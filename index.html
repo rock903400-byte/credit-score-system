@@ -299,14 +299,16 @@
             <div class="result-item">🏆 信用等級： <span id="resGrade" class="result-value"></span> 級</div>
             <div class="result-item">💰 本次最高可貸： 約 <span id="resLimit" class="result-value"></span> 元</div>
             
-            <div style="margin-top: 15px; font-weight: bold; color: #555;">總負債壓力指標 (上限 25%)：</div>
+            <div style="margin-top: 15px; font-weight: bold; color: #555;">總負債壓力指標 (DTI)：</div>
             <div class="progress-container">
-                <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+                <div id="progressFill" class="progress-fill" style="width: 0%; box-shadow: 0 0 10px rgba(0,0,0,0.1);"></div>
                 <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級核貸上限"></div>
             </div>
             <div class="progress-labels">
                 <span>0%</span>
-                <span style="position: absolute; right: 20px;">25% (滿水位)</span>
+                <span>30% (警示)</span>
+                <span>50% (極限)</span>
+                <span>100%</span>
             </div>
             <div style="font-size: 0.9em; color: #555; margin-top: -5px;">
                 (核貸後預估總負債比 <span id="resTotalDti"></span>% / 本級別上限 <span id="resMaxDtiTxt"></span>%)
@@ -446,25 +448,24 @@ function calculateLoan() {
     document.getElementById('resMaxDtiTxt').innerText = (maxDti * 100);
 
     // -- 視覺防呆進度條邏輯 --
-    // 將 25% 視為進度條的滿水位 (100% 寬度)
-    const absoluteMax = 0.25; 
-    let fillWidthPercent = (totalDtiRatio / absoluteMax) * 100;
+    // 進度條顯示 0-100%
+    let fillWidthPercent = totalDtiRatio * 100;
     if (fillWidthPercent > 100) fillWidthPercent = 100;
     
     const progressFill = document.getElementById('progressFill');
     progressFill.style.width = fillWidthPercent + '%';
 
-    // 顏色判定：超過他自己的上限(紅)、逼近上限的 80%(黃)、安全(綠)
-    if (totalDtiRatio > maxDti) {
-        progressFill.style.backgroundColor = "#f44336"; // 紅色 (爆表)
-    } else if (totalDtiRatio > maxDti * 0.8) {
-        progressFill.style.backgroundColor = "#ffeb3b"; // 黃色 (緊繃)
+    // 顏色判定：<30% 綠色，30-50% 黃色，>50% 紅色
+    if (totalDtiRatio < 0.3) {
+        progressFill.style.backgroundColor = "#4caf50"; // 綠色
+    } else if (totalDtiRatio <= 0.5) {
+        progressFill.style.backgroundColor = "#ffeb3b"; // 黃色
     } else {
-        progressFill.style.backgroundColor = "#4caf50"; // 綠色 (安全)
+        progressFill.style.backgroundColor = "#f44336"; // 紅色
     }
 
-    // 警戒線位置
-    const limitLinePercent = maxDti > 0 ? (maxDti / absoluteMax) * 100 : 0;
+    // 警戒線位置 (該等級上限)
+    const limitLinePercent = maxDti * 100;
     document.getElementById('progressLimit').style.left = limitLinePercent + '%';
 
     // -- 填入列印報告的資料 --
@@ -493,6 +494,19 @@ function calculateLoan() {
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('btnPrint').style.display = 'block';
 }
+
+// 即時計算：監聽所有輸入與選擇框
+document.addEventListener('DOMContentLoaded', () => {
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            // 如果結果卡已經顯示，則即時更新；否則等點擊按鈕
+            if (document.getElementById('resultCard').style.display === 'block') {
+                calculateLoan();
+            }
+        });
+    });
+});
 </script>
 
 </body>
