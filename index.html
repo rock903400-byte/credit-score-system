@@ -307,7 +307,9 @@
                     <input type="number" id="income" value="45000" min="1">
                 </div>
                 <div class="form-group">
-                    <label>現有貸款(含外部)每月應繳總額 (元)</label>
+                    <label>現有外債每月應繳總額 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">(包含銀行房貸、車貸、信貸、信用卡分期等)</small>
+                    </label>
                     <input type="number" id="existing_debt" class="highlight-input" value="0" min="0">
                 </div>
                 <div class="form-group">
@@ -407,7 +409,8 @@
             </div>
             
             <div class="gauge-container">
-                <div style="font-weight: 700; color: var(--primary-dark); margin-bottom: 10px;">還款壓力指標 (月負債比 DTI)</div>
+                <div style="font-weight: 700; color: var(--primary-dark); margin-bottom: 5px;">月負擔占薪水比例 (含外債)</div>
+                <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px;">計算公式：(現有外債 + 本次新增貸款) ÷ 月收入</div>
                 <div class="progress-container">
                     <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
                     <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級還款壓力上限"></div>
@@ -419,12 +422,17 @@
                     <span>100%</span>
                 </div>
                 <div style="font-size: 0.9em; color: var(--text-muted); margin-top: 10px; display: flex; justify-content: space-between;">
-                    <span>預計月負擔比：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%</span>
+                    <span>預計總月負擔：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%</span>
                     <span>本級別建議上限：<strong id="resMaxDtiTxt"></strong>%</span>
                 </div>
             </div>
 
             <div id="resStatus" class="status-msg"></div>
+
+            <div style="margin-top: 20px; padding: 15px; background-color: #fcfcfc; border: 1px dashed #d1d9e6; border-radius: 8px; font-size: 0.85em; color: var(--text-muted);">
+                <strong>💡 專業小叮嚀：</strong><br>
+                「本級別建議上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不建議超過月收入的該比例，以維持良好的生活品質與信用風險控制。
+            </div>
         </div>
     </div>
 
@@ -555,6 +563,7 @@ function calculateLoan() {
     document.getElementById('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
     document.getElementById('resTotalDti').innerText = (totalDtiRatio * 100).toFixed(1);
     document.getElementById('resMaxDtiTxt').innerText = (maxDti * 100);
+    document.getElementById('resMaxDtiTxt2').innerText = (maxDti * 100);
 
     // 進度條視覺化
     const fillWidthPercent = Math.min(totalDtiRatio * 100, 100);
