@@ -212,11 +212,11 @@
         <div class="section-title">1. 基本財務與負債狀況</div>
         <div class="form-grid">
             <div class="form-group">
-                <label>借款人年收入 (元)</label>
-                <input type="number" id="income" value="500000" min="1">
+                <label>借款人月平均收入 (元)</label>
+                <input type="number" id="income" value="45000" min="1">
             </div>
             <div class="form-group">
-                <label>現有外部負債年攤還額 (元) ⚠️用於計分</label>
+                <label>現有貸款(含外部)每月應繳總額 (元)</label>
                 <input type="number" id="existing_debt" class="highlight-input" value="0" min="0">
             </div>
             <div class="form-group">
@@ -299,19 +299,19 @@
             <div class="result-item">🏆 信用等級： <span id="resGrade" class="result-value"></span> 級</div>
             <div class="result-item">💰 本次最高可貸： 約 <span id="resLimit" class="result-value"></span> 元</div>
             
-            <div style="margin-top: 15px; font-weight: bold; color: #555;">總負債壓力指標 (DTI)：</div>
+            <div style="margin-top: 15px; font-weight: bold; color: #555;">還款壓力指標 (負負擔比)：</div>
             <div class="progress-container">
                 <div id="progressFill" class="progress-fill" style="width: 0%; box-shadow: 0 0 10px rgba(0,0,0,0.1);"></div>
-                <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級核貸上限"></div>
+                <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級還款壓力上限"></div>
             </div>
             <div class="progress-labels">
                 <span>0%</span>
-                <span>30% (警示)</span>
+                <span>30% (警戒)</span>
                 <span>50% (極限)</span>
                 <span>100%</span>
             </div>
             <div style="font-size: 0.9em; color: #555; margin-top: -5px;">
-                (核貸後預估總負債比 <span id="resTotalDti"></span>% / 本級別上限 <span id="resMaxDtiTxt"></span>%)
+                (核貸後每月還款約佔收入 <span id="resTotalDti"></span>% / 本級別建議上限 <span id="resMaxDtiTxt"></span>%)
             </div>
 
             <div id="resStatus" class="status-msg"></div>
@@ -326,8 +326,8 @@
 
         <div class="print-section">
             <div class="print-section-title">一、 借款人財務現況</div>
-            <div class="print-row"><div class="print-label">借款人年收入：</div><div class="print-value" id="p_income"></div></div>
-            <div class="print-row"><div class="print-label">現有外部負債年攤還額：</div><div class="print-value" id="p_existing"></div></div>
+            <div class="print-row"><div class="print-label">借款人月平均收入：</div><div class="print-value" id="p_income"></div></div>
+            <div class="print-row"><div class="print-label">現有貸款每月應繳額：</div><div class="print-value" id="p_existing"></div></div>
             <div class="print-row"><div class="print-label">預計貸款額 / 年限 / 利率：</div><div class="print-value" id="p_loan_details"></div></div>
         </div>
 
@@ -344,7 +344,7 @@
         <div class="print-result-box">
             <div class="print-result-title">系統評估結果：<span id="p_grade"></span> 級 (<span id="p_score"></span> 分)</div>
             <div style="margin-top: 10px; font-size: 16px;">
-                核貸後預估總負債比：<span id="p_dti"></span>% (該級別上限：<span id="p_maxdti"></span>%)<br>
+                核貸後預計月還款比：<span id="p_dti"></span>% (該級別建議上限：<span id="p_maxdti"></span>%)<br>
                 建議最高可貸額度：<span id="p_limit" style="font-size: 18px; font-weight: bold;"></span> 元<br>
                 <div id="p_status" style="margin-top: 10px; font-weight: bold; border: 1px solid #000; display: inline-block; padding: 5px 15px;"></div>
             </div>
@@ -360,9 +360,9 @@
 
 <script>
 function calculateLoan() {
-    // 1. 取得數值
-    const income = parseFloat(document.getElementById('income').value);
-    const existingDebt = parseFloat(document.getElementById('existing_debt').value);
+    // 1. 取得數值 (改為月薪與月繳額)
+    const income = parseFloat(document.getElementById('income').value); // 月薪
+    const existingDebt = parseFloat(document.getElementById('existing_debt').value); // 月還款額
     const proposedLoan = parseFloat(document.getElementById('loan').value);
     const years = parseInt(document.getElementById('years').value);
     const ratePercent = parseFloat(document.getElementById('rate').value);
@@ -374,7 +374,7 @@ function calculateLoan() {
         return;
     }
 
-    // 2. 前端計分用的現有收支比 (Existing DTI)
+    // 2. 計算月負擔比 (Monthly DTI)
     const dtiScoring = existingDebt / income;
 
     // 3. 計算前端分數
@@ -401,7 +401,7 @@ function calculateLoan() {
     extraPoints = isNaN(extraPoints) ? 0 : Math.min(Math.max(extraPoints, 0), 10);
     score += extraPoints;
 
-    // 4. 判定等級與總收支比門檻
+    // 4. 判定等級與總收支比門檻 (維持原本邏輯但應用於月比率)
     let grade = "";
     let maxDti = 0;
     if (score >= 90) { grade = "甲"; maxDti = 0.25; }
@@ -410,15 +410,17 @@ function calculateLoan() {
     else if (score >= 60) { grade = "丁"; maxDti = 0.05; }
     else { grade = "戊"; maxDti = 0; }
 
-    // 5. 計算本次預計貸款的首年本息與總收支比
-    const newLoanFirstYearPmt = (proposedLoan / years) + (proposedLoan * rate);
-    const totalDtiRatio = (existingDebt + newLoanFirstYearPmt) / income;
+    // 5. 計算本次預計貸款的每月本息與總收支比
+    // 每月本息 = (本金 / 月數) + (每月利息) -> 這裡用首年簡單平均估算
+    const newLoanMonthlyPmt = (proposedLoan / (years * 12)) + (proposedLoan * (rate / 12));
+    const totalDtiRatio = (existingDebt + newLoanMonthlyPmt) / income;
 
     // 6. 反推本次最高可貸額度
-    const maxAvailablePmt = (income * maxDti) - existingDebt;
+    const maxAvailableMonthlyPmt = (income * maxDti) - existingDebt;
     let maxLoanLimit = 0;
-    if (maxAvailablePmt > 0 && maxDti > 0) {
-        maxLoanLimit = maxAvailablePmt / ((1 / years) + rate);
+    if (maxAvailableMonthlyPmt > 0 && maxDti > 0) {
+        // 反推公式: 本金 = 月付額 / ((1 / 月數) + 月利率)
+        maxLoanLimit = maxAvailableMonthlyPmt / ((1 / (years * 12)) + (rate / 12));
     }
 
     // 7. 網頁狀態判定與顯示
@@ -430,13 +432,13 @@ function calculateLoan() {
         statusText = "⚠️ 評分未滿60分，慎重考慮";
         statusEl.classList.add("status-fail");
     } else if (existingDebt >= income * maxDti) {
-        statusText = `❌ 「現有外部負債」已達該級別上限，無法新增貸款`;
+        statusText = `❌ 現有還款壓力已達上限，無法新增貸款`;
         statusEl.classList.add("status-fail");
     } else if (totalDtiRatio <= maxDti) {
-        statusText = "✅ 符合規範，建議核貸";
+        statusText = "✅ 還款負擔在安全範圍內，建議核貸";
         statusEl.classList.add("status-pass");
     } else {
-        statusText = `❌ 預計貸款金額過高，總負債比超出級別限制`;
+        statusText = `❌ 預計貸款金額過高，還款壓力超出建議範圍`;
         statusEl.classList.add("status-warn");
     }
     statusEl.innerHTML = statusText;
@@ -448,23 +450,20 @@ function calculateLoan() {
     document.getElementById('resMaxDtiTxt').innerText = (maxDti * 100);
 
     // -- 視覺防呆進度條邏輯 --
-    // 進度條顯示 0-100%
     let fillWidthPercent = totalDtiRatio * 100;
     if (fillWidthPercent > 100) fillWidthPercent = 100;
     
     const progressFill = document.getElementById('progressFill');
     progressFill.style.width = fillWidthPercent + '%';
 
-    // 顏色判定：<30% 綠色，30-50% 黃色，>50% 紅色
     if (totalDtiRatio < 0.3) {
-        progressFill.style.backgroundColor = "#4caf50"; // 綠色
+        progressFill.style.backgroundColor = "#4caf50"; 
     } else if (totalDtiRatio <= 0.5) {
-        progressFill.style.backgroundColor = "#ffeb3b"; // 黃色
+        progressFill.style.backgroundColor = "#ffeb3b"; 
     } else {
-        progressFill.style.backgroundColor = "#f44336"; // 紅色
+        progressFill.style.backgroundColor = "#f44336"; 
     }
 
-    // 警戒線位置 (該等級上限)
     const limitLinePercent = maxDti * 100;
     document.getElementById('progressLimit').style.left = limitLinePercent + '%';
 
@@ -490,7 +489,6 @@ function calculateLoan() {
     document.getElementById('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
     document.getElementById('p_status').innerText = statusText;
 
-    // 顯示結果卡與列印按鈕
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('btnPrint').style.display = 'block';
 }
