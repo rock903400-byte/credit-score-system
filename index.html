@@ -269,24 +269,43 @@
             body { background-color: #fff; padding: 0; color: #000; }
             .container { box-shadow: none; padding: 0; max-width: 100%; }
             .no-print { display: none !important; }
-            .print-area { display: block; }
+            .print-area { display: block; padding: 20px; }
             
-            .print-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
-            .print-title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-            .print-subtitle { font-size: 16px; color: #555; }
+            .print-header { text-align: center; border-bottom: 2px solid #1a237e; padding-bottom: 15px; margin-bottom: 30px; }
+            .print-title { font-size: 28px; font-weight: bold; color: #1a237e; margin-bottom: 5px; }
+            .print-subtitle { font-size: 14px; color: #555; }
             
-            .print-section { margin-bottom: 20px; }
-            .print-section-title { font-weight: bold; font-size: 18px; border-bottom: 1px solid #ccc; margin-bottom: 10px; }
+            .print-section { margin-bottom: 25px; }
+            .print-section-title { font-weight: bold; font-size: 18px; border-left: 5px solid #1a237e; padding-left: 10px; margin-bottom: 15px; }
             
-            .print-row { display: flex; margin-bottom: 8px; font-size: 15px; }
-            .print-label { width: 40%; color: #333; }
-            .print-value { width: 60%; font-weight: bold; }
+            /* 專業報表表格 */
+            .print-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 10px; text-align: left; font-size: 14px; word-wrap: break-word; }
+            .print-table th { background-color: #f2f2f2 !important; width: 35%; font-weight: bold; -webkit-print-color-adjust: exact; }
             
-            .print-result-box { border: 2px solid #000; padding: 15px; margin-top: 20px; text-align: center; }
-            .print-result-title { font-size: 20px; font-weight: bold; }
+            .print-result-box { border: 2px solid #1a237e; padding: 20px; margin-top: 20px; background: #f8faff !important; -webkit-print-color-adjust: exact; position: relative; }
+            .print-result-title { font-size: 20px; font-weight: bold; color: #1a237e; margin-bottom: 10px; }
             
-            .print-signatures { display: flex; justify-content: space-between; margin-top: 80px; }
-            .signature-box { width: 30%; border-top: 1px solid #000; text-align: center; padding-top: 10px; }
+            .disclaimer { margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px; line-height: 1.5; }
+            
+            .system-seal { 
+                position: absolute; 
+                right: 20px; 
+                top: 20px; 
+                width: 100px; 
+                height: 100px; 
+                border: 3px double #d32f2f; 
+                border-radius: 50%; 
+                display: flex; 
+                align-items: center; 
+                text-align: center; 
+                color: #d32f2f; 
+                font-weight: bold; 
+                font-size: 14px; 
+                transform: rotate(-15deg);
+                opacity: 0.8;
+                padding: 5px;
+            }
         }
     </style>
 </head>
@@ -439,33 +458,86 @@
     <div class="print-area">
         <div class="print-header">
             <div class="print-title">儲蓄互助社 授信審查報告書</div>
-            <div class="print-subtitle">產出日期：<span id="printDate"></span></div>
+            <div class="print-subtitle">Report ID: <span id="reportId"></span> | 產出日期：<span id="printDate"></span></div>
         </div>
 
         <div class="print-section">
             <div class="print-section-title">一、 借款人財務現況</div>
-            <div class="print-row"><div class="print-label">借款人月平均收入：</div><div class="print-value" id="p_income"></div></div>
-            <div class="print-row"><div class="print-label">現有貸款每月應繳額：</div><div class="print-value" id="p_existing"></div></div>
-            <div class="print-row"><div class="print-label">預計貸款額 / 年限 / 利率：</div><div class="print-value" id="p_loan_details"></div></div>
+            <table class="print-table">
+                <tr>
+                    <th>借款人月平均收入</th>
+                    <td id="p_income"></td>
+                </tr>
+                <tr>
+                    <th>現有外債每月應繳額<br><small>(含房貸、車貸、信貸、卡債等)</small></th>
+                    <td id="p_existing"></td>
+                </tr>
+                <tr>
+                    <th>本次申請貸款明細<br><small>(金額 / 年限 / 利率)</small></th>
+                    <td id="p_loan_details"></td>
+                </tr>
+            </table>
         </div>
 
         <div class="print-section">
             <div class="print-section-title">二、 信用評估明細</div>
-            <div class="print-row"><div class="print-label">擔保設定狀況：</div><div class="print-value" id="p_collateral"></div></div>
-            <div class="print-row"><div class="print-label">借款次數：</div><div class="print-value" id="p_borrow"></div></div>
-            <div class="print-row"><div class="print-label">同戶貸款次數：</div><div class="print-value" id="p_cohabit"></div></div>
-            <div class="print-row"><div class="print-label">貸款金額與股金：</div><div class="print-value" id="p_shares"></div></div>
-            <div class="print-row"><div class="print-label">與本社往來情形：</div><div class="print-value" id="p_interact"></div></div>
-            <div class="print-row"><div class="print-label">其他考量加分：</div><div class="print-value" id="p_extra"></div></div>
+            <table class="print-table">
+                <tr>
+                    <th>擔保設定狀況</th>
+                    <td id="p_collateral"></td>
+                </tr>
+                <tr>
+                    <th>借款次數 / 同戶貸款</th>
+                    <td><span id="p_borrow"></span> / <span id="p_cohabit"></span></td>
+                </tr>
+                <tr>
+                    <th>貸款金額與股金比例</th>
+                    <td id="p_shares"></td>
+                </tr>
+                <tr>
+                    <th>與本社往來情形</th>
+                    <td id="p_interact"></td>
+                </tr>
+                <tr>
+                    <th>其他考量加分項目</th>
+                    <td id="p_extra"></td>
+                </tr>
+            </table>
         </div>
 
         <div class="print-result-box">
-            <div class="print-result-title">系統評估結果：<span id="p_grade"></span> 級 (<span id="p_score"></span> 分)</div>
-            <div style="margin-top: 10px; font-size: 16px;">
-                核貸後預計月還款比：<span id="p_dti"></span>% (該級別建議上限：<span id="p_maxdti"></span>%)<br>
-                建議最高可貸額度：<span id="p_limit" style="font-size: 18px; font-weight: bold;"></span> 元<br>
-                <div id="p_status" style="margin-top: 10px; font-weight: bold; border: 1px solid #000; display: inline-block; padding: 5px 15px;"></div>
+            <div class="system-seal">系統自動檢測<br>合格驗證</div>
+            <div class="print-result-title">三、 系統綜合評估結果</div>
+            <table class="print-table" style="border: none;">
+                <tr style="border: none;">
+                    <td style="border: none; width: 60%;">
+                        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
+                            評估等級：<span id="p_grade" style="color: #1a237e; font-size: 24px;"></span> 級 (<span id="p_score"></span> 分)
+                        </div>
+                        <div style="font-size: 14px; color: #333;">
+                            核貸後總負債比 (DTI)：<span id="p_dti" style="font-weight: bold;"></span>%<br>
+                            (該等級建議負債上限：<span id="p_maxdti" style="font-weight: bold;"></span>%)
+                        </div>
+                    </td>
+                    <td style="border: none; text-align: center; vertical-align: middle;">
+                        <div style="font-size: 14px; color: #555;">建議最高核貸額度</div>
+                        <div style="font-size: 22px; font-weight: bold; color: #d32f2f;">NT$ <span id="p_limit"></span></div>
+                    </td>
+                </tr>
+            </table>
+            <div id="p_status" style="margin-top: 15px; font-weight: bold; padding: 10px; border: 1px solid #1a237e; background: #fff; text-align: center; width: 100%;"></div>
+        </div>
+
+        <div class="print-section" style="margin-top: 20px;">
+            <div style="font-size: 13px; color: #444; line-height: 1.6;">
+                <strong>報告備註：</strong><br>
+                1. DTI 指標係綜合「現有外債」與「本次擬貸本息」後對比月收入之比例，旨在評估還款壓力。<br>
+                2. 本報告之建議額度係依據「<span id="p_grade2"></span>級」之負債上限（<span id="p_maxdti2"></span>%）反推求得。
             </div>
+        </div>
+
+        <div class="disclaimer">
+            本報告書由信用評分系統自動生成，僅供內部授信審核參考之用。借款人實際核貸金額、利率及條件，仍須依據本社授信規章辦理，並以「放款委員會」之最終審議決議為準。
         </div>
     </div>
 </div>
@@ -574,7 +646,9 @@ function calculateLoan() {
 
     // 更新列印資料
     const today = new Date();
-    document.getElementById('printDate').innerText = today.toLocaleDateString();
+    const reportId = "CR-" + today.getFullYear() + (today.getMonth()+1).toString().padStart(2, '0') + today.getDate().toString().padStart(2, '0') + "-" + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('reportId').innerText = reportId;
+    document.getElementById('printDate').innerText = today.toLocaleDateString() + " " + today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0');
     document.getElementById('p_income').innerText = income.toLocaleString() + " 元";
     document.getElementById('p_existing').innerText = existingDebt.toLocaleString() + " 元";
     document.getElementById('p_loan_details').innerText = `${proposedLoan.toLocaleString()} 元 / ${years} 年 / ${ratePercent}%`;
@@ -588,9 +662,11 @@ function calculateLoan() {
     document.getElementById('p_extra').innerText = extraPoints + " 分";
 
     document.getElementById('p_grade').innerText = grade;
+    document.getElementById('p_grade2').innerText = grade;
     document.getElementById('p_score').innerText = score;
     document.getElementById('p_dti').innerText = (totalDtiRatio * 100).toFixed(1);
     document.getElementById('p_maxdti').innerText = (maxDti * 100);
+    document.getElementById('p_maxdti2').innerText = (maxDti * 100);
     document.getElementById('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString();
     document.getElementById('p_status').innerText = statusText;
 
