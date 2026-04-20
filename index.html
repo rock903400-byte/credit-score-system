@@ -299,7 +299,7 @@
             <div class="result-item">🏆 信用等級： <span id="resGrade" class="result-value"></span> 級</div>
             <div class="result-item">💰 本次最高可貸： 約 <span id="resLimit" class="result-value"></span> 元</div>
             
-            <div style="margin-top: 15px; font-weight: bold; color: #555;">還款壓力指標 (負負擔比)：</div>
+            <div style="margin-top: 15px; font-weight: bold; color: #555;">還款壓力指標 (負擔比)：</div>
             <div class="progress-container">
                 <div id="progressFill" class="progress-fill" style="width: 0%; box-shadow: 0 0 10px rgba(0,0,0,0.1);"></div>
                 <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級還款壓力上限"></div>
@@ -360,21 +360,29 @@
 
 <script>
 function calculateLoan() {
-    // 1. 取得數值 (改為月薪與月繳額)
-    const income = parseFloat(document.getElementById('income').value); // 月薪
-    const existingDebt = parseFloat(document.getElementById('existing_debt').value); // 月還款額
-    const proposedLoan = parseFloat(document.getElementById('loan').value);
-    const years = parseInt(document.getElementById('years').value);
-    const ratePercent = parseFloat(document.getElementById('rate').value);
-    const rate = ratePercent / 100;
-    let extraPoints = parseInt(document.getElementById('extra').value);
+    // 1. 取得數值，並強化防呆判斷
+    const incomeVal = document.getElementById('income').value;
+    const existingDebtVal = document.getElementById('existing_debt').value;
+    const loanVal = document.getElementById('loan').value;
+    const yearsVal = document.getElementById('years').value;
+    const rateVal = document.getElementById('rate').value;
+    const extraVal = document.getElementById('extra').value;
 
-    if (isNaN(income) || income <= 0 || isNaN(years) || years <= 0) {
-        alert("收入與年限必須大於 0！");
+    const income = parseFloat(incomeVal) || 0;
+    const existingDebt = parseFloat(existingDebtVal) || 0;
+    const proposedLoan = parseFloat(loanVal) || 0;
+    const years = parseInt(yearsVal) || 0;
+    const ratePercent = parseFloat(rateVal) || 0;
+    const extraPoints = parseInt(extraVal) || 0;
+
+    // 基本防呆：若收入或年限無效，則隱藏結果卡並跳出
+    if (income <= 0 || years <= 0) {
+        document.getElementById('resultCard').style.display = 'none';
+        document.getElementById('btnPrint').style.display = 'none';
         return;
     }
 
-    // 2. 計算月負擔比 (Monthly DTI)
+    // 2. 計算月負擔比評分基礎
     const dtiScoring = existingDebt / income;
 
     // 3. 計算前端分數
@@ -383,25 +391,21 @@ function calculateLoan() {
     else if (dtiScoring >= 0.05 && dtiScoring < 0.15) score += 30;
     else if (dtiScoring >= 0.15 && dtiScoring < 0.25) score += 20;
     else if (dtiScoring >= 0.25 && dtiScoring < 1.00) score += 10;
-    else score += 0;
 
-    // 取得選單文字與數值
     const selCollateral = document.getElementById('collateral');
     const selBorrow = document.getElementById('borrow_count');
     const selCohabit = document.getElementById('cohabitant');
     const selShares = document.getElementById('loan_shares');
     const selInteract = document.getElementById('interaction');
 
-    score += parseInt(selCollateral.value);
-    score += parseInt(selBorrow.value);
-    score += parseInt(selCohabit.value);
-    score += parseInt(selShares.value);
-    score += parseInt(selInteract.value);
-    
-    extraPoints = isNaN(extraPoints) ? 0 : Math.min(Math.max(extraPoints, 0), 10);
-    score += extraPoints;
+    score += parseInt(selCollateral.value) || 0;
+    score += parseInt(selBorrow.value) || 0;
+    score += parseInt(selCohabit.value) || 0;
+    score += parseInt(selShares.value) || 0;
+    score += parseInt(selInteract.value) || 0;
+    score += Math.min(Math.max(extraPoints, 0), 10);
 
-    // 4. 判定等級與總收支比門檻 (維持原本邏輯但應用於月比率)
+    // 4. 判定等級
     let grade = "";
     let maxDti = 0;
     if (score >= 90) { grade = "甲"; maxDti = 0.25; }
@@ -410,29 +414,28 @@ function calculateLoan() {
     else if (score >= 60) { grade = "丁"; maxDti = 0.05; }
     else { grade = "戊"; maxDti = 0; }
 
-    // 5. 計算本次預計貸款的每月本息與總收支比
-    // 每月本息 = (本金 / 月數) + (每月利息) -> 這裡用首年簡單平均估算
+    // 5. 計算本次預計貸款的每月本息
+    const rate = ratePercent / 100;
     const newLoanMonthlyPmt = (proposedLoan / (years * 12)) + (proposedLoan * (rate / 12));
     const totalDtiRatio = (existingDebt + newLoanMonthlyPmt) / income;
 
-    // 6. 反推本次最高可貸額度
-    const maxAvailableMonthlyPmt = (income * maxDti) - existingDebt;
+    // 6. 反推最高可貸
+    const maxAvailablePmt = (income * maxDti) - existingDebt;
     let maxLoanLimit = 0;
-    if (maxAvailableMonthlyPmt > 0 && maxDti > 0) {
-        // 反推公式: 本金 = 月付額 / ((1 / 月數) + 月利率)
-        maxLoanLimit = maxAvailableMonthlyPmt / ((1 / (years * 12)) + (rate / 12));
+    if (maxAvailablePmt > 0 && maxDti > 0) {
+        maxLoanLimit = maxAvailablePmt / ((1 / (years * 12)) + (rate / 12));
     }
 
-    // 7. 網頁狀態判定與顯示
+    // 7. 更新顯示與狀態
     const statusEl = document.getElementById('resStatus');
     statusEl.className = "status-msg";
     let statusText = "";
 
     if (grade === "戊") {
-        statusText = "⚠️ 評分未滿60分，慎重考慮";
+        statusText = "⚠️ 評分未滿60分，請審慎評估";
         statusEl.classList.add("status-fail");
     } else if (existingDebt >= income * maxDti) {
-        statusText = `❌ 現有還款壓力已達上限，無法新增貸款`;
+        statusText = `❌ 現有還款壓力已達本級別上限，無法新增貸款`;
         statusEl.classList.add("status-fail");
     } else if (totalDtiRatio <= maxDti) {
         statusText = "✅ 還款負擔在安全範圍內，建議核貸";
@@ -449,62 +452,41 @@ function calculateLoan() {
     document.getElementById('resTotalDti').innerText = (totalDtiRatio * 100).toFixed(1);
     document.getElementById('resMaxDtiTxt').innerText = (maxDti * 100);
 
-    // -- 視覺防呆進度條邏輯 --
-    let fillWidthPercent = totalDtiRatio * 100;
-    if (fillWidthPercent > 100) fillWidthPercent = 100;
-    
+    // 進度條視覺化
+    const fillWidthPercent = Math.min(totalDtiRatio * 100, 100);
     const progressFill = document.getElementById('progressFill');
     progressFill.style.width = fillWidthPercent + '%';
+    progressFill.style.backgroundColor = totalDtiRatio < 0.3 ? "#4caf50" : (totalDtiRatio <= 0.5 ? "#ffeb3b" : "#f44336");
+    document.getElementById('progressLimit').style.left = (maxDti * 100) + '%';
 
-    if (totalDtiRatio < 0.3) {
-        progressFill.style.backgroundColor = "#4caf50"; 
-    } else if (totalDtiRatio <= 0.5) {
-        progressFill.style.backgroundColor = "#ffeb3b"; 
-    } else {
-        progressFill.style.backgroundColor = "#f44336"; 
-    }
-
-    const limitLinePercent = maxDti * 100;
-    document.getElementById('progressLimit').style.left = limitLinePercent + '%';
-
-    // -- 填入列印報告的資料 --
+    // 更新列印資料
     const today = new Date();
-    document.getElementById('printDate').innerText = today.getFullYear() + "/" + (today.getMonth()+1) + "/" + today.getDate();
-    
-    document.getElementById('p_income').innerText = income.toLocaleString('zh-TW') + " 元";
-    document.getElementById('p_existing').innerText = existingDebt.toLocaleString('zh-TW') + " 元";
-    document.getElementById('p_loan_details').innerText = `${proposedLoan.toLocaleString('zh-TW')} 元 / ${years} 年 / 年利率 ${ratePercent}%`;
-
-    document.getElementById('p_collateral').innerText = selCollateral.options[selCollateral.selectedIndex].text;
-    document.getElementById('p_borrow').innerText = selBorrow.options[selBorrow.selectedIndex].text;
-    document.getElementById('p_cohabit').innerText = selCohabit.options[selCohabit.selectedIndex].text;
-    document.getElementById('p_shares').innerText = selShares.options[selShares.selectedIndex].text;
-    document.getElementById('p_interact').innerText = selInteract.options[selInteract.selectedIndex].text;
-    document.getElementById('p_extra').innerText = extraPoints + " 分";
-
+    document.getElementById('printDate').innerText = today.toLocaleDateString();
+    document.getElementById('p_income').innerText = income.toLocaleString() + " 元";
+    document.getElementById('p_existing').innerText = existingDebt.toLocaleString() + " 元";
+    document.getElementById('p_loan_details').innerText = `${proposedLoan.toLocaleString()} 元 / ${years} 年 / ${ratePercent}%`;
     document.getElementById('p_grade').innerText = grade;
     document.getElementById('p_score').innerText = score;
     document.getElementById('p_dti').innerText = (totalDtiRatio * 100).toFixed(1);
     document.getElementById('p_maxdti').innerText = (maxDti * 100);
-    document.getElementById('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
+    document.getElementById('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString();
     document.getElementById('p_status').innerText = statusText;
 
+    // 顯示結果卡與按鈕
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('btnPrint').style.display = 'block';
 }
 
-// 即時計算：監聽所有輸入與選擇框
+// 事件監聽：達成「改變條件即刻反映」
 document.addEventListener('DOMContentLoaded', () => {
+    // 選取所有輸入框與選單
     const inputs = document.querySelectorAll('input, select');
     inputs.forEach(input => {
-        input.addEventListener('input', () => {
-            // 如果結果卡已經顯示，則即時更新；否則等點擊按鈕
-            if (document.getElementById('resultCard').style.display === 'block') {
-                calculateLoan();
-            }
-        });
+        // 使用 input 事件達成即時監控
+        input.addEventListener('input', calculateLoan);
     });
 });
+</script>
 </script>
 
 </body>
