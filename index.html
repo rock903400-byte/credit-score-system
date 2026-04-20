@@ -459,12 +459,6 @@
                 <div id="p_status" style="margin-top: 10px; font-weight: bold; border: 1px solid #000; display: inline-block; padding: 5px 15px;"></div>
             </div>
         </div>
-
-        <div class="print-signatures">
-            <div class="signature-box">經辦人簽章</div>
-            <div class="signature-box">核准人簽章</div>
-            <div class="signature-box">連保人簽章</div>
-        </div>
     </div>
 </div>
 
@@ -575,6 +569,15 @@ function calculateLoan() {
     document.getElementById('p_income').innerText = income.toLocaleString() + " 元";
     document.getElementById('p_existing').innerText = existingDebt.toLocaleString() + " 元";
     document.getElementById('p_loan_details').innerText = `${proposedLoan.toLocaleString()} 元 / ${years} 年 / ${ratePercent}%`;
+    
+    // 填入信用評估明細文字
+    document.getElementById('p_collateral').innerText = selCollateral.options[selCollateral.selectedIndex].text;
+    document.getElementById('p_borrow').innerText = selBorrow.options[selBorrow.selectedIndex].text;
+    document.getElementById('p_cohabit').innerText = selCohabit.options[selCohabit.selectedIndex].text;
+    document.getElementById('p_shares').innerText = selShares.options[selShares.selectedIndex].text;
+    document.getElementById('p_interact').innerText = selInteract.options[selInteract.selectedIndex].text;
+    document.getElementById('p_extra').innerText = extraPoints + " 分";
+
     document.getElementById('p_grade').innerText = grade;
     document.getElementById('p_score').innerText = score;
     document.getElementById('p_dti').innerText = (totalDtiRatio * 100).toFixed(1);
