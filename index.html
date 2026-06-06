@@ -355,12 +355,8 @@
             <div class="section-title">零、案件基本資訊</div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>會員編號 / 姓名 <span style="color: var(--text-muted); font-weight: normal;">(選填，列印時顯示)</span></label>
+                    <label>社員編號 / 姓名 <span style="color: var(--text-muted); font-weight: normal;">(選填，列印時顯示)</span></label>
                     <input type="text" id="memberId" placeholder="例如：A00123 王小明" maxlength="40">
-                </div>
-                <div class="form-group">
-                    <label>承辦業務員 <span style="color: var(--text-muted); font-weight: normal;">(選填)</span></label>
-                    <input type="text" id="officer" placeholder="例如：林業務" maxlength="20">
                 </div>
                 <div class="form-group">
                     <label>申請日期</label>
@@ -596,12 +592,8 @@
             <div class="print-section-title">一、 案件與借款人基本資料</div>
             <table class="print-table">
                 <tr>
-                    <th>會員編號 / 姓名</th>
+                    <th>社員編號 / 姓名</th>
                     <td id="p_memberId">—</td>
-                </tr>
-                <tr>
-                    <th>承辦業務員</th>
-                    <td id="p_officer">—</td>
                 </tr>
                 <tr>
                     <th>借款人月平均收入</th>
@@ -749,7 +741,6 @@ function getReportSeq() {
 function parseInputs() {
     return {
         memberId:       $('memberId').value.trim(),
-        officer:        $('officer').value.trim(),
         appDate:        $('appDate').value,
         income:         parseFloat($('income').value) || 0,
         age:            parseInt($('age').value) || 0,
@@ -1050,7 +1041,6 @@ function renderPrintReport(result) {
 
     // [FIX 3.2] 案件基本資訊
     $('p_memberId').innerText = input.memberId || '—';
-    $('p_officer').innerText = input.officer || '—';
     $('p_income').innerText = input.income.toLocaleString('zh-TW') + ' 元';
     $('p_existing').innerText = input.existingDebt.toLocaleString('zh-TW') + ' 元';
     $('p_internal').innerText = `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
