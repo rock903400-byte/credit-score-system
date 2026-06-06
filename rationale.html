@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系統計算擬定說明（v2.0）</title>
+    <style>
+        :root {
+            --primary-color: #1a237e;
+            --secondary-color: #ffb300;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+        }
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.8;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            border-bottom: 3px solid var(--secondary-color);
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        .version {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9em;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: var(--primary-color);
+            border-left: 5px solid var(--secondary-color);
+            padding-left: 15px;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #34495e;
+            margin-bottom: 10px;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        li {
+            margin-bottom: 15px;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #d35400;
+        }
+        .new {
+            background-color: #e8f5e9;
+            color: #1b5e20;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .fix {
+            background-color: #fff3e0;
+            color: #e65100;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .summary {
+            background-color: #e8f4f8;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid #3498db;
+            margin-top: 40px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .scope {
+            background-color: #fff8e1;
+            padding: 18px 22px;
+            border-radius: 8px;
+            border-left: 5px solid #ffb300;
+            margin-top: 20px;
+        }
+        .scope h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>信用評分系統計算擬定說明</h1>
+        <div class="version">版本：v2.0 ｜ 對應 index.html（1053 行）</div>
+
+        <p>這套系統的計算邏輯是基於<strong>授信實務 (Banking Practice)</strong> 與 <strong>台灣儲蓄互助社相關法規</strong> 擬定的。以下為您條列式說明各項設計的擬定原因，並標註 v2.0 的調整重點。</p>
+
+        <h2>1. 權重分配（5P 原則）的擬定原因</h2>
+        <p>系統採用國際通用的 5P 授信分析法，並根據互助社「平民金融」的特性調整權重：</p>
+        <ul>
+            <li><strong>還款能力 (35%) — 最優先考量</strong>：<br>
+                <em>原因</em>：現金流是還款的第一來源。比起抵押品，借款人每月的收入扣除負債後是否有餘力還款，是防止逾期放款最直接的指標。<br>
+                <em>v2.0 調整</em>：<span class="fix">DSR 公式已修</span> 分子由「社外月付」改為「<strong>社外月付 + 本社長債月付</strong>」，避免已有大額社內貸款的借款人反拿滿分。
+            </li>
+            <li><strong>借款人信用 (25%) — 重視往來情誼</strong>：<br>
+                <em>原因</em>：互助社核心精神是「社員互助」。長期穩定儲蓄的社員，其還款意願通常較高，因此將「社內往來」與「聯徵紀錄」設為第二高權重。
+            </li>
+            <li><strong>債權保障 (20%) — 風險抵補</strong>：<br>
+                <em>原因</em>：當第一來源（收入）出問題時，抵押品與保證人是第二還款來源。
+            </li>
+            <li><strong>資金用途 (10%) 與 未來展望 (10%) — 輔助判斷</strong>：<br>
+                <em>原因</em>：確保借款不是用於投機賭博，並確認借款人在貸款期間（如 5-7 年）職業是否具備延續性。
+            </li>
+        </ul>
+
+        <h2>2. 硬性限制（Veto 否決權）的擬定原因</h2>
+        <p>這部分主要是為了符合<strong>《儲蓄互助社法》</strong>及相關授信規章，預防法律風險。<span class="new">v2.0 新增多項否決邏輯</span>：</p>
+        <ul>
+            <li><strong>未成年人限制</strong>：<br>
+                <em>原因</em>：依據規章，未成年社員民事行為能力受限，其借款總額不得超過股金，以保護互助社資產與未成年人權益。
+            </li>
+            <li><strong>信用借款上限 (<span class="highlight">股金 + 100 萬</span>)<span class="fix">v2.0 修法</span></strong>：<br>
+                <em>原因</em>：這是互助社法規對「無擔保放款」的典型天花板，防止單一社員過度擴張信用。<br>
+                <em>計算方式</em>：原版只比對「本次申請額」，已修正為「<strong>本次申請額 ＋ 現有本社貸款餘額</strong>」與上限比較，杜絕「拆單規避」漏洞。
+            </li>
+            <li><strong>7 年貸款期限須有不動產<span class="fix">v2.0 修法</span></strong>：<br>
+                <em>原因</em>：長天期貸款風險高，依實務經驗與內部控管，逾 7 年之放款多要求足額抵押以保障社方。<br>
+                <em>v2.0 調整</em>：除了「足額不動產抵押」之外，<strong>「足額股金內借款」亦放行</strong>，因股金為社員自有資金（100% 擔保），風險實質上低於不動產。
+            </li>
+            <li><strong>總額 1,000 萬上限</strong>：<br>
+                <em>原因</em>：針對自然人放款的集中度風險控管，設定絕對金額上限。
+            </li>
+            <li><strong>核貸後總負債比 &gt; 70% 否決<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 的 DSR 否決線是「既有社外 DSR &gt; 70%」（分子不含本社與新貸），與業界慣例的「<strong>核貸後總負債比 DTI</strong>」不一致。v2.0 改為「<code>(社外 + 本社 + 新貸月付) ÷ 月收入 &gt; 70%</code>」即觸發否決。
+            </li>
+            <li><strong>到期年齡 &gt; 75 歲直接否決<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 對高齡僅扣 8 分，75 歲借 5 年仍可達 A 級，明顯違背常理。v2.0 設為硬性否決，避免爭議。
+            </li>
+            <li><strong>聯徵紀錄嚴重瑕疵（拒絕往來/強執）</strong>：<br>
+                <em>原因</em>：外部信用資料庫已明確標記風險，系統直接擋下。
+            </li>
+            <li><strong>資金用途不當（高風險投機）</strong>：<br>
+                <em>原因</em>：投機用途違背互助社「互助」本質。
+            </li>
+        </ul>
+
+        <h2>3. 分級制度與 DTI（負債比）的擬定原因</h2>
+        <p>系統將信用評分轉化為建議額度，是基於<strong>風險定價 (Risk-Based Pricing)</strong> 的邏輯：</p>
+        <ul>
+            <li><strong>分級連動負債比（30% ~ 60%）</strong>：<br>
+                <em>原因</em>：
+                <ul>
+                    <li><strong>A 級（90 分以上）</strong>：信用極佳，允許 DTI 達 60%。</li>
+                    <li><strong>D 級（60 分級別）</strong>：風險較高，DTI 嚴格限縮在 30%。</li>
+                </ul>
+            </li>
+            <li><strong>70% DTI 否決線<span class="fix">v2.0 修法</span></strong>：<br>
+                <em>原因</em>：在金融實務中，總負債比超過 70% 被視為「高風險客群」，違約機率大幅上升。v2.0 統一以「<strong>核貸後總負債比</strong>」為比較基準（v1.0 誤用既有社外 DSR）。
+            </li>
+            <li><strong>進度條顏色相對各級 DTI 上限<span class="fix">v2.0 修法</span></strong>：<br>
+                <em>原因</em>：v1.0 以「絕對 0.4 / 0.6」切換紅綠燈，未考慮各等級 DTI 上限不同（A=60%、D=30%）。v2.0 改為「<strong>postLoanDti / maxDti</strong>」的比例：&lt; 70% 綠、70-100% 黃、&gt; 100% 紅。E 級（maxDti = 0）時自動隱藏 marker。
+            </li>
+        </ul>
+
+        <h2>4. 試算公式與預覽設計</h2>
+        <ul>
+            <li><strong>月付金改採 PMT 公式<span class="fix">v2.0 修法</span></strong>：<br>
+                <em>原因</em>：v1.0 採「本金均攤 + 全額利息」，在長期低利下尚可，但 5 年以上、高利率情境會<strong>高估月付金 13-100%</strong>，連帶低估可貸額度。v2.0 改為業界標準等額本息公式：<br>
+                <code>PMT = P × r × (1+r)^n / ((1+r)^n - 1)</code><br>
+                反推可貸額、月付金、DTI 三者全部一致。
+            </li>
+            <li><strong>反推最高可貸額度</strong>：<br>
+                <em>原因</em>：業務人員常遇到社員問「我最多能借多少？」。系統透過「該等級建議負債比」減去「既有債務」後，<strong>反推</strong>剩餘可負擔的月付金，再換算成貸款本金。
+            </li>
+            <li><strong>金額文字化預覽（例如：4.5 萬元）</strong>：<br>
+                <em>原因</em>：防止輸入時漏看或多打一個「0」，增加人工校對的準確性。
+            </li>
+        </ul>
+
+        <h2>5. 否決清單與預核章<span class="new">v2.0 新增</span></h2>
+        <ul>
+            <li><strong>否決清單累積呈現</strong>：<br>
+                <em>原因</em>：v1.0 若同時觸發多條法規否決（例如：信用超限 + 7 年無不動產 + JCIC 瑕疵），畫面只顯示最後觸發的那一條，使用者無從得知完整原因。v2.0 改以 <code>&lt;ul&gt;</code> 列出<strong>所有</strong>觸發原因。
+            </li>
+            <li><strong>預核章依狀態切換</strong>：<br>
+                <em>原因</em>：v1.0 不論結果為何都蓋「合格驗證」紅章，可能在列印報告中誤導審查委員。v2.0 章戳依狀態切換：
+                <ul>
+                    <li>綠章「<strong>合格驗證</strong>」：建議核貸</li>
+                    <li>橘章「<strong>額度超限</strong>」：評分過關但 DTI 超本級上限</li>
+                    <li>紅章「<strong>建議婉拒</strong>」：E 級分數不足 60</li>
+                    <li>紅章「<strong>不予核貸</strong>」：法規否決</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>6. 報表設計</h2>
+        <ul>
+            <li><strong>報表 ID 序號制<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 採 <code>Math.random()</code> 4 位數字尾，同日 100 份以上即有約 50% 機率撞號（生日問題）。v2.0 改用 <code>localStorage</code> 累計每日序號，格式 <code>CU-YYYYMMDD-0001</code>，可追溯。
+            </li>
+            <li><strong>列印狀態去除 emoji<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 列印的狀態文字帶 🚫/⚠️/❌/✅ emoji，於正式紙本報告中不雅。v2.0 顯示用 emoji，列印時以 <code>stripEmoji</code> 去除。
+            </li>
+            <li><strong>欄位 ID 全面語意化<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 列印區 ID 命名混亂（<code>p_shares</code> 顯示用途、<code>p_interact</code> 顯示前景），未來重構風險高。v2.0 全部改為 <code>p_&lt;區塊&gt;</code> 格式（<code>p_purpose</code>、<code>p_perspective</code>、<code>p_interaction</code>、<code>p_jcic</code>、<code>p_stability</code>）。
+            </li>
+            <li><strong>補上會員編號、承辦人、申請日期<span class="new">v2.0 新增</span></strong>：<br>
+                <em>原因</em>：v1.0 報告沒有對應到具體人，無法歸檔追溯。v2.0 報表 header 增加會員編號/姓名、承辦業務員、申請日期三欄。
+            </li>
+        </ul>
+
+        <h2>7. 輸入防呆<span class="new">v2.0 新增</span></h2>
+        <ul>
+            <li><strong>負值檢查</strong>：所有數字欄位若輸入負值，系統立即攔截並列出錯誤清單。</li>
+            <li><strong>預設值移除</strong>：v1.0 預先填入「45000 元月收入」「300,000 元借款」等範例數字，恐導致業務員忘記改就按計算。v2.0 全部留空，僅顯示 placeholder 提示。</li>
+            <li><strong>異常值警告</strong>：年利率 &gt; 20%、貸款年限 &gt; 50 年、年齡 &lt; 18 歲等異常輸入會主動提示，但仍允許繼續試算。</li>
+        </ul>
+
+        <div class="scope">
+            <h3>⚠ 系統定位與不涵蓋範圍</h3>
+            <p><strong>本系統定位為「業務員內部試算輔助工具」</strong>，不取代法規審查與放款委員會之最終決議。下列項目<strong>未涵蓋</strong>於本系統中，須由相關人員另行處理：</p>
+            <ul>
+                <li>連帶保證人數上限（多數互助社限 1-2 人）</li>
+                <li>同一社員總授信集中度（對單一社員放款總額 ≤ 社股金 × 一定比例）</li>
+                <li>擔保品鑑估規則（不動產鑑價、股金按面額）</li>
+                <li>放款利率上下限（合作法規）</li>
+                <li>逾期 3 期處理程序、催收流程</li>
+                <li>放款委員會審議門檻（金額、評分雙重標準）</li>
+                <li>共同借款人 / 連帶保證人具體身份驗證</li>
+            </ul>
+        </div>
+
+        <div class="summary">
+            目標總結：「在符合法規的前提下，讓優質社員獲得更高額度，並對高風險借款人進行自動化預警。」<br>
+            <span style="font-weight:normal; color:#555;">v2.0 強調：所有法規否決採<strong>累積式呈現</strong>，預核章<strong>依狀態切換</strong>，公式<strong>採用業界 PMT 標準</strong>，確保對外報告一致、可追溯。</span>
+        </div>
+    </div>
+</body>
+</html>

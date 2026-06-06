@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>儲蓄互助社 - 信用評分與核貸試算系統</title>
+    <style>
+        :root {
+            --primary-color: #1a237e; /* 深藍色 */
+            --primary-light: #534bae;
+            --primary-dark: #000051;
+            --secondary-color: #ffb300; /* 琥珀金點綴 */
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+            --border-radius: 12px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-size: 18px;
+            line-height: 1.7;
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--primary-dark);
+            font-size: 2.2em;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            position: relative;
+            display: inline-block;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 4px;
+            background: var(--secondary-color);
+            border-radius: 2px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 25px;
+            border: 1px solid rgba(0,0,0,0.03);
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            color: var(--primary-color);
+            margin-bottom: 22px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            border-left: 6px solid var(--secondary-color);
+            padding-left: 15px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 1em;
+            color: var(--text-main);
+        }
+
+        input, select {
+            padding: 14px 18px;
+            border: 2px solid #e0e6ed;
+            border-radius: var(--border-radius);
+            font-size: 1em;
+            transition: var(--transition);
+            background-color: #fcfdfe;
+        }
+
+        .input-preview {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85em;
+            font-weight: 700;
+            color: var(--primary-color);
+            min-height: 1.2em;
+            letter-spacing: 0.5px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 4px rgba(26, 35, 126, 0.1);
+            background-color: #fff;
+        }
+
+        .highlight-input {
+            border-color: #ffcc80;
+            background-color: #fffde7;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        button {
+            flex: 1;
+            padding: 20px;
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1.2em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .btn-calc {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+        }
+        .btn-calc:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(26, 35, 126, 0.25);
+        }
+
+        .btn-print {
+            background: linear-gradient(135deg, #2e7d32, #43a047);
+            display: none;
+        }
+        .btn-print:hover {
+            background: linear-gradient(135deg, #1b5e20, #2e7d32);
+            transform: translateY(-2px);
+        }
+
+        /* 結果卡片優化 */
+        .result-card {
+            margin-top: 35px;
+            padding: 35px;
+            background: linear-gradient(to bottom right, #ffffff, #f8faff);
+            border: 1px solid #d1d9e6;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: none;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .result-stat {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #edf2f7;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .result-stat-label {
+            font-size: 0.95em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .result-stat-value {
+            font-size: 1.8em;
+            font-weight: 800;
+            color: var(--primary-dark);
+        }
+
+        .result-value-highlight {
+            color: var(--secondary-color);
+            text-shadow: 1px 1px 0px rgba(0,0,0,0.05);
+        }
+
+        /* 儀表板進度條 */
+        .gauge-container {
+            margin: 30px 0;
+            background: #f1f4f8;
+            padding: 20px;
+            border-radius: 15px;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 14px;
+            background-color: #e2e8f0;
+            border-radius: 7px;
+            margin: 15px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 7px;
+            transition: width 1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+        }
+
+        .progress-limit-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #d32f2f;
+            z-index: 10;
+            box-shadow: 0 0 5px rgba(211, 47, 47, 0.5);
+        }
+
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .status-msg {
+            margin-top: 25px;
+            padding: 22px;
+            border-radius: var(--border-radius);
+            font-weight: 700;
+            text-align: center;
+            font-size: 1.2em;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pass { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+        .status-warn { background-color: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+        .status-fail { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+
+        /* 提示訊息樣式（取代 inline cssText） */
+        .hint { display: block; margin-top: 15px; padding: 14px; border-radius: var(--border-radius); font-size: 0.9em; font-weight: 600; }
+        .hint-success { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+        .hint-warn    { background-color: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+        .hint-error   { background-color: #ffebee; color: #c62828; border: 2px solid #ef9a9a; }
+        .hint-info    { background-color: #e8eaf6; color: #283593; border: 1px solid #c5cae9; }
+
+        /* 預核章狀態 */
+        .system-seal-pass { border-color: #2e7d32 !important; color: #2e7d32 !important; }
+        .system-seal-fail { border-color: #d32f2f !important; color: #d32f2f !important; }
+        .system-seal-warn { border-color: #e65100 !important; color: #e65100 !important; }
+
+        /* 否決清單 */
+        .veto-list { text-align: left; margin: 8px 0 0 0; padding-left: 20px; }
+        .veto-list li { margin-bottom: 4px; }
+
+        /* 進度條 marker E 級隱藏 */
+        .progress-limit-marker.hidden { display: none; }
+
+        /* 列印專屬樣式 */
+        .print-area { display: none; }
+        
+        @media print {
+            body { background-color: #fff; padding: 0; color: #000; }
+            .container { box-shadow: none; padding: 0; max-width: 100%; }
+            .no-print { display: none !important; }
+            .print-area { display: block; padding: 20px; }
+            
+            .print-header { text-align: center; border-bottom: 2px solid #1a237e; padding-bottom: 15px; margin-bottom: 30px; }
+            .print-title { font-size: 28px; font-weight: bold; color: #1a237e; margin-bottom: 5px; }
+            .print-subtitle { font-size: 14px; color: #555; }
+            
+            .print-section { margin-bottom: 25px; }
+            .print-section-title { font-weight: bold; font-size: 18px; border-left: 5px solid #1a237e; padding-left: 10px; margin-bottom: 15px; }
+            
+            /* 專業報表表格 */
+            .print-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 10px; text-align: left; font-size: 14px; word-wrap: break-word; }
+            .print-table th { background-color: #f2f2f2 !important; width: 35%; font-weight: bold; -webkit-print-color-adjust: exact; }
+            
+            .print-result-box { border: 2px solid #1a237e; padding: 20px; margin-top: 20px; background: #f8faff !important; -webkit-print-color-adjust: exact; position: relative; }
+            .print-result-title { font-size: 20px; font-weight: bold; color: #1a237e; margin-bottom: 10px; }
+            
+            .disclaimer { margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px; line-height: 1.5; }
+            
+            .system-seal {
+                position: absolute;
+                right: 20px;
+                top: 20px;
+                width: 100px;
+                height: 100px;
+                border: 3px double #d32f2f;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                text-align: center;
+                color: #d32f2f;
+                font-weight: bold;
+                font-size: 14px;
+                transform: rotate(-15deg);
+                opacity: 0.9;
+                padding: 5px;
+            }
+            .system-seal-pass { border-color: #2e7d32 !important; color: #2e7d32 !important; }
+            .system-seal-fail { border-color: #d32f2f !important; color: #d32f2f !important; }
+            .system-seal-warn { border-color: #e65100 !important; color: #e65100 !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="no-print">
+        <div class="header">
+            <h1>信用評分與核貸試算系統</h1>
+            <p style="color: var(--text-muted); margin-top: 15px;">儲蓄互助社授信試算工具</p>
+        </div>
+
+        <div class="card">
+            <div class="section-title">零、案件基本資訊</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>會員編號 / 姓名 <span style="color: var(--text-muted); font-weight: normal;">(選填，列印時顯示)</span></label>
+                    <input type="text" id="memberId" placeholder="例如：A00123 王小明" maxlength="40">
+                </div>
+                <div class="form-group">
+                    <label>承辦業務員 <span style="color: var(--text-muted); font-weight: normal;">(選填)</span></label>
+                    <input type="text" id="officer" placeholder="例如：林業務" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label>申請日期</label>
+                    <input type="date" id="appDate">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">一、還款能力 — 權重 35%</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>借款人月平均收入 (元)</label>
+                    <input type="number" id="income" placeholder="例如：45000" min="1">
+                    <span class="input-preview" id="preview_income"></span>
+                </div>
+                <div class="form-group">
+                    <label>借款人年齡 (歲)</label>
+                    <input type="number" id="age" placeholder="例如：40" min="18" max="80">
+                </div>
+                <div class="form-group">
+                    <label>社外債務每月應繳總額 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">(銀行房貸、車貸、信貸、信用卡分期等)</small>
+                    </label>
+                    <input type="number" id="existing_debt" class="highlight-input" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_existing_debt"></span>
+                </div>
+                <div class="form-group">
+                    <label>本社現有貸款每月應繳額 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">(若無則填 0；同時會納入 DSR 評分)</small>
+                    </label>
+                    <input type="number" id="internal_monthly" class="highlight-input" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_internal_monthly"></span>
+                </div>
+                <div class="form-group">
+                    <label>本社現有貸款餘額 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">(用於計算在本社借款總金額、信用上限合計)</small>
+                    </label>
+                    <input type="number" id="internal_balance" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_internal_balance"></span>
+                </div>
+                <div class="form-group">
+                    <label>收入穩定性與年資</label>
+                    <select id="stability">
+                        <option value="15">現職年資 > 3年 (公教或大型企業)</option>
+                        <option value="10">現職年資 1~3年</option>
+                        <option value="5">收入為不固定佣金或打零工</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>預計借款金額 (元)</label>
+                    <input type="number" id="loan" placeholder="例如：300000" min="0">
+                    <span class="input-preview" id="preview_loan"></span>
+                </div>
+                <div class="form-group">
+                    <label>貸款年限 (年)</label>
+                    <input type="number" id="years" placeholder="例如：5" min="1">
+                </div>
+                <div class="form-group">
+                    <label>年利率 (%)</label>
+                    <input type="number" id="rate" placeholder="例如：3" step="0.01" min="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">二、借款人信用 — 權重 25%</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>社內往來與儲蓄習慣</label>
+                    <select id="interaction">
+                        <option value="10">不間斷儲蓄超過 12 個月</option>
+                        <option value="7">穩定儲蓄但曾有短暫中斷</option>
+                        <option value="3">偶爾儲蓄股金</option>
+                        <option value="-20">曾有還款逾期紀錄</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>聯合徵信紀錄</label>
+                    <select id="jcic">
+                        <option value="10">無信用瑕疵且無預借現金</option>
+                        <option value="5">有遲繳紀錄但已結清</option>
+                        <option value="veto">強執、拒絕往來或嚴重瑕疵</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>入社年資</label>
+                    <select id="membership">
+                        <option value="5">入社超過 5 年</option>
+                        <option value="3">入社 1~5 年</option>
+                        <option value="1">入社未滿 1 年</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">三、債權保障 — 權重 20%</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>社內股金餘額 (元)</label>
+                    <input type="number" id="shares" placeholder="例如：50000" min="0">
+                    <span class="input-preview" id="preview_shares"></span>
+                </div>
+                <div class="form-group">
+                    <label>擔保品設定</label>
+                    <select id="collateral">
+                        <option value="12">足額股金內借款 (極優)</option>
+                        <option value="10">足額不動產抵押</option>
+                        <option value="5">不足額擔保或純信用(股金2倍內)</option>
+                        <option value="0">純信用借款 (超過股金2倍)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>保證人實力</label>
+                    <select id="guarantor">
+                        <option value="8">保證人收入高且有資產</option>
+                        <option value="5">有保證人但實力一般</option>
+                        <option value="0">無保證人</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">四、資金用途 — 權重 10%</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>借款用途正當性</label>
+                    <select id="purpose">
+                        <option value="10">生產、教育、修繕房屋、醫療</option>
+                        <option value="10">債務整合 (清償高利貸/卡債)</option>
+                        <option value="7">生活週轉、理財投資</option>
+                        <option value="veto">高風險投機、用途不明</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">五、未來展望 — 權重 10%</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>職業前景與參與度</label>
+                    <select id="perspective">
+                        <option value="10">公教或大型企業 (受景氣影響小) + 積極參與社務</option>
+                        <option value="7">一般產業 (穩定) + 有參與大會</option>
+                        <option value="4">受景氣影響較大行業 (如旅遊、營造)</option>
+                        <option value="0">無固定職業</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-calc" onclick="calculateLoan()">開始授信評分</button>
+            <button id="btnPrint" class="btn-print" onclick="window.print()">列印正式審查報告</button>
+        </div>
+
+        <div id="resultCard" class="result-card">
+            <div class="section-title">📊 試算分析結果</div>
+            
+            <div class="result-dashboard">
+                <div class="result-stat">
+                    <span class="result-stat-label">系統總評分</span>
+                    <span id="resScore" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">分</span>
+                </div>
+                <div class="result-stat">
+                    <span class="result-stat-label">信用等級</span>
+                    <span id="resGrade" class="result-stat-value result-value-highlight"></span> <span style="font-size: 0.6em; color: var(--text-muted);">級</span>
+                </div>
+                <div class="result-stat">
+                    <span class="result-stat-label">最高建議可貸額度</span>
+                    <span id="resLimit" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">元</span>
+                </div>
+                <div class="result-stat">
+                    <span class="result-stat-label">申請額 / 股金倍數</span>
+                    <span id="resShareMult" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">倍</span>
+                </div>
+                <div class="result-stat">
+                    <span class="result-stat-label">在本社借款總金額</span>
+                    <span id="resTotalExposure" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">元</span>
+                </div>
+            </div>
+            
+            <div class="gauge-container">
+                <div style="font-weight: 700; color: var(--primary-dark); margin-bottom: 5px;">每月還款總負擔（占月收入比例）</div>
+                <div style="font-size: 0.9em; color: var(--text-muted); margin-bottom: 10px;">計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入</div>
+                <div class="progress-container">
+                    <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+                    <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級還款壓力上限"></div>
+                </div>
+                <div class="progress-labels">
+                    <span>0%</span>
+                    <span>30% 警戒</span>
+                    <span>50% 極限</span>
+                    <span>100%</span>
+                </div>
+                <div style="font-size: 0.9em; color: var(--text-muted); margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>預計總月負擔：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%
+                        <span id="dtiOverflowBadge" style="display:none; margin-left:8px; padding:2px 8px; background-color:#ffebee; color:#c62828; border:1px solid #ef9a9a; border-radius:4px; font-size:0.85em; font-weight:700;"></span>
+                    </span>
+                    <span>本級別建議上限：<strong id="resMaxDtiTxt"></strong>%</span>
+                </div>
+            </div>
+
+            <div id="resStatus" class="status-msg"></div>
+
+            <div id="minorWarn" style="display:none; margin-top:15px; padding:14px; border-radius:var(--border-radius); font-size:0.95em; font-weight:600; background-color:#fff3e0; color:#e65100; border:2px solid #ffb300;">
+                注意：借款人為未成年（未滿18歲），依規須取得法定代理人書面同意，請附上同意書後再送件。
+            </div>
+
+            <div id="shareHint" style="display:none; margin-top: 15px; padding: 14px; border-radius: var(--border-radius); font-size: 0.9em; font-weight: 600;"></div>
+
+            <div style="margin-top: 20px; padding: 15px; background-color: #fcfcfc; border: 1px dashed #d1d9e6; border-radius: 8px; font-size: 0.85em; color: var(--text-muted);">
+                <strong>💡 專業小叮嚀：</strong><br>
+                「本級別建議上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不建議超過月收入的該比例，以維持良好的生活品質與信用風險控制。
+            </div>
+        </div>
+    </div>
+
+    <div class="print-area">
+        <div class="print-header">
+            <div class="print-title">儲蓄互助社 授信審查報告書</div>
+            <div class="print-subtitle">
+                Report ID: <span id="reportId"></span> |
+                申請日期：<span id="printAppDate">—</span> |
+                產出日期：<span id="printDate"></span>
+            </div>
+        </div>
+
+        <div class="print-section">
+            <div class="print-section-title">一、 案件與借款人基本資料</div>
+            <table class="print-table">
+                <tr>
+                    <th>會員編號 / 姓名</th>
+                    <td id="p_memberId">—</td>
+                </tr>
+                <tr>
+                    <th>承辦業務員</th>
+                    <td id="p_officer">—</td>
+                </tr>
+                <tr>
+                    <th>借款人月平均收入</th>
+                    <td id="p_income"></td>
+                </tr>
+                <tr>
+                    <th>社外債務每月應繳額<br><small>(房貸、車貸、信貸、卡債等)</small></th>
+                    <td id="p_existing"></td>
+                </tr>
+                <tr>
+                    <th>本社現有貸款<br><small>(月應繳額 / 餘額)</small></th>
+                    <td id="p_internal"></td>
+                </tr>
+                <tr>
+                    <th>本次申請貸款明細<br><small>(金額 / 年限 / 利率)</small></th>
+                    <td id="p_loan_details"></td>
+                </tr>
+                <tr>
+                    <th>社內股金餘額 / 申請額倍數</th>
+                    <td id="p_shares_info"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="print-section">
+            <div class="print-section-title">二、 授信評核明細（五大評估面向）</div>
+            <table class="print-table">
+                <tr>
+                    <th>一、還款能力 — 收入穩定性</th>
+                    <td id="p_stability"></td>
+                </tr>
+                <tr>
+                    <th>二、借款人信用 — 社內往來 / 聯徵紀錄</th>
+                    <td><span id="p_interaction"></span> / <span id="p_jcic"></span></td>
+                </tr>
+                <tr>
+                    <th>三、債權保障 — 擔保設定與保證人</th>
+                    <td id="p_collateral"></td>
+                </tr>
+                <tr>
+                    <th>四、資金用途</th>
+                    <td id="p_purpose"></td>
+                </tr>
+                <tr>
+                    <th>五、未來展望與參與度</th>
+                    <td id="p_perspective"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="print-result-box">
+            <div class="system-seal" id="printSeal">系統自動檢測<br><span id="sealText">合格驗證</span></div>
+            <div class="print-result-title">三、 系統綜合評估結果</div>
+            <table class="print-table" style="border: none;">
+                <tr style="border: none;">
+                    <td style="border: none; width: 60%;">
+                        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
+                            評估等級：<span id="p_grade" style="color: #1a237e; font-size: 24px;"></span> 級 (<span id="p_score"></span> 分)
+                        </div>
+                        <div style="font-size: 14px; color: #333;">
+                            核貸後每月負債比：<span id="p_dti" style="font-weight: bold;"></span>%<br>
+                            （該等級建議上限：<span id="p_maxdti" style="font-weight: bold;"></span>%）
+                        </div>
+                    </td>
+                    <td style="border: none; text-align: center; vertical-align: middle;">
+                        <div style="font-size: 14px; color: #555;">建議最高核貸額度</div>
+                        <div style="font-size: 22px; font-weight: bold; color: #d32f2f;">NT$ <span id="p_limit"></span></div>
+                    </td>
+                </tr>
+            </table>
+            <div id="p_status" style="margin-top: 15px; font-weight: bold; padding: 10px; border: 1px solid #1a237e; background: #fff; text-align: center; width: 100%;"></div>
+        </div>
+
+        <div class="print-section" style="margin-top: 20px;">
+            <div style="font-size: 13px; color: #444; line-height: 1.6;">
+                <strong>報告備註：</strong><br>
+                1. 每月負債比係綜合「社外月付」「本社現有月付」與「本次擬貸月付」後對比月收入，用以評估還款壓力。<br>
+                2. 本報告之建議額度係依據「<span id="p_grade2"></span>級」之負債上限（<span id="p_maxdti2"></span>%）反推求得。
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            本報告書由信用評分系統自動生成，僅供內部授信審核參考之用。借款人實際核貸金額、利率及條件，仍須依據本社授信規章辦理，並以「放款委員會」之最終審議決議為準。
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 常數（評分門檻、法規上限、評等等級）
+// ============================================================
+const DSR_VETO_THRESHOLD       = 0.70;
+const DSR_TIER_HIGH            = 0.50;
+const DSR_TIER_VERY_HIGH       = 0.60;
+const AGE_HARD_VETO            = 75;
+const AGE_SOFT_PENALTY         = 70;
+const AGE_SOFT_PENALTY_MILD    = 65;
+const AGE_SCORE_HARD           = -10;
+const AGE_SCORE_MILD           = -5;
+const NATURAL_PERSON_CAP       = 10_000_000;
+const CREDIT_FLOOR_PER_SHARE   = 1_000_000;
+const LONG_TERM_YEARS          = 7;
+const GRADE_THRESHOLDS         = { A: 90, B: 80, C: 70, D: 60 };
+const GRADE_DTI_LIMITS         = { A: 0.60, B: 0.50, C: 0.40, D: 0.30 };
+
+// ============================================================
+// 工具函式
+// ============================================================
+const $ = id => document.getElementById(id);
+
+function pmt(principal, annualRatePercent, years) {
+    const n = years * 12;
+    const r = (annualRatePercent / 100) / 12;
+    if (r === 0) return principal / n;
+    return principal * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1);
+}
+
+function stripEmoji(str) {
+    return String(str).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+}
+
+function formatAmount(val) {
+    if (!val || val <= 0) return '';
+    if (val >= 100000000) return (val / 100000000).toFixed(1) + ' 億元';
+    if (val >= 10000) {
+        const wan = val / 10000;
+        return (wan % 1 === 0 ? wan : wan.toFixed(1)) + ' 萬元';
+    }
+    return val.toLocaleString('zh-TW') + ' 元';
+}
+
+function getReportSeq() {
+    const today = new Date();
+    const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const key = `cu_seq_${ymd}`;
+    const cur = parseInt(localStorage.getItem(key) || '0', 10);
+    const next = cur + 1;
+    localStorage.setItem(key, String(next));
+    return next;
+}
+
+// ============================================================
+// 解析與驗證輸入
+// ============================================================
+function parseInputs() {
+    return {
+        memberId:       $('memberId').value.trim(),
+        officer:        $('officer').value.trim(),
+        appDate:        $('appDate').value,
+        income:         parseFloat($('income').value) || 0,
+        age:            parseInt($('age').value) || 0,
+        existingDebt:   parseFloat($('existing_debt').value) || 0,
+        internalMonthly:parseFloat($('internal_monthly').value) || 0,
+        internalBalance:parseFloat($('internal_balance').value) || 0,
+        proposedLoan:   parseFloat($('loan').value) || 0,
+        years:          parseInt($('years').value) || 0,
+        ratePercent:    parseFloat($('rate').value) || 0,
+        shares:         parseFloat($('shares').value) || 0,
+        stability:      parseInt($('stability').value) || 0,
+        interaction:    parseInt($('interaction').value) || 0,
+        jcic:           $('jcic').value,
+        membership:     parseInt($('membership').value) || 0,
+        collateral:     $('collateral').value,
+        guarantor:      parseInt($('guarantor').value) || 0,
+        purpose:        $('purpose').value,
+        perspective:    parseInt($('perspective').value) || 0,
+    };
+}
+
+function validateInputs(input) {
+    const errors = [];
+    if (input.income <= 0)        errors.push('月收入須大於 0');
+    if (input.years <= 0)         errors.push('貸款年限須大於 0');
+    if (input.proposedLoan <= 0)  errors.push('申請金額須大於 0');
+    const numericFields = ['income','age','existingDebt','internalMonthly','internalBalance','proposedLoan','years','ratePercent','shares'];
+    for (const f of numericFields) {
+        if (input[f] < 0) errors.push(`「${f}」不可為負值`);
+    }
+    if (input.ratePercent > 20)   errors.push('年利率 > 20% 異常，請確認');
+    if (input.years > 50)         errors.push('貸款年限過長（> 50 年），請確認');
+    if (input.age > 0 && input.age < 18) errors.push('年齡未滿 18 歲須特別審核（仍可試算）');
+    return errors;
+}
+
+// ============================================================
+// 評分計算（含 baseline DSR 含本社長債）
+// ============================================================
+function computeScore(input) {
+    // [FIX 1.6] DSR 含社外 + 本社月付
+    const baselineDsr = (input.existingDebt + input.internalMonthly) / input.income;
+    let dsrScore = 0;
+    if (baselineDsr < DSR_TIER_HIGH)      dsrScore = 20;
+    else if (baselineDsr < DSR_TIER_VERY_HIGH) dsrScore = 15;
+    else if (baselineDsr < DSR_VETO_THRESHOLD) dsrScore = 5;
+
+    // People (25%)
+    const jcicScore = input.jcic === 'veto' ? 0 : (parseInt(input.jcic) || 0);
+    const peopleScore = input.interaction + jcicScore + input.membership;
+
+    // Protection (20%)
+    const protectionScore = parseInt(input.collateral) + input.guarantor;
+
+    // Purpose (10%)
+    const purposeScore = input.purpose === 'veto' ? 0 : (parseInt(input.purpose) || 0);
+
+    // Perspective (10%)
+    const perspectiveScore = input.perspective;
+
+    // Age penalty（僅扣分，不否決；否決由法規⑧處理）
+    const ageAtMaturity = input.age + input.years;
+    let ageScore = 0;
+    if (ageAtMaturity > AGE_SOFT_PENALTY)      ageScore = AGE_SCORE_HARD;
+    else if (ageAtMaturity > AGE_SOFT_PENALTY_MILD) ageScore = AGE_SCORE_MILD;
+
+    return {
+        dsr: baselineDsr,
+        dsrScore,
+        stability: input.stability,
+        ageScore,
+        peopleScore,
+        protectionScore,
+        purposeScore,
+        perspectiveScore,
+        total: dsrScore + input.stability + ageScore + peopleScore + protectionScore + purposeScore + perspectiveScore
+    };
+}
+
+// ============================================================
+// 法規否決（累積所有觸發原因）
+// ============================================================
+function applyRegulatoryVetoes(input) {
+    const vetoes = [];
+    const ageAtMaturity = input.age + input.years;
+
+    // [FIX 1.1] 月付金改用 PMT 公式
+    const newLoanMonthlyPmt = pmt(input.proposedLoan, input.ratePercent, input.years);
+    // [FIX 1.5] 否決線比對「核貸後總負債比」
+    const postLoanDti = (input.existingDebt + input.internalMonthly + newLoanMonthlyPmt) / input.income;
+
+    // ① 未成年社員借款總額 ≤ 股金
+    if (input.age < 18 && (input.proposedLoan + input.internalBalance) > input.shares) {
+        vetoes.push(`未成年社員借款總額（${(input.proposedLoan + input.internalBalance).toLocaleString('zh-TW')} 元）不得超過股金餘額（${input.shares.toLocaleString('zh-TW')} 元）`);
+    }
+
+    // ② [FIX 1.4] 信用借款法定上限（含現有本社餘額）
+    const creditCeiling = input.shares + CREDIT_FLOOR_PER_SHARE;
+    const totalCreditExposure = input.proposedLoan + input.internalBalance;
+    if ((input.collateral === '0' || input.collateral === '5') && totalCreditExposure > creditCeiling) {
+        vetoes.push(`信用借款總額（${totalCreditExposure.toLocaleString('zh-TW')} 元）超過法定上限（股金 ${input.shares.toLocaleString('zh-TW')} 元 ＋ 100 萬 ＝ ${creditCeiling.toLocaleString('zh-TW')} 元）`);
+    }
+
+    // ③ 自然人放款絕對上限
+    if (input.proposedLoan > NATURAL_PERSON_CAP) {
+        vetoes.push(`申請金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過自然人放款法定上限 ${(NATURAL_PERSON_CAP/10000).toLocaleString('zh-TW')} 萬元`);
+    }
+
+    // ④ [FIX 1.9] 7 年以上須足額不動產 OR 足額股金內
+    //   股金為社員自有資金（100% 擔保），風險實質上低於不動產，故一併放行
+    if (input.years > LONG_TERM_YEARS && input.collateral !== '10' && input.collateral !== '12') {
+        vetoes.push(`貸款年限 ${input.years} 年超過 ${LONG_TERM_YEARS} 年，依法須以足額不動產抵押或足額股金內借款為擔保（信用借款不符合）`);
+    }
+
+    // ⑤ 聯徵紀錄嚴重瑕疵
+    if (input.jcic === 'veto') {
+        vetoes.push('聯徵紀錄存有嚴重瑕疵（拒絕往來/強執）');
+    }
+
+    // ⑥ 資金用途不當
+    if (input.purpose === 'veto') {
+        vetoes.push('資金用途不具正當性或屬高風險投機');
+    }
+
+    // ⑦ [FIX 1.5] 核貸後總負債比 > 70% 極限
+    if (postLoanDti > DSR_VETO_THRESHOLD) {
+        vetoes.push(`核貸後總負債比 ${(postLoanDti*100).toFixed(1)}% 超過 70% 極限`);
+    }
+
+    // ⑧ [FIX 1.7] 到期年齡 > 75 直接否決
+    if (ageAtMaturity > AGE_HARD_VETO) {
+        vetoes.push(`還款到期年齡 ${ageAtMaturity} 歲超過 ${AGE_HARD_VETO} 歲上限`);
+    }
+
+    return { vetoes, newLoanMonthlyPmt, postLoanDti };
+}
+
+function determineGrade(score, isVetoed) {
+    if (isVetoed) return { grade: 'E', maxDti: 0 };
+    if (score >= GRADE_THRESHOLDS.A) return { grade: 'A', maxDti: GRADE_DTI_LIMITS.A };
+    if (score >= GRADE_THRESHOLDS.B) return { grade: 'B', maxDti: GRADE_DTI_LIMITS.B };
+    if (score >= GRADE_THRESHOLDS.C) return { grade: 'C', maxDti: GRADE_DTI_LIMITS.C };
+    if (score >= GRADE_THRESHOLDS.D) return { grade: 'D', maxDti: GRADE_DTI_LIMITS.D };
+    return { grade: 'E', maxDti: 0 };
+}
+
+function computeMaxLoan(input, maxDti) {
+    if (maxDti <= 0) return 0;
+    const maxAvailablePmt = (input.income * maxDti) - input.existingDebt - input.internalMonthly;
+    if (maxAvailablePmt <= 0) return 0;
+    const r = (input.ratePercent / 100) / 12;
+    const n = input.years * 12;
+    const factor = r === 0 ? (1/n) : r * Math.pow(1+r, n) / (Math.pow(1+r, n) - 1);
+    return maxAvailablePmt / factor;
+}
+
+function applyLegalCeiling(input, maxLoanLimit) {
+    let ceiling;
+    if (input.collateral === '10' || input.collateral === '12') {
+        ceiling = NATURAL_PERSON_CAP;
+    } else {
+        ceiling = input.shares + CREDIT_FLOOR_PER_SHARE;
+    }
+    let limit = Math.min(maxLoanLimit, ceiling);
+    if (input.age < 18) {
+        limit = Math.min(limit, Math.max(0, input.shares - input.internalBalance));
+    }
+    return limit;
+}
+
+// ============================================================
+// UI 渲染
+// ============================================================
+function renderDashboard(result) {
+    const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, statusText } = result;
+
+    $('resScore').innerText = scoreDetail.total;
+    const gradeEl = $('resGrade');
+    gradeEl.innerText = grade;
+    const gradeColors  = { A:'#2e7d32', B:'#00695c', C:'#e65100', D:'#bf360c', E:'#c62828' };
+    const gradeBgs     = { A:'#e8f5e9', B:'#e0f2f1', C:'#fff3e0', D:'#fbe9e7', E:'#ffebee' };
+    const gradeBorders = { A:'#c8e6c9', B:'#b2dfdb', C:'#ffe0b2', D:'#ffccbc', E:'#ffcdd2' };
+    gradeEl.style.color = gradeColors[grade] || '#000051';
+    const gradeCard = gradeEl.closest('.result-stat');
+    gradeCard.style.backgroundColor = gradeBgs[grade] || '#fff';
+    gradeCard.style.borderColor = gradeBorders[grade] || '#edf2f7';
+
+    $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
+    $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
+    $('resMaxDtiTxt').innerText = (maxDti * 100);
+    $('resMaxDtiTxt2').innerText = (maxDti * 100);
+    $('resShareMult').innerText = shareMult !== null ? shareMult.toFixed(1) : '—';
+    $('resTotalExposure').innerText = totalExposure.toLocaleString('zh-TW');
+    $('minorWarn').style.display = (input.age < 18 && !isVetoed) ? 'block' : 'none';
+
+    // 股金 / 擔保品提示（[FIX 6.3] 改用 CSS class）
+    const shareHint = $('shareHint');
+    if (input.shares > 0) {
+        let hintMsg = '';
+        let hintType = '';
+        let conflict = '';
+        if (input.collateral === '12' && input.proposedLoan > input.shares) {
+            conflict = '申請金額超過股金餘額，不符合「足額股金內借款」條件，請重新確認擔保品欄位。';
+        } else if (input.collateral === '5' && input.proposedLoan > input.shares * 2) {
+            conflict = '申請金額超過股金 2 倍，不符合「股金 2 倍內」條件，請重新確認擔保品欄位。';
+        } else if (input.collateral === '0' && input.proposedLoan <= input.shares) {
+            conflict = '申請金額未超過股金，可能符合「足額股金內借款」，請確認擔保品欄位設定。';
+        }
+        if (conflict) {
+            hintType = 'error';
+            hintMsg = `擔保品設定矛盾：${conflict}`;
+        } else if (input.collateral === '10') {
+            hintType = 'info';
+            hintMsg = `股金參考：申請額為股金的 ${shareMult !== null ? shareMult.toFixed(1) : '—'} 倍，擔保品為足額不動產，不受股金倍數限制。`;
+        } else if (input.proposedLoan <= input.shares) {
+            hintType = 'success';
+            hintMsg = '股金確認：申請金額未超過股金餘額，符合「足額股金內借款」條件。';
+        } else if (input.proposedLoan <= input.shares * 2) {
+            hintType = 'warn';
+            hintMsg = `股金確認：申請金額為股金的 ${shareMult.toFixed(1)} 倍，屬「股金 2 倍內」範圍。`;
+        } else {
+            hintType = 'error';
+            hintMsg = `股金確認：申請金額已超過股金的 2 倍（目前 ${shareMult.toFixed(1)} 倍），屬純信用借款，請確認擔保品設定。`;
+        }
+        shareHint.className = `hint hint-${hintType}`;
+        shareHint.innerText = hintMsg;
+    } else {
+        shareHint.style.display = 'none';
+    }
+
+    // 狀態訊息（[FIX 1.3] 否決清單以 <ul> 累積呈現）
+    const statusEl = $('resStatus');
+    statusEl.className = 'status-msg';
+    if (isVetoed) {
+        statusEl.innerHTML = `🚫 系統判定：不予核貸<ul class="veto-list">${vetoes.map(v => `<li>${v}</li>`).join('')}</ul>`;
+        statusEl.classList.add('status-fail');
+    } else if (grade === 'E') {
+        statusEl.innerHTML = '⚠️ 評分不足 60 分，建議婉拒或要求增加股金';
+        statusEl.classList.add('status-fail');
+    } else if (postLoanDti > maxDti) {
+        statusEl.innerHTML = `❌ 額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級建議上限 (${(maxDti*100).toFixed(0)}%)`;
+        statusEl.classList.add('status-warn');
+    } else {
+        statusEl.innerHTML = '✅ 信用良好且負擔合理，建議核貸';
+        statusEl.classList.add('status-pass');
+    }
+
+    // 進度條（[FIX 5.4] 顏色相對 DTI；[FIX 5.5] DTI>100% 溢出提示）
+    const fillWidthPercent = Math.min(postLoanDti * 100, 100);
+    const progressFill = $('progressFill');
+    progressFill.style.width = fillWidthPercent + '%';
+    if (maxDti <= 0) {
+        progressFill.style.backgroundColor = '#f44336';
+    } else {
+        const ratio = postLoanDti / maxDti;
+        if (ratio < 0.7)      progressFill.style.backgroundColor = '#4caf50';
+        else if (ratio <= 1.0) progressFill.style.backgroundColor = '#ffeb3b';
+        else                  progressFill.style.backgroundColor = '#f44336';
+    }
+    // [FIX 5.3] E 級隱藏 marker
+    const markerEl = $('progressLimit');
+    if (maxDti > 0) {
+        markerEl.classList.remove('hidden');
+        markerEl.style.left = (maxDti * 100) + '%';
+    } else {
+        markerEl.classList.add('hidden');
+    }
+    // [FIX 5.5] DTI > 100% 顯示溢出警示
+    const overflowBadge = $('dtiOverflowBadge');
+    if (postLoanDti > 1.0) {
+        overflowBadge.style.display = 'inline-block';
+        overflowBadge.innerText = `超 ${(postLoanDti * 100 - 100).toFixed(1)}% 點`;
+    } else {
+        overflowBadge.style.display = 'none';
+    }
+
+    // [FIX 1.2] 預核章依狀態切換
+    $('sealText').innerText = result.sealText;
+    const sealEl = $('printSeal');
+    sealEl.classList.remove('system-seal-pass', 'system-seal-fail', 'system-seal-warn');
+    sealEl.classList.add(`system-seal-${result.sealType}`);
+
+    $('resultCard').style.display = 'block';
+    $('btnPrint').style.display = 'block';
+    $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderPrintReport(result) {
+    const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, ageAtMaturity, statusText } = result;
+
+    // [FIX 3.3] 報表 ID 改為序號制
+    const today = new Date();
+    const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const seq = getReportSeq();
+    $('reportId').innerText = `CU-${ymd}-${String(seq).padStart(4,'0')}`;
+    $('printDate').innerText = today.toLocaleString('zh-TW');
+    $('printAppDate').innerText = input.appDate || '—';
+
+    // [FIX 3.2] 案件基本資訊
+    $('p_memberId').innerText = input.memberId || '—';
+    $('p_officer').innerText = input.officer || '—';
+    $('p_income').innerText = input.income.toLocaleString('zh-TW') + ' 元';
+    $('p_existing').innerText = input.existingDebt.toLocaleString('zh-TW') + ' 元';
+    $('p_internal').innerText = `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
+    $('p_loan_details').innerText = `${input.proposedLoan.toLocaleString('zh-TW')} 元 / ${input.years} 年 / ${input.ratePercent}% （借款人現齡 ${input.age} 歲，還款到期年齡 ${ageAtMaturity} 歲）`;
+    $('p_shares_info').innerText = input.shares > 0
+        ? `${input.shares.toLocaleString('zh-TW')} 元 / 倍數 ${shareMult.toFixed(1)} 倍`
+        : '未填寫';
+
+    // [FIX 1.8] 5P 明細使用語意化 ID
+    $('p_stability').innerText = $('stability').options[$('stability').selectedIndex].text;
+    $('p_interaction').innerText = $('interaction').options[$('interaction').selectedIndex].text;
+    $('p_jcic').innerText = $('jcic').options[$('jcic').selectedIndex].text;
+    $('p_collateral').innerText = $('collateral').options[$('collateral').selectedIndex].text;
+    $('p_purpose').innerText = $('purpose').options[$('purpose').selectedIndex].text;
+    $('p_perspective').innerText = $('perspective').options[$('perspective').selectedIndex].text;
+
+    // 評估結果
+    $('p_grade').innerText = grade;
+    $('p_score').innerText = scoreDetail.total;
+    $('p_dti').innerText = (postLoanDti * 100).toFixed(1);
+    $('p_maxdti').innerText = (maxDti * 100);
+    $('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
+    // [FIX 3.4] 列印狀態去 emoji
+    $('p_status').innerText = stripEmoji(statusText);
+
+    $('p_grade2').innerText = grade;
+    $('p_maxdti2').innerText = (maxDti * 100);
+}
+
+// ============================================================
+// 主流程
+// ============================================================
+function calculateLoan() {
+    const input = parseInputs();
+
+    // [FIX 4.1] 輸入驗證（含負值防呆）
+    const errors = validateInputs(input);
+    if (errors.length > 0) {
+        alert('輸入資料有問題：\n' + errors.join('\n'));
+        $('resultCard').style.display = 'none';
+        $('btnPrint').style.display = 'none';
+        return;
+    }
+
+    // 評分
+    const scoreDetail = computeScore(input);
+
+    // [FIX 1.3] 法規否決（累積所有觸發原因）
+    const { vetoes, newLoanMonthlyPmt, postLoanDti } = applyRegulatoryVetoes(input);
+    const isVetoed = vetoes.length > 0;
+
+    // 等級
+    const { grade, maxDti } = determineGrade(scoreDetail.total, isVetoed);
+
+    // 可貸額度（[FIX 1.1] 用 PMT 公式反推）
+    let maxLoanLimit = computeMaxLoan(input, maxDti);
+    maxLoanLimit = applyLegalCeiling(input, maxLoanLimit);
+
+    // 衍生變數
+    const ageAtMaturity = input.age + input.years;
+    const totalExposure = input.internalBalance + input.proposedLoan;
+    const shareMult = input.shares > 0 ? (input.proposedLoan / input.shares) : null;
+
+    // 狀態文字（純文字版，供列印去 emoji）
+    let statusText, sealText, sealType;
+    if (isVetoed) {
+        statusText = `不予核貸：${vetoes.join('；')}`;
+        sealText = '不予核貸';
+        sealType = 'fail';
+    } else if (grade === 'E') {
+        statusText = '評分不足 60 分，建議婉拒或要求增加股金';
+        sealText = '建議婉拒';
+        sealType = 'fail';
+    } else if (postLoanDti > maxDti) {
+        statusText = `額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級建議上限 (${(maxDti*100).toFixed(0)}%)`;
+        sealText = '額度超限';
+        sealType = 'warn';
+    } else {
+        statusText = '信用良好且負擔合理，建議核貸';
+        sealText = '合格驗證';
+        sealType = 'pass';
+    }
+
+    const result = {
+        input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit,
+        newLoanMonthlyPmt, postLoanDti, totalExposure, shareMult, ageAtMaturity,
+        statusText, sealText, sealType
+    };
+
+    renderDashboard(result);
+    renderPrintReport(result);
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // 申請日期預設今天
+    const appDate = $('appDate');
+    if (appDate && !appDate.value) {
+        const t = new Date();
+        appDate.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    }
+
+    // 金額欄位即時預覽
+    const moneyFields = ['income', 'existing_debt', 'internal_monthly', 'internal_balance', 'loan', 'shares'];
+    moneyFields.forEach(id => {
+        const input = $(id);
+        const preview = $('preview_' + id);
+        if (!input || !preview) return;
+        const update = () => {
+            const val = parseFloat(input.value) || 0;
+            preview.innerText = formatAmount(val);
+        };
+        input.addEventListener('input', update);
+        update();
+    });
+});
+</script>
+
+</body>
+</html>
