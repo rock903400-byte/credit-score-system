@@ -725,14 +725,22 @@ function formatAmount(val) {
     return val.toLocaleString('zh-TW') + ' 元';
 }
 
+const _memSeqFallback = {};  // [FIX 2.2] localStorage 不可用時的記憶體序號 fallback
+
 function getReportSeq() {
     const today = new Date();
     const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
     const key = `cu_seq_${ymd}`;
-    const cur = parseInt(localStorage.getItem(key) || '0', 10);
-    const next = cur + 1;
-    localStorage.setItem(key, String(next));
-    return next;
+    // [FIX 2.2] localStorage 在隱私模式 / 企業政策封鎖時會丟例外，加 try/catch 與記憶體 fallback
+    try {
+        const cur = parseInt(localStorage.getItem(key) || '0', 10);
+        const next = cur + 1;
+        localStorage.setItem(key, String(next));
+        return next;
+    } catch (e) {
+        _memSeqFallback[key] = (_memSeqFallback[key] || 0) + 1;
+        return _memSeqFallback[key];
+    }
 }
 
 // ============================================================
@@ -773,7 +781,9 @@ function validateInputs(input) {
     }
     if (input.ratePercent > 20)   errors.push('年利率 > 20% 異常，請確認');
     if (input.years > 50)         errors.push('貸款年限過長（> 50 年），請確認');
-    if (input.age > 0 && input.age < 18) errors.push('年齡未滿 18 歲須特別審核（仍可試算）');
+    // [FIX 2.1] 年齡 <= 0 直接擋下（避免留白 / 負數繞過所有年齡控管）
+    if (input.age <= 0) errors.push('年齡為必填欄位且須大於 0');
+    else if (input.age < 18) errors.push('年齡未滿 18 歲，須取得法定代理人書面同意後送件');
     return errors;
 }
 
@@ -934,7 +944,8 @@ function renderDashboard(result) {
     $('resMaxDtiTxt2').innerText = (maxDti * 100);
     $('resShareMult').innerText = shareMult !== null ? shareMult.toFixed(1) : '—';
     $('resTotalExposure').innerText = totalExposure.toLocaleString('zh-TW');
-    $('minorWarn').style.display = (input.age < 18 && !isVetoed) ? 'block' : 'none';
+    // [FIX 2.1] 加上 age > 0 判斷，避免 0 / 負數年齡誤觸發未成年人警告
+    $('minorWarn').style.display = (input.age > 0 && input.age < 18 && !isVetoed) ? 'block' : 'none';
 
     // 股金 / 擔保品提示（[FIX 6.3] 改用 CSS class）
     const shareHint = $('shareHint');
