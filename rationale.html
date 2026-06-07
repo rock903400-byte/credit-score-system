@@ -114,9 +114,9 @@
 <body>
     <div class="container">
         <h1>信用評分系統計算擬定說明</h1>
-        <div class="version">版本：v2.0 ｜ 對應 index.html（1053 行）</div>
+        <div class="version">版本：v2.0.1 ｜ 對應 index.html（1176 行）</div>
 
-        <p>這套系統的計算邏輯是基於<strong>授信實務 (Banking Practice)</strong> 與 <strong>台灣儲蓄互助社相關法規</strong> 擬定的。以下為您條列式說明各項設計的擬定原因，並標註 v2.0 的調整重點。</p>
+        <p>這套系統的計算邏輯是基於<strong>授信實務 (Banking Practice)</strong> 與 <strong>台灣儲蓄互助社相關法規</strong> 擬定的。以下為您條列式說明各項設計的擬定原因，並標註 v2.0 / v2.0.1 的調整重點。</p>
 
         <h2>1. 權重分配（5P 原則）的擬定原因</h2>
         <p>系統採用國際通用的 5P 授信分析法，並根據互助社「平民金融」的特性調整權重：</p>
@@ -255,8 +255,45 @@
 
         <div class="summary">
             目標總結：「在符合法規的前提下，讓優質社員獲得更高額度，並對高風險借款人進行自動化預警。」<br>
-            <span style="font-weight:normal; color:#555;">v2.0 強調：所有法規否決採<strong>累積式呈現</strong>，預核章<strong>依狀態切換</strong>，公式<strong>採用業界 PMT 標準</strong>，確保對外報告一致、可追溯。</span>
+            <span style="font-weight:normal; color:#555;">v2.0 強調：所有法規否決採<strong>累積式呈現</strong>，預核章<strong>依狀態切換</strong>，公式<strong>採用業界 PMT 標準</strong>，確保對外報告一致、可追溯。<br>
+            v2.0.1 hotfix：補上年齡輸入防呆、隱私模式容錯、未成年人訊息語意修正。</span>
         </div>
+
+        <h2>8. v2.0.1 hotfix 修補紀錄 <span class="fix">hotfix</span></h2>
+        <p>本次審查時發現 3 個需要立即修補的問題，已於 commit <code>25dcc7a</code> 修復：</p>
+        <ul>
+            <li><strong>[FIX 2.1] 年齡輸入防呆</strong>：<br>
+                <em>問題</em>：<code>validateInputs</code> 原先只檢查 <code>age > 0 &amp;&amp; age &lt; 18</code>，年齡欄位留白（→ 0）或填負數時不會觸發任何錯誤；同時 <code>renderDashboard</code> 的未成年人警告只看 <code>age &lt; 18</code>，會誤觸發 0 歲的警告。<br>
+                <em>風險</em>：100 歲阿公留白年齡 → 試算顯示 A 級、最高 1000 萬；稽核規則 R008 只抓未成年，<strong>兩層防線都沒擋</strong>。<br>
+                <em>修法</em>：驗證 <code>age &lt;= 0</code> 直接擋下；未成年人警告加上 <code>age &gt; 0</code> 判斷。
+            </li>
+            <li><strong>[FIX 2.2] localStorage 強健性</strong>：<br>
+                <em>問題</em>：<code>getReportSeq</code> 在隱私模式 / 企業政策封鎖 localStorage 時會丟例外，導致整個試算流程炸掉。<br>
+                <em>修法</em>：加 try/catch，失敗時改用模組級 <code>_memSeqFallback</code> 物件累加序號。壞 / 好環境的計數互不干擾（18/18 整合測試通過）。
+            </li>
+            <li><strong>[FIX 2.3] 未成年訊息用語</strong>：<br>
+                <em>問題</em>：原訊息「年齡未滿 18 歲須特別審核（<strong>仍可試算</strong>）」會誤導使用者——實際上錯誤已加入 <code>errors</code> 陣列，計算流程會直接擋下，按鈕沒反應讓使用者以為當機。<br>
+                <em>修法</em>：訊息改為「年齡未滿 18 歲，<strong>須取得法定代理人書面同意後送件</strong>」，語意與結果區既有的未成年人警告橫幅一致。
+            </li>
+        </ul>
+
+        <h2>9. 已審查但暫不處理 <span style="background-color:#eceff1; color:#455a64; padding:2px 8px; border-radius:4px; font-size:0.75em; font-weight:bold; margin-left:6px; vertical-align:middle;">deferred</span></h2>
+        <p>本次審查時一併檢視了以下項目，經評估<strong>由「稽核系統（CUB.MDB）」在後端接住，或屬於純 UX / 美觀問題</strong>，暫不修補：</p>
+        <ul>
+            <li><strong>Bug #2 / #3：可貸額度天花板顯示（collateral = 0 / 5 / 12）</strong><br>
+                <em>現況</em>：<code>applyLegalCeiling</code> 對信用 / 股金內借款採 <code>shares + 100萬</code> 或 <code>NATURAL_PERSON_CAP</code> 作為新貸上限，沒扣掉 <code>internalBalance</code>。<br>
+                <em>具體差異</em>：股金 10 萬、本社已借 50 萬 → 系統畫面顯示最高可貸 <strong>110 萬</strong>，但稽核 R016 實際允許的新貸上限是 <strong>60 萬</strong>（110 − 50）。<br>
+                <em>不修理由</em>：<strong>稽核 R016</strong>（股金 + 100 萬上限）在正式系統會擋；<code>applyRegulatoryVetoes</code> 的否決邏輯本身是對的，只是畫面顯示的「最高可貸」數字會高於實際合法值。這是<strong>顯示問題</strong>，不是<strong>核貸問題</strong>。
+            </li>
+            <li><strong>Bug #5：報表序號在「按計算」時累加，不在「列印」時累加</strong><br>
+                <em>現況</em>：每次點「開始授信評分」都會 +1，連續按 5 次就吃掉 5 個序號。<br>
+                <em>不修理由</em>：純歸檔美觀問題，<strong>稽核系統（CUB.MDB）有自己的 loan ID</strong>，<strong>不依賴試算的 report ID</strong>做為對帳依據。
+            </li>
+            <li><strong>Bug #14：7 年以上「足額股金內借款」是否要驗證金額</strong><br>
+                <em>現況</em>：規則 ④ 只看擔保品類型（10 或 12），不驗證 type=12 的「proposed + existing ≤ shares」是否真成立。<br>
+                <em>不修理由</em>：這是<strong>兩條不同的規則</strong>——規則 ④ 管「擔保品類型」，金額是否符合是業務員的<strong>專業責任</strong>。<strong>稽核 R013 / R014 / R016</strong> 在後端接住，試算系統是<strong>工具</strong>，不是每個細節的守門員。
+            </li>
+        </ul>
     </div>
 </body>
 </html>
