@@ -471,12 +471,26 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>保證人實力</label>
-                    <select id="guarantor">
-                        <option value="8">保證人收入高且有資產</option>
-                        <option value="5">有保證人但實力一般</option>
+                    <label>保證人人數</label>
+                    <select id="guarantor_count">
+                        <option value="6">2人以上</option>
+                        <option value="4">1人</option>
                         <option value="0">無保證人</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>保證人月收入 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">無保證人時留空</small>
+                    </label>
+                    <input type="number" id="guarantor_income" placeholder="例如：50000" min="0">
+                    <span class="input-preview" id="preview_guarantor_income"></span>
+                </div>
+                <div class="form-group">
+                    <label>保證人既有債務月付 (元)<br>
+                        <small style="color: var(--text-muted); font-weight: normal;">無保證人時留空</small>
+                    </label>
+                    <input type="number" id="guarantor_debt" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_guarantor_debt"></span>
                 </div>
             </div>
         </div>
@@ -500,12 +514,23 @@
             <div class="section-title">五、未來展望 — 權重 10%</div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>職業前景與參與度</label>
-                    <select id="perspective">
-                        <option value="10">公教或大型企業 (受景氣影響小) + 積極參與社務</option>
-                        <option value="7">一般產業 (穩定) + 有參與大會</option>
-                        <option value="4">受景氣影響較大行業 (如旅遊、營造)</option>
+                    <label>職業前景</label>
+                    <select id="career">
+                        <option value="6">公教或大型企業 (受景氣影響小)</option>
+                        <option value="4">一般產業 (穩定)</option>
+                        <option value="3">自營商／自由業</option>
+                        <option value="2">受景氣影響較大行業 (如旅遊、營造)</option>
                         <option value="0">無固定職業</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>社務參與度</label>
+                    <select id="participation">
+                        <option value="4">積極參與社務並擔任幹部</option>
+                        <option value="3">積極參與社務 (出席會議/活動)</option>
+                        <option value="2">按時參與大會</option>
+                        <option value="1">僅繳納股金</option>
+                        <option value="0">鮮少參與</option>
                     </select>
                 </div>
             </div>
@@ -631,15 +656,15 @@
                 </tr>
                 <tr>
                     <th>三、債權保障 — 擔保設定與保證人</th>
-                    <td id="p_collateral"></td>
+                    <td><span id="p_collateral"></span><br><span id="p_guarantor_print"></span></td>
                 </tr>
                 <tr>
                     <th>四、資金用途</th>
                     <td id="p_purpose"></td>
                 </tr>
                 <tr>
-                    <th>五、未來展望與參與度</th>
-                    <td id="p_perspective"></td>
+                    <th>五、未來展望</th>
+                    <td><span id="p_career_print"></span> / <span id="p_participation_print"></span></td>
                 </tr>
             </table>
         </div>
@@ -764,9 +789,12 @@ function parseInputs() {
         jcic:           $('jcic').value,
         membership:     parseInt($('membership').value) || 0,
         collateral:     $('collateral').value,
-        guarantor:      parseInt($('guarantor').value) || 0,
+        guarantorCount:  parseInt($('guarantor_count').value) || 0,
+        guarantorIncome: parseFloat($('guarantor_income').value) || 0,
+        guarantorDebt:  parseFloat($('guarantor_debt').value) || 0,
         purpose:        $('purpose').value,
-        perspective:    parseInt($('perspective').value) || 0,
+        career:         parseInt($('career').value) || 0,
+        participation:  parseInt($('participation').value) || 0,
     };
 }
 
@@ -775,7 +803,7 @@ function validateInputs(input) {
     if (input.income <= 0)        errors.push('月收入須大於 0');
     if (input.years <= 0)         errors.push('貸款年限須大於 0');
     if (input.proposedLoan <= 0)  errors.push('申請金額須大於 0');
-    const numericFields = ['income','age','existingDebt','internalMonthly','internalBalance','proposedLoan','years','ratePercent','shares'];
+    const numericFields = ['income','age','existingDebt','internalMonthly','internalBalance','proposedLoan','years','ratePercent','shares','guarantorIncome','guarantorDebt'];
     for (const f of numericFields) {
         if (input[f] < 0) errors.push(`「${f}」不可為負值`);
     }
@@ -802,14 +830,23 @@ function computeScore(input) {
     const jcicScore = input.jcic === 'veto' ? 0 : (parseInt(input.jcic) || 0);
     const peopleScore = input.interaction + jcicScore + input.membership;
 
+    // Guarantor DSR score
+    let guarantorDsrScore = 0;
+    if (input.guarantorCount > 0 && input.guarantorIncome > 0) {
+        const gDsr = input.guarantorDebt / input.guarantorIncome;
+        if (gDsr < 0.30)      guarantorDsrScore = 5;
+        else if (gDsr < 0.50) guarantorDsrScore = 3;
+        else                   guarantorDsrScore = 1;
+    }
+
     // Protection (20%)
-    const protectionScore = parseInt(input.collateral) + input.guarantor;
+    const protectionScore = parseInt(input.collateral) + input.guarantorCount + guarantorDsrScore;
 
     // Purpose (10%)
     const purposeScore = input.purpose === 'veto' ? 0 : (parseInt(input.purpose) || 0);
 
     // Perspective (10%)
-    const perspectiveScore = input.perspective;
+    const perspectiveScore = input.career + input.participation;
 
     // Age penalty（僅扣分，不否決；否決由法規⑧處理）
     const ageAtMaturity = input.age + input.years;
@@ -859,10 +896,9 @@ function applyRegulatoryVetoes(input) {
         vetoes.push(`申請金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過自然人放款法定上限 ${(NATURAL_PERSON_CAP/10000).toLocaleString('zh-TW')} 萬元`);
     }
 
-    // ④ [FIX 1.9] 7 年以上須足額不動產 OR 足額股金內
-    //   股金為社員自有資金（100% 擔保），風險實質上低於不動產，故一併放行
-    if (input.years > LONG_TERM_YEARS && input.collateral !== '10' && input.collateral !== '12') {
-        vetoes.push(`貸款年限 ${input.years} 年超過 ${LONG_TERM_YEARS} 年，依法須以足額不動產抵押或足額股金內借款為擔保（信用借款不符合）`);
+    // ④ 7 年以上須足額不動產抵押
+    if (input.years > LONG_TERM_YEARS && input.collateral !== '10') {
+        vetoes.push(`貸款年限 ${input.years} 年超過 ${LONG_TERM_YEARS} 年，須以足額不動產抵押為擔保`);
     }
 
     // ⑤ 聯徵紀錄嚴重瑕疵
@@ -1065,8 +1101,10 @@ function renderPrintReport(result) {
     $('p_interaction').innerText = $('interaction').options[$('interaction').selectedIndex].text;
     $('p_jcic').innerText = $('jcic').options[$('jcic').selectedIndex].text;
     $('p_collateral').innerText = $('collateral').options[$('collateral').selectedIndex].text;
+    $('p_guarantor_print').innerText = `保證人 ${input.guarantorCount > 0 ? $('guarantor_count').options[$('guarantor_count').selectedIndex].text : '無'}${input.guarantorIncome > 0 ? `，月收入 ${input.guarantorIncome.toLocaleString('zh-TW')} 元` : ''}`;
     $('p_purpose').innerText = $('purpose').options[$('purpose').selectedIndex].text;
-    $('p_perspective').innerText = $('perspective').options[$('perspective').selectedIndex].text;
+    $('p_career_print').innerText = $('career').options[$('career').selectedIndex].text;
+    $('p_participation_print').innerText = $('participation').options[$('participation').selectedIndex].text;
 
     // 評估結果
     $('p_grade').innerText = grade;
@@ -1157,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 金額欄位即時預覽
-    const moneyFields = ['income', 'existing_debt', 'internal_monthly', 'internal_balance', 'loan', 'shares'];
+    const moneyFields = ['income', 'existing_debt', 'internal_monthly', 'internal_balance', 'loan', 'shares', 'guarantor_income', 'guarantor_debt'];
     moneyFields.forEach(id => {
         const input = $(id);
         const preview = $('preview_' + id);
