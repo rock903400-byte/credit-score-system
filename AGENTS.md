@@ -2,9 +2,10 @@
 
 ## Project overview
 
-Single-page static HTML tool for credit union loan assessment. No build step, no dependencies, no tests, no lint/typecheck.
+Single-page static HTML tool for credit union loan assessment. No build step, no dependencies.
 
-- `index.html` (~1346 lines) — monolithic app (HTML+CSS+JS)
+- `index.html` (~1783 lines) — monolithic app (HTML+CSS+JS)
+- `test.js` — 39 automated regression tests covering core logic (PMT, scoring, vetoes, ceilings, age boundaries, income guard, collateral '12' veto)
 - `rationale.html` — business logic / scoring rationale documentation
 - `.github/workflows/deploy.yml` — auto-deploys `main` to GitHub Pages at `https://rock903400-byte.github.io/credit-score-system/`
 
@@ -12,48 +13,77 @@ Single-page static HTML tool for credit union loan assessment. No build step, no
 
 Open `index.html` in any browser (double-click or `file:///`). No server required.
 
+## How to test
+
+```
+node test.js
+```
+
+39 tests cover: PMT, formatAmount, escapeHtml, validateInputs, validateInputsByField, computeScore, applyRegulatoryVetoes, determineGrade, computeMaxLoan, applyLegalCeiling.
+
+Uses Node.js `vm` sandbox to extract and execute the script block from `index.html`. No browser needed.
+
 ## Architecture
 
-- All logic in one file: `index.html`
-- Constants section: `LONG_TERM_YEARS=7`, `GRADE_THRESHOLDS`, `GRADE_DTI_LIMITS`, `GUARANTOR_SCORE_TABLE` at line ~737
-- Key functions:
-  - `computeScore(input)` — total score (35% repayment + 25% people + 20% protection + 10% purpose + 10% perspective)
-  - `applyRegulatoryVetoes(input)` — 8 hard veto rules (collateral, JCIC, age, DTI, etc.)
-  - `applyLegalCeiling(input, maxLoanLimit)` — legal borrowing caps (NATURAL_PERSON_CAP, `shares + 1M`)
-  - `computeMaxLoan(input, maxDti)` — reverse-calculates loan amount from DTI limit using PMT
-  - `renderDashboard(result)` / `renderPrintReport(result)` — UI rendering
-- Monthly payment uses standard PMT formula: `P * r * (1+r)^n / ((1+r)^n - 1)`
+All logic in `index.html`. Core functions (pure, no DOM) are testable in isolation; UI functions depend on `document` and render to specific elements.
+
+### Constants (line ~941)
+
+```js
+DSR_VETO_THRESHOLD       = 0.70
+AGE_HARD_VETO            = 75
+AGE_SOFT_PENALTY         = 70
+AGE_SOFT_PENALTY_MILD    = 65
+AGE_SCORE_HARD           = -10
+AGE_SCORE_MILD           = -5
+NATURAL_PERSON_CAP       = 10_000_000
+CREDIT_FLOOR_PER_SHARE   = 1_000_000
+LONG_TERM_YEARS          = 7
+MAX_GUARANTORS           = 5
+GUARANTOR_SCORE_TABLE    = { 0:0, 1:4, 2:6, 3:7, 4:8, 5:9 }
+GRADE_THRESHOLDS         = { A: 90, B: 80, C: 70, D: 60 }
+GRADE_DTI_LIMITS         = { A: 0.60, B: 0.50, C: 0.40, D: 0.30 }
+```
+
+### Key functions (pure — testable)
+
+- `computeScore(input)` — total score (35% repayment + 25% people + 20% protection + 10% purpose + 10% perspective)
+- `applyRegulatoryVetoes(input)` — 8 hard veto rules (① minor share cap, ② credit ceiling, ③ natural person cap, ④ >7yr requires real estate, ⑤ collateral '12' loan ≤ shares, ⑥ JCIC veto, ⑦ purpose veto, ⑨ age >75 veto); returns `{ vetoes[], newLoanMonthlyPmt, postLoanDti }`
+- `determineGrade(score, isVetoed)` — returns `{ grade, maxDti }`; vetoed always → E/0
+- `computeMaxLoan(input, maxDti)` — reverse-calculates loan amount from DTI limit using PMT
+- `applyLegalCeiling(input, maxLoanLimit)` — legal caps (NATURAL_PERSON_CAP or `shares + 1M`)
+- `validateInputs(input)` — returns array of error strings (used in `calculateLoan`)
+- `validateInputsByField(input)` — returns `{ fieldKey: 'error msg' }` object for inline rendering
+- `pmt(principal, annualRatePercent, years)` — standard PMT formula: `P * r * (1+r)^n / ((1+r)^n - 1)`
+
+### Key functions (DOM-coupled)
+
+- `calculateLoan()` — main entry: parse → validate → score → veto → render
+- `renderDashboard(result)` — populates result card, SVG gauge, progress bar, status message
+- `renderPrintReport(result)` — populates print-area (hidden until `window.print()`)
+- `renderGuarantorRows(count)` — dynamically rebuilds `.guarantor-row` elements; **resets innerHTML**, so event bindings and data must be restored after calling
+- `setFieldError(inputEl, msg)` / `applyFieldErrors(fieldErrors)` / `clearAllFieldErrors()` — inline validation UI
+- `saveFormDraft()` / `loadFormDraft()` / `clearFormDraft()` — localStorage persistence for all form fields including guarantors
+
+### CSS architecture
+
+- **Theme**: CSS custom properties in `:root` (lines 8–20). All colors routed through variables.
+- **Accordion**: `.card.collapsible` pattern — `.section-title` is clickable, `.card-body` has `max-height` transition. JS toggles `.collapsed` class (`line ~1774`).
+- **Dark mode**: `@media (prefers-color-scheme: dark)` overrides `:root` variables (`line ~470`). No manual toggle — follows OS setting.
+- **RWD**: `@media (max-width: 768px)` and `@media (max-width: 480px)` (`line ~422`). Guarantor rows stack vertically, buttons stack, form-grid goes single-column.
+- **SVG gauge**: Circle in `.score-gauge` rendered as `<circle stroke-dasharray>`; fill color matches grade (A=green → E=red) via `renderDashboard` (`line ~1397`).
+- **Micro-interactions**: `.card:hover` (lift + shadow), `button:active` (scale 0.98).
 
 ## Key behaviors
 
-- **7-year rule** (`line 933-935`): `years > 7` requires collateral = `'10'` (real estate). Auto-switches if years > 7, disables non-real-estate options.
-- **Guarantors**: dynamic rows (0-5), per-person name/income/debt. Score = `GUARANTOR_SCORE_TABLE[count]` + worst DSR among guarantors.
-- **Age**: hard veto at maturity > 75 (`line 953`), soft penalty at > 65/70 (`line 886-888`). Under 18 requires guardian consent.
-- **Credit ceiling**: `collateral in ('10','12')` → 10M cap; else → `shares + 1M`.
-
-## Key constants (line ~737)
-
-```js
-LONG_TERM_YEARS = 7
-NATURAL_PERSON_CAP = 10_000_000
-CREDIT_FLOOR_PER_SHARE = 1_000_000
-MAX_GUARANTORS = 5
-GUARANTOR_SCORE_TABLE = { 0:0, 1:4, 2:6, 3:7, 4:8, 5:9 }
-GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 }
-GRADE_DTI_LIMITS = { A: 0.60, B: 0.50, C: 0.40, D: 0.30 }
-```
-
-## Verifying changes
-
-Open `index.html` in browser and click **開始授信評分** to test. No test framework or CI checks exist (no lint, no typecheck).
-
-## Deploy
-
-Push to `main` — GitHub Actions auto-deploys:
-```
-git add . && git commit -m "..." && git push origin main
-```
-Deploys to `https://rock903400-byte.github.io/credit-score-system/`.
+- **7-year rule**: `years > 7` requires `collateral = '10'` (real estate). `updateCollateralByYears()` auto-switches the select and disables non-`10` options (`line ~1372`).
+- **Collateral '12' rule**: `years ≤ 7 && collateral === '12'` allows loan only if `proposedLoan <= shares`; otherwise veto (rule ⑤).
+- **Guarantors**: dynamic rows (0–5). Each row has name/income/debt + error-msg span. Data preserved across rebuild via `existingData` snapshot. Score = `GUARANTOR_SCORE_TABLE[count]` + worst DSR among guarantors.
+- **Age**: hard veto at maturity >75 (`line ~1276`), soft penalty at >70 (−10) and >65 (−5) — checked in descending order (`line ~1212–1214`). Under 18 requires guardian consent; borrow cap = `shares - internalBalance` (`line ~1311`).
+- **Credit ceiling**: `collateral in ('10','12')` → 10M cap (`NATURAL_PERSON_CAP`); else → `shares + 1M` (`CREDIT_FLOOR_PER_SHARE`).
+- **Collateral '12' veto**: `years ≤ 7 && collateral === '12' && proposedLoan > shares` → hard veto (rule ⑤, `line ~1268`).
+- **Inline validation**: `calculateLoan()` calls `validateInputsByField()` → `applyFieldErrors()` → scrolls to first error element. Errors show as red `.has-error` border + `.error-msg` span below the field. Cleared on successful validation.
+- **Form draft**: All fields (including guarantor rows) saved to `localStorage['cu_form_draft']` on every `input`/`change`. Restored on `DOMContentLoaded`. "清除草稿" button calls `clearFormDraft()` + `location.reload()`.
 
 ## Collateral options
 
@@ -66,6 +96,10 @@ Deploys to `https://rock903400-byte.github.io/credit-score-system/`.
 
 ## Guardrails
 
-- `escapeHtml(s)` available for safe string interpolation
-- Dynamic guarantor rows cap at `MAX_GUARANTORS`
-- All numeric fields checked for negatives in `validateInputs`
+- `escapeHtml(s)` available for safe string interpolation in `innerHTML` contexts
+- `formatAmount(val)` for human-readable amounts (4.5 萬元, 1000 萬元, etc.)
+- Dynamic guarantor rows capped at `MAX_GUARANTORS` (5)
+- All numeric fields checked for negatives in `validateInputs` and `validateInputsByField`
+- `income=0` guard in `computeScore` (returns zero-score object) and `applyRegulatoryVetoes` (postLoanDti=Infinity) — prevents division by zero
+- When editing `renderGuarantorRows`, remember to restore event bindings and preview values after `innerHTML = ''`
+- HTML structure uses `.card.collapsible > .section-title + .card-body` pattern; adding a new section requires matching `</div>` nesting (card-body → card)
