@@ -196,7 +196,7 @@ function updateCollateralByYears() {
 function renderDashboard(result) {
     const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, statusText } = result;
 
-    $('gaugeScoreVal').innerText = scoreDetail.total;
+    $('gaugeScoreVal').textContent = scoreDetail.total;
     // SVG gauge 填色與進度
     const gaugeEl = $('gaugeFill');
     const gaugeCircumference = 2 * Math.PI * 58;  // ≈ 364.4
