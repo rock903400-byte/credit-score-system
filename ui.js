@@ -19,7 +19,8 @@ function parseInputs() {
         years:          parseInt($('years').value) || 0,
         ratePercent:    parseFloat($('rate').value) || 0,
         shares:         parseFloat($('shares').value) || 0,
-        stability:      parseInt($('stability').value) || 0,
+        incomeStability:parseInt($('incomeStability').value) || 0,
+        tenure:         parseInt($('tenure').value) || 0,
         interaction:    parseInt($('interaction').value) || 0,
         jcic:           $('jcic').value,
         membership:     parseInt($('membership').value) || 0,
@@ -195,7 +196,6 @@ function updateCollateralByYears() {
 function renderDashboard(result) {
     const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, statusText } = result;
 
-    $('resScore').innerText = scoreDetail.total;
     $('gaugeScoreVal').innerText = scoreDetail.total;
     // SVG gauge 填色與進度
     const gaugeEl = $('gaugeFill');
@@ -271,13 +271,13 @@ function renderDashboard(result) {
         statusEl.innerHTML = `🚫 系統判定：不予核貸<ul class="veto-list">${vetoes.map(v => `<li>${v}</li>`).join('')}</ul>`;
         statusEl.classList.add('status-fail');
     } else if (grade === 'E') {
-        statusEl.innerHTML = '⚠️ 評分不足 60 分，建議婉拒或要求增加股金';
+        statusEl.innerHTML = '⚠️ 評分不足 60 分，請專職/幹部審慎評估';
         statusEl.classList.add('status-fail');
     } else if (postLoanDti > maxDti) {
-        statusEl.innerHTML = `❌ 額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級建議上限 (${(maxDti*100).toFixed(0)}%)`;
+        statusEl.innerHTML = `❌ 額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級上限 (${(maxDti*100).toFixed(0)}%)`;
         statusEl.classList.add('status-warn');
     } else {
-        statusEl.innerHTML = '✅ 信用良好且負擔合理，建議核貸';
+        statusEl.innerHTML = '✅ 信用良好且負擔合理，評分供專職/幹部裁量參考';
         statusEl.classList.add('status-pass');
     }
 
@@ -343,7 +343,9 @@ function renderPrintReport(result) {
         : '未填寫';
 
     // [FIX 1.8] 5P 明細使用語意化 ID
-    $('p_stability').innerText = $('stability').options[$('stability').selectedIndex].text;
+    const stabText = $('incomeStability').options[$('incomeStability').selectedIndex].text;
+    const tenText = $('tenure').options[$('tenure').selectedIndex].text;
+    $('p_stability').innerText = stabText + ' / ' + tenText;
     $('p_interaction').innerText = $('interaction').options[$('interaction').selectedIndex].text;
     $('p_jcic').innerText = $('jcic').options[$('jcic').selectedIndex].text;
     $('p_collateral').innerText = $('collateral').options[$('collateral').selectedIndex].text;
@@ -379,6 +381,7 @@ function renderPrintReport(result) {
 // 主流程
 // ============================================================
 function calculateLoan() {
+    try {
     // 擔保品聯動保險：確保之前年的變更已同步（若未失焦）
     updateCollateralByYears();
     const input = parseInputs();
@@ -423,16 +426,16 @@ function calculateLoan() {
         sealText = '不予核貸';
         sealType = 'fail';
     } else if (grade === 'E') {
-        statusText = '評分不足 60 分，建議婉拒或要求增加股金';
-        sealText = '建議婉拒';
+        statusText = '評分不足 60 分，請專職/幹部審慎評估';
+        sealText = '專職審核';
         sealType = 'fail';
     } else if (postLoanDti > maxDti) {
-        statusText = `額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級建議上限 (${(maxDti*100).toFixed(0)}%)`;
+        statusText = `額度超限：預計月負擔 (${(postLoanDti*100).toFixed(1)}%) 超過本級上限 (${(maxDti*100).toFixed(0)}%)`;
         sealText = '額度超限';
         sealType = 'warn';
     } else {
-        statusText = '信用良好且負擔合理，建議核貸';
-        sealText = '合格驗證';
+        statusText = '信用良好且負擔合理，評分供專職/幹部裁量參考';
+        sealText = '評分完成';
         sealType = 'pass';
     }
 
@@ -444,6 +447,7 @@ function calculateLoan() {
 
     renderDashboard(result);
     renderPrintReport(result);
+    } catch(e) { console.error('calculateLoan error:', e); alert('計算過程發生錯誤，請檢查輸入資料。\n' + e.message); }
 }
 
 // ============================================================
@@ -452,7 +456,7 @@ function calculateLoan() {
 const FORM_DRAFT_KEY = 'cu_form_draft';
 const FORM_DRAFT_FIELDS = [
     'memberId','appDate','income','age','existing_debt','internal_monthly','internal_balance',
-    'loan','years','rate','shares','stability','interaction','jcic','membership',
+    'loan','years','rate','shares','incomeStability','tenure','interaction','jcic','membership',
     'collateral','guarantor_count','purpose','career','participation'
 ];
 

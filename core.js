@@ -175,16 +175,17 @@ function computeScore(input) {
     else if (ageAtMaturity > AGE_SOFT_PENALTY) ageScore = AGE_SCORE_HARD;
     else if (ageAtMaturity > AGE_SOFT_PENALTY_MILD) ageScore = AGE_SCORE_MILD;
 
+    const stabilityScore = (input.incomeStability || 0) + (input.tenure || 0);
     return {
         dsr: baselineDsr,
         dsrScore,
-        stability: input.stability,
+        stability: stabilityScore,
         ageScore,
         peopleScore,
         protectionScore,
         purposeScore,
         perspectiveScore,
-        total: dsrScore + input.stability + ageScore + peopleScore + protectionScore + purposeScore + perspectiveScore
+        total: dsrScore + stabilityScore + ageScore + peopleScore + protectionScore + purposeScore + perspectiveScore
     };
 }
 

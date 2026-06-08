@@ -71,11 +71,21 @@
                     <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
-                    <label>收入穩定性與年資</label>
-                    <select id="stability">
-                        <option value="15">現職年資 > 3年 (公教或大型企業)</option>
-                        <option value="10">現職年資 1~3年</option>
-                        <option value="5">收入為不固定佣金或打零工</option>
+                    <label>收入穩定性</label>
+                    <select id="incomeStability">
+                        <option value="9">公教人員或大型企業（受景氣影響小）</option>
+                        <option value="6">一般企業正職員工</option>
+                        <option value="3">自營商／自由業</option>
+                        <option value="1">收入不固定（佣金、兼職、打零工）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>現職年資</label>
+                    <select id="tenure">
+                        <option value="6">現職年資 > 5 年</option>
+                        <option value="4">現職年資 3~5 年</option>
+                        <option value="2">現職年資 1~3 年</option>
+                        <option value="1">現職年資 未滿 1 年</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -247,7 +257,7 @@
                     <span id="resGrade" class="result-stat-value result-value-highlight"></span> <span style="font-size: 0.6em; color: var(--text-muted);">級</span>
                 </div>
                 <div class="result-stat">
-                    <span class="result-stat-label">最高建議可貸額度</span>
+                    <span class="result-stat-label">評分可貸額度</span>
                     <span id="resLimit" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">元</span>
                 </div>
                 <div class="result-stat">
@@ -277,7 +287,7 @@
                     <span>預計總月負擔：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%
                         <span id="dtiOverflowBadge" style="display:none; margin-left:8px; padding:2px 8px; background-color:#ffebee; color:#c62828; border:1px solid #ef9a9a; border-radius:4px; font-size:0.85em; font-weight:700;"></span>
                     </span>
-                    <span>本級別建議上限：<strong id="resMaxDtiTxt"></strong>%</span>
+                    <span>本級別上限：<strong id="resMaxDtiTxt"></strong>%</span>
                 </div>
             </div>
 
@@ -291,7 +301,7 @@
 
             <div style="margin-top: 20px; padding: 15px; background-color: #fcfcfc; border: 1px dashed #d1d9e6; border-radius: 8px; font-size: 0.85em; color: var(--text-muted);">
                 <strong>💡 專業小叮嚀：</strong><br>
-                「本級別建議上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不建議超過月收入的該比例，以維持良好的生活品質與信用風險控制。
+                「本級別上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不宜超過月收入的該比例，以維持良好的生活品質與信用風險控制。
             </div>
         </div>
     </div>
@@ -340,7 +350,7 @@
             <div class="print-section-title">二、 授信評核明細（五大評估面向）</div>
             <table class="print-table">
                 <tr>
-                    <th>一、還款能力 — 收入穩定性</th>
+                    <th>一、還款能力 — 收入穩定性 / 年資</th>
                     <td id="p_stability"></td>
                 </tr>
                 <tr>
@@ -373,11 +383,11 @@
                         </div>
                         <div style="font-size: 14px; color: #333;">
                             核貸後每月負債比：<span id="p_dti" style="font-weight: bold;"></span>%<br>
-                            （該等級建議上限：<span id="p_maxdti" style="font-weight: bold;"></span>%）
+                            （該等級上限：<span id="p_maxdti" style="font-weight: bold;"></span>%）
                         </div>
                     </td>
                     <td style="border: none; text-align: center; vertical-align: middle;">
-                        <div style="font-size: 14px; color: #555;">建議最高核貸額度</div>
+                        <div style="font-size: 14px; color: #555;">評分可貸額度</div>
                         <div style="font-size: 22px; font-weight: bold; color: #d32f2f;">NT$ <span id="p_limit"></span></div>
                     </td>
                 </tr>
@@ -389,7 +399,7 @@
             <div style="font-size: 13px; color: #444; line-height: 1.6;">
                 <strong>報告備註：</strong><br>
                 1. 每月負債比係綜合「社外月付」「本社現有月付」與「本次擬貸月付」後對比月收入，用以評估還款壓力。<br>
-                2. 本報告之建議額度係依據「<span id="p_grade2"></span>級」之負債上限（<span id="p_maxdti2"></span>%）反推求得。
+                 2. 本報告之可貸額度係依據「<span id="p_grade2"></span>級」之負債上限（<span id="p_maxdti2"></span>%）反推求得。
             </div>
         </div>
 

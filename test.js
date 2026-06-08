@@ -95,7 +95,7 @@ test('優質借款人 ≥ 90 分', () => {
   const inp = {
     income:80000,age:35,years:5,ratePercent:3,
     existingDebt:0,internalMonthly:0,proposedLoan:400000,
-    stability:15,interaction:10,jcic:'10',membership:5,
+    incomeStability:9,tenure:6,interaction:10,jcic:'10',membership:5,
     collateral:'12',guarantorCount:1,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:200000,
     guarantors:[{name:'a',income:60000,debt:0}]
@@ -106,7 +106,7 @@ test('不良借款人 < 60', () => {
   const inp = {
     income:30000,age:60,years:10,ratePercent:5,
     existingDebt:15000,internalMonthly:5000,proposedLoan:200000,
-    stability:5,interaction:-20,jcic:'veto',membership:1,
+    incomeStability:1,tenure:2,interaction:-20,jcic:'veto',membership:1,
     collateral:'0',guarantorCount:0,purpose:'7',career:2,participation:1,
     internalBalance:0,shares:10000,guarantors:[]
   };
@@ -116,7 +116,7 @@ test('年齡罰分 65-70 到期 = -5', () => {
   const inp = {
     income:50000,age:66,years:3,ratePercent:3,
     existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,
     collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[]
   };
@@ -124,37 +124,37 @@ test('年齡罰分 65-70 到期 = -5', () => {
 });
 test('年齡罰分 65 到期 = 0', () => {
   const inp = { income:50000,age:62,years:3,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[] };
   assert(CS(inp).ageScore === 0, 'got:'+CS(inp).ageScore);
 });
 test('年齡罰分 70 到期 = -5', () => {
   const inp = { income:50000,age:67,years:3,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[] };
   assert(CS(inp).ageScore === -5, 'got:'+CS(inp).ageScore);
 });
 test('年齡罰分 71 到期 = -10', () => {
   const inp = { income:50000,age:68,years:3,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[] };
   assert(CS(inp).ageScore === -10, 'got:'+CS(inp).ageScore);
 });
 test('年齡罰分 75 到期 = -10 (否決在 ARV 是 >75)', () => {
   const inp = { income:50000,age:72,years:3,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[] };
   assert(CS(inp).ageScore === -10, 'got:'+CS(inp).ageScore);
 });
 test('年齡罰分 76 到期 = -10 (否決在 ARV)', () => {
   const inp = { income:50000,age:73,years:3,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:100000,guarantors:[] };
   assert(CS(inp).ageScore === -10, 'got:'+CS(inp).ageScore);
 });
 test('income=0 回傳零分物件', () => {
   const inp = { income:0,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,
-    stability:10,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
     internalBalance:0,shares:200000,guarantors:[] };
   const r = CS(inp);
   assert(r.total===0 && r.dsr===0 && r.dsrScore===0 && r.ageScore===0, 'got:'+JSON.stringify(r));
