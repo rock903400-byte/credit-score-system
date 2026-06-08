@@ -1,107 +1,28 @@
 // ============================================================
-// 自動化測試 — Node.js vm 沙箱執行 index.html 核心邏輯
+// 自動化測試 — Node.js vm 沙箱執行 core.js 核心邏輯
 // ============================================================
 const fs = require('fs');
 const vm = require('vm');
 
-// 讀取 JS
-let html = fs.readFileSync(__dirname + '/index.html', 'utf8');
-const s = html.indexOf('<script>') + '<script>'.length;
-const e = html.lastIndexOf('</script>');
-let js = html.substring(s, e);
+// 讀取 core.js（純業務邏輯，無 DOM 相依）
+const coreJs = fs.readFileSync(__dirname + '/core.js', 'utf8');
 
-// 沙箱（完整 DOM + BOM mock）
+// 沙箱（只需 localStorage mock，無需 DOM）
 const ctx = {
   console: console,
-  document: {
-    getElementById(id) { return null; },
-    querySelectorAll(sel) { return []; },
-    querySelector(sel) { return null; },
-    addEventListener(evt, fn) {},
-    createElement(tag) {
-      return { className:'', innerHTML:'', setAttribute(){}, appendChild(){} };
-    },
-    createTextNode(t) { return t; },
-    body: {},
-    head: {},
-  },
-  window: {
-    print() {},
-    scrollTo() {},
-    scrollBy() {},
-  },
+  Math, Date, String, Number, Array, Object, JSON, RegExp,
+  parseInt, parseFloat, isNaN,
+  setTimeout, clearTimeout, setInterval, clearInterval,
   localStorage: {
     _store: {},
     getItem(k) { return this._store[k] ?? null; },
     setItem(k, v) { this._store[k] = v; },
     removeItem(k) { delete this._store[k]; },
   },
-  sessionStorage: {
-    _store: {},
-    getItem(k) { return this._store[k] ?? null; },
-    setItem(k, v) { this._store[k] = v; },
-  },
-  location: { reload() {}, href:'', assign() {}, replace() {} },
-  alert(msg) {},
-  confirm(msg) { return true; },
-  Math: Math, Date: Date, String: String, Number: Number,
-  Array: Array, Object: Object, JSON: JSON, RegExp: RegExp,
-  parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN,
-  setTimeout: setTimeout, setInterval: setInterval, clearTimeout: clearTimeout, clearInterval: clearInterval,
-  Event: class {}, CustomEvent: class {}, HTMLElement: class {},
-  Node: { ELEMENT_NODE: 1, TEXT_NODE: 3 },
-  navigator: { userAgent: 'test', language: 'zh-TW' },
-  screen: { width: 1920, height: 1080 },
-  self: undefined, top: undefined, parent: undefined,
-  performance: { now() { return 0; } },
-  requestAnimationFrame(fn) { setTimeout(fn, 0); },
-  cancelAnimationFrame() {},
-  fetch() { return Promise.resolve({ json:()=>Promise.resolve({}) }); },
 };
 
-// 讓 window 指回 self
-ctx.self = ctx;
-ctx.window.document = ctx.document;
-ctx.window.localStorage = ctx.localStorage;
-ctx.window.location = ctx.location;
-
-// 執行 JS
-const wrapped = `(function(global) { ${js} })`;
-try {
-  vm.runInNewContext(wrapped, ctx)(ctx);
-} catch (err) {
-  // 忽略 DOMContentLoaded 內的型別錯誤（mock DOM 無法完全模擬）
-  if (err.message && err.message.includes('addEventListener')) {
-    // 重試：只抽取函數定義
-  } else {
-    console.error('Bootstrap error:', err.message, '\n');
-  }
-}
-
-// 從 ctx 取出核心函數
-const { computeScore, applyRegulatoryVetoes, determineGrade, computeMaxLoan, applyLegalCeiling, validateInputs, validateInputsByField, pmt, formatAmount, escapeHtml } = ctx;
-
-// 如果上面的 vm 執行失敗（DOMContentLoaded 炸了），直接用 Function 抽取純函數
-function extractPureFunctions(jsCode) {
-  // 取得所有 toplevel function/const 定義
-  const fn = {};
-  const all = new Function('global', `
-    const document={getElementById:()=>null,querySelectorAll:()=>[],querySelector:()=>null,addEventListener:()=>{},createElement:()=>({appendChild(){},setAttribute(){}}),body:{},head:{}};
-    const localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
-    const window=document;
-    const alert=()=>{}, confirm=()=>true;
-    const location={reload(){}};
-    ${jsCode}
-    return { computeScore, applyRegulatoryVetoes, determineGrade, computeMaxLoan, applyLegalCeiling, validateInputs, validateInputsByField, pmt, formatAmount, escapeHtml, saveFormDraft, loadFormDraft, clearFormDraft };
-  `);
-  return all({});
-}
-
-// 檢查是否 ctx 已有函數，否則用 Function 抽取
-if (typeof ctx.computeScore !== 'function') {
-  const fns = extractPureFunctions(js);
-  Object.assign(ctx, fns);
-}
+// 執行 core.js
+vm.runInNewContext(coreJs, ctx);
 
 const { computeScore: CS, applyRegulatoryVetoes: ARV, determineGrade: DG, computeMaxLoan: CML, applyLegalCeiling: ALC, validateInputs: VI, validateInputsByField: VIBF, pmt: PMT, formatAmount: FA, escapeHtml: EH } = ctx;
 
@@ -274,7 +195,7 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
   assert(!v.some(x=>x.includes('足額股金內借款')), '不應觸發12規則，got:'+v.join(';'));
 });
 test('源碼：8 條否決規則（含擔保品12）', () => {
-  const src = fs.readFileSync(__dirname + '/index.html','utf8');
+  const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(src.indexOf('function applyRegulatoryVetoes'), src.indexOf('function determineGrade'));
   assert((vf.match(/vetoes\.push/g)||[]).length === 8, 'got:'+(vf.match(/vetoes\.push/g)||[]).length);
 });
