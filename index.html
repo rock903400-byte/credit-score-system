@@ -24,7 +24,7 @@
             background-color: var(--bg-color);
             color: var(--text-main);
             font-size: 18px;
-            line-height: 1.7;
+            line-height: 1.55;
             margin: 0;
             padding: 40px 20px;
         }
@@ -67,6 +67,14 @@
             box-shadow: var(--shadow);
             margin-bottom: 25px;
             border: 1px solid rgba(0,0,0,0.03);
+            transition: var(--transition);
+        }
+        .card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+        }
+        button:active {
+            transform: translateY(0) scale(0.98);
         }
 
         .section-title {
@@ -78,6 +86,37 @@
             align-items: center;
             border-left: 6px solid var(--secondary-color);
             padding-left: 15px;
+        }
+
+        /* 可折疊區塊 */
+        .card.collapsible .section-title {
+            cursor: pointer;
+            user-select: none;
+            justify-content: space-between;
+        }
+        .card.collapsible .section-title::after {
+            content: "▼";
+            font-size: 0.7em;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+            margin-left: 8px;
+        }
+        .card.collapsible.collapsed .section-title::after {
+            transform: rotate(-90deg);
+        }
+        .card.collapsible .card-body {
+            overflow: hidden;
+            transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.25s ease;
+            max-height: 5000px;
+            opacity: 1;
+        }
+        .card.collapsible.collapsed .card-body {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+        }
+        .card.collapsible.collapsed {
+            margin-bottom: 12px;
         }
 
         .form-grid {
@@ -117,6 +156,27 @@
             letter-spacing: 0.5px;
         }
 
+        .error-msg {
+            display: none;
+            margin-top: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #c62828;
+            line-height: 1.4;
+        }
+        .error-msg::before {
+            content: "⚠ ";
+        }
+        input.has-error,
+        select.has-error {
+            border-color: #c62828;
+            background-color: #ffebee;
+        }
+        input.has-error:focus,
+        select.has-error:focus {
+            box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.15);
+        }
+
         input:focus, select:focus {
             outline: none;
             border-color: var(--primary-light);
@@ -137,11 +197,11 @@
 
         button {
             flex: 1;
-            padding: 20px;
+            padding: 18px;
             color: white;
             border: none;
             border-radius: var(--border-radius);
-            font-size: 1.2em;
+            font-size: 1.05em;
             font-weight: 700;
             cursor: pointer;
             transition: var(--transition);
@@ -187,6 +247,50 @@
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 25px;
+        }
+
+        /* SVG 圓形 Gauge */
+        .score-gauge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #edf2f7;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .score-gauge svg {
+            display: block;
+        }
+        .gauge-score-text {
+            font-size: 2.2em;
+            font-weight: 800;
+            fill: var(--primary-dark);
+        }
+        .gauge-score-suffix {
+            font-size: 0.5em;
+            fill: var(--text-muted);
+        }
+        .gauge-track {
+            fill: none;
+            stroke: #e2e8f0;
+            stroke-width: 12;
+        }
+        .gauge-fill {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1.2s cubic-bezier(0.17, 0.67, 0.83, 0.67), stroke 0.4s ease;
+            transform: rotate(-90deg);
+            transform-origin: center;
+        }
+        .gauge-label {
+            margin-top: 6px;
+            font-size: 0.9em;
+            color: var(--text-muted);
+            font-weight: 600;
         }
 
         .result-stat {
@@ -313,7 +417,83 @@
 
         /* 列印專屬樣式 */
         .print-area { display: none; }
-        
+
+        /* 響應式 — 行動裝置 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 16px;
+                padding: 20px 12px;
+                line-height: 1.55;
+            }
+            .card { padding: 20px 16px; margin-bottom: 16px; }
+            h1 { font-size: 1.6em; }
+            .section-title { font-size: 1.15em; }
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+            .guarantor-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: 12px;
+            }
+            .guarantor-row .form-group {
+                display: flex;
+                flex-direction: column;
+            }
+            .btn-group {
+                flex-direction: column;
+                gap: 12px;
+            }
+            button {
+                padding: 16px;
+                font-size: 1.05em;
+            }
+            .result-card { padding: 22px 16px; }
+            .result-dashboard {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            .result-stat-value { font-size: 1.4em; }
+            .gauge-container { padding: 14px; }
+            .progress-labels { font-size: 0.75em; }
+            .status-msg { font-size: 1.05em; padding: 16px; }
+        }
+
+        @media (max-width: 480px) {
+            .result-dashboard { grid-template-columns: 1fr; }
+            .header { margin-bottom: 24px; }
+            h1 { font-size: 1.4em; }
+        }
+
+        /* 深色模式 — 自動跟隨系統 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0f172a;
+                --card-bg: #1e293b;
+                --primary-color: #818cf8;
+                --primary-light: #a5b4fc;
+                --primary-dark: #c7d2fe;
+                --secondary-color: #fbbf24;
+                --text-main: #e2e8f0;
+                --text-muted: #94a3b8;
+            }
+            body { background-color: var(--bg-color); color: var(--text-main); }
+            .card { background: var(--card-bg); border-color: rgba(255,255,255,0.06); }
+            input, select { background-color: #0f172a; color: var(--text-main); border-color: #334155; }
+            input:focus, select:focus { background-color: #0f172a; }
+            .highlight-input { background-color: #1e293b; border-color: #fbbf24; }
+            .result-card { background: linear-gradient(to bottom right, #1e293b, #0f172a); border-color: #334155; }
+            .result-stat { background: #0f172a; border-color: #334155; }
+            .gauge-container { background: #0f172a; }
+            .progress-container { background-color: #334155; }
+            .guarantor-row { background: #0f172a; border-color: #334155; }
+            .score-gauge { background: #0f172a; border-color: #334155; }
+            .gauge-track { stroke: #334155; }
+            .hint-info { background-color: #1e293b; color: #a5b4fc; border-color: #334155; }
+            .input-preview { color: #a5b4fc; }
+        }
+
         @media print {
             body { background-color: #fff; padding: 0; color: #000; }
             .container { box-shadow: none; padding: 0; max-width: 100%; }
@@ -370,8 +550,9 @@
             <p style="color: var(--text-muted); margin-top: 15px;">儲蓄互助社授信試算工具</p>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">零、案件基本資訊</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>社員編號 / 姓名 <span style="color: var(--text-muted); font-weight: normal;">(選填，列印時顯示)</span></label>
@@ -382,19 +563,23 @@
                     <input type="date" id="appDate">
                 </div>
             </div>
+            </div>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">一、還款能力 — 權重 35%</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>借款人月平均收入 (元)</label>
                     <input type="number" id="income" placeholder="例如：45000" min="1">
                     <span class="input-preview" id="preview_income"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>借款人年齡 (歲)</label>
                     <input type="number" id="age" placeholder="例如：40" min="18" max="80">
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>社外債務每月應繳總額 (元)<br>
@@ -402,6 +587,7 @@
                     </label>
                     <input type="number" id="existing_debt" class="highlight-input" placeholder="0" min="0">
                     <span class="input-preview" id="preview_existing_debt"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>本社現有貸款每月應繳額 (元)<br>
@@ -409,6 +595,7 @@
                     </label>
                     <input type="number" id="internal_monthly" class="highlight-input" placeholder="0" min="0">
                     <span class="input-preview" id="preview_internal_monthly"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>本社現有貸款餘額 (元)<br>
@@ -416,6 +603,7 @@
                     </label>
                     <input type="number" id="internal_balance" placeholder="0" min="0">
                     <span class="input-preview" id="preview_internal_balance"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>收入穩定性與年資</label>
@@ -429,20 +617,25 @@
                     <label>預計借款金額 (元)</label>
                     <input type="number" id="loan" placeholder="例如：300000" min="0">
                     <span class="input-preview" id="preview_loan"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>貸款年限 (年)</label>
                     <input type="number" id="years" placeholder="例如：5" min="1">
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>年利率 (%)</label>
                     <input type="number" id="rate" placeholder="例如：3" step="0.01" min="0">
+                    <span class="error-msg"></span>
                 </div>
+            </div>
             </div>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">二、借款人信用 — 權重 25%</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>社內往來與儲蓄習慣</label>
@@ -470,15 +663,18 @@
                     </select>
                 </div>
             </div>
+            </div>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">三、債權保障 — 權重 20%</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>社內股金餘額 (元)</label>
                     <input type="number" id="shares" placeholder="例如：50000" min="0">
                     <span class="input-preview" id="preview_shares"></span>
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>擔保品設定</label>
@@ -507,10 +703,12 @@
             <div id="guarantorContainer" style="margin-top:15px;">
                 <div id="guarantorList"></div>
             </div>
+            </div>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">四、資金用途 — 權重 10%</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>借款用途正當性</label>
@@ -522,10 +720,12 @@
                     </select>
                 </div>
             </div>
+            </div>
         </div>
 
-        <div class="card">
+        <div class="card collapsible">
             <div class="section-title">五、未來展望 — 權重 10%</div>
+            <div class="card-body">
             <div class="form-grid">
                 <div class="form-group">
                     <label>職業前景</label>
@@ -548,6 +748,7 @@
                     </select>
                 </div>
             </div>
+            </div>
         </div>
 
         <div class="btn-group">
@@ -555,13 +756,26 @@
             <button id="btnPrint" class="btn-print" onclick="window.print()">列印正式審查報告</button>
         </div>
 
+        <div style="text-align:center; margin-top:15px;">
+            <button id="clearDraftBtn" type="button" style="background:transparent; color:var(--text-muted); box-shadow:none; font-size:0.9em; padding:8px 16px; flex:initial; min-width:auto; width:auto; display:inline-block;">
+                🗑 清除草稿
+            </button>
+        </div>
+
         <div id="resultCard" class="result-card">
             <div class="section-title">📊 試算分析結果</div>
             
             <div class="result-dashboard">
-                <div class="result-stat">
-                    <span class="result-stat-label">系統總評分</span>
-                    <span id="resScore" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">分</span>
+                <div class="score-gauge">
+                    <svg width="140" height="140" viewBox="0 0 140 140" aria-label="總評分圓形儀表">
+                        <circle class="gauge-track" cx="70" cy="70" r="58"></circle>
+                        <circle id="gaugeFill" class="gauge-fill" cx="70" cy="70" r="58"
+                                stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke="#4caf50"></circle>
+                        <text class="gauge-score-text" x="70" y="76" text-anchor="middle">
+                            <tspan id="gaugeScoreVal">0</tspan><tspan class="gauge-score-suffix"> 分</tspan>
+                        </text>
+                    </svg>
+                    <div class="gauge-label">系統總評分（滿分 100）</div>
                 </div>
                 <div class="result-stat">
                     <span class="result-stat-label">信用等級</span>
@@ -847,9 +1061,123 @@ function validateInputs(input) {
 }
 
 // ============================================================
+// 欄位級驗證 — 將全域錯誤依欄位分組，供 inline 顯示用
+// ============================================================
+function validateInputsByField(input) {
+    const fieldErrors = {};  // { fieldKey: '錯誤訊息' }
+    const setErr = (key, msg) => { fieldErrors[key] = (fieldErrors[key] ? fieldErrors[key] + '；' : '') + msg; };
+
+    if (input.income <= 0)        setErr('income', '月收入須大於 0');
+    if (input.years <= 0)         setErr('years', '貸款年限須大於 0');
+    if (input.proposedLoan <= 0)  setErr('loan', '申請金額須大於 0');
+    if (input.existingDebt < 0)   setErr('existing_debt', '社外債務不可為負值');
+    if (input.internalMonthly < 0) setErr('internal_monthly', '本社月付不可為負值');
+    if (input.internalBalance < 0) setErr('internal_balance', '本社餘額不可為負值');
+    if (input.shares < 0)         setErr('shares', '股金不可為負值');
+    if (input.ratePercent < 0)    setErr('rate', '年利率不可為負值');
+    if (input.ratePercent > 20)   setErr('rate', '年利率 > 20% 異常，請確認');
+    if (input.years > 50)         setErr('years', '貸款年限過長（> 50 年），請確認');
+    if (input.age <= 0)           setErr('age', '年齡為必填欄位且須大於 0');
+    else if (input.age < 18)      setErr('age', '年齡未滿 18 歲須取得法定代理人書面同意');
+
+    if (input.guarantors && input.guarantors.length > 0) {
+        input.guarantors.forEach((g, i) => {
+            const k = `g_name_${i}`;
+            const k2 = `g_income_${i}`;
+            const k3 = `g_debt_${i}`;
+            if (!g.name || !g.name.trim()) setErr(k, '保證人姓名未填寫');
+            if (g.income <= 0)              setErr(k2, '月收入須大於 0');
+            if (g.debt < 0)                 setErr(k3, '既有債務月付不可為負值');
+        });
+    }
+    return fieldErrors;
+}
+
+// 為指定 input 旁的 error-msg span 設定文字；無 error 時隱藏
+function setFieldError(inputEl, msg) {
+    if (!inputEl) return;
+    if (msg) {
+        inputEl.classList.add('has-error');
+        let span = inputEl.nextElementSibling;
+        while (span && !span.classList?.contains('error-msg')) {
+            span = span.nextElementSibling;
+        }
+        if (!span || !span.classList?.contains('error-msg')) {
+            // 找最近一個 form-group 內的 error-msg（相容保證人動態 row）
+            const group = inputEl.closest('.form-group');
+            if (group) {
+                span = group.querySelector('.error-msg');
+            }
+        }
+        if (span) {
+            span.textContent = msg;
+            span.style.display = 'block';
+        }
+    } else {
+        inputEl.classList.remove('has-error');
+        const group = inputEl.closest('.form-group');
+        if (group) {
+            const span = group.querySelector('.error-msg');
+            if (span) { span.textContent = ''; span.style.display = 'none'; }
+        }
+    }
+}
+
+function clearAllFieldErrors() {
+    document.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
+    document.querySelectorAll('.error-msg').forEach(el => { el.textContent = ''; el.style.display = 'none'; });
+}
+
+function applyFieldErrors(fieldErrors) {
+    // 主表單欄位
+    const idMap = {
+        income: 'income',
+        existing_debt: 'existing_debt',
+        internal_monthly: 'internal_monthly',
+        internal_balance: 'internal_balance',
+        loan: 'loan',
+        shares: 'shares',
+        years: 'years',
+        rate: 'rate',
+        age: 'age',
+    };
+    Object.keys(idMap).forEach(key => {
+        const el = $(idMap[key]);
+        if (el) setFieldError(el, fieldErrors[key] || '');
+    });
+    // 保證人動態欄位
+    document.querySelectorAll('.guarantor-row').forEach((row, i) => {
+        setFieldError(row.querySelector('.g-name'), fieldErrors[`g_name_${i}`] || '');
+        setFieldError(row.querySelector('.g-income'), fieldErrors[`g_income_${i}`] || '');
+        setFieldError(row.querySelector('.g-debt'), fieldErrors[`g_debt_${i}`] || '');
+    });
+}
+
+function getFirstErrorElement(fieldErrors) {
+    const order = ['income','age','years','loan','rate','shares','existing_debt','internal_monthly','internal_balance'];
+    for (const k of order) {
+        if (fieldErrors[k]) {
+            return $(k);
+        }
+    }
+    // 保證人
+    const rows = document.querySelectorAll('.guarantor-row');
+    for (let i = 0; i < rows.length; i++) {
+        if (fieldErrors[`g_name_${i}`] || fieldErrors[`g_income_${i}`] || fieldErrors[`g_debt_${i}`]) {
+            return rows[i];
+        }
+    }
+    return null;
+}
+
+// ============================================================
 // 評分計算（含 baseline DSR 含本社長債）
 // ============================================================
 function computeScore(input) {
+    if (!input.income || input.income <= 0) {
+        return { total: 0, dsr: 0, dsrScore: 0, stability: 0, ageScore: 0,
+                 peopleScore: 0, protectionScore: 0, purposeScore: 0, perspectiveScore: 0 };
+    }
     // [FIX 1.6] DSR 含社外 + 本社月付
     const baselineDsr = (input.existingDebt + input.internalMonthly) / input.income;
     let dsrScore = 0;
@@ -885,7 +1213,8 @@ function computeScore(input) {
     // Age penalty（僅扣分，不否決；否決由法規⑧處理）
     const ageAtMaturity = input.age + input.years;
     let ageScore = 0;
-    if (ageAtMaturity > AGE_SOFT_PENALTY)      ageScore = AGE_SCORE_HARD;
+    if (ageAtMaturity > AGE_HARD_VETO)         ageScore = AGE_SCORE_HARD;
+    else if (ageAtMaturity > AGE_SOFT_PENALTY) ageScore = AGE_SCORE_HARD;
     else if (ageAtMaturity > AGE_SOFT_PENALTY_MILD) ageScore = AGE_SCORE_MILD;
 
     return {
@@ -911,7 +1240,9 @@ function applyRegulatoryVetoes(input) {
     // [FIX 1.1] 月付金改用 PMT 公式
     const newLoanMonthlyPmt = pmt(input.proposedLoan, input.ratePercent, input.years);
     // [FIX 1.5] 否決線比對「核貸後總負債比」
-    const postLoanDti = (input.existingDebt + input.internalMonthly + newLoanMonthlyPmt) / input.income;
+    const postLoanDti = input.income > 0
+        ? (input.existingDebt + input.internalMonthly + newLoanMonthlyPmt) / input.income
+        : Infinity;
 
     // ① 未成年社員借款總額 ≤ 股金
     if (input.age < 18 && (input.proposedLoan + input.internalBalance) > input.shares) {
@@ -935,22 +1266,22 @@ function applyRegulatoryVetoes(input) {
         vetoes.push(`貸款年限 ${input.years} 年超過 ${LONG_TERM_YEARS} 年，須以足額不動產抵押為擔保，不得僅以股金或信用方式辦理`);
     }
 
-    // ⑤ 聯徵紀錄嚴重瑕疵
+    // ⑤ 擔保品 '12'（足額股金內借款）申請金額不得超過股金（僅限 ≤7 年）
+    if (input.collateral === '12' && input.years <= LONG_TERM_YEARS && input.proposedLoan > input.shares) {
+        vetoes.push(`足額股金內借款申請金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）不得超過股金餘額（${input.shares.toLocaleString('zh-TW')} 元）`);
+    }
+
+    // ⑥ 聯徵紀錄嚴重瑕疵
     if (input.jcic === 'veto') {
         vetoes.push('聯徵紀錄存有嚴重瑕疵（拒絕往來/強執）');
     }
 
-    // ⑥ 資金用途不當
+    // ⑦ 資金用途不當
     if (input.purpose === 'veto') {
         vetoes.push('資金用途不具正當性或屬高風險投機');
     }
 
-    // ⑦ [FIX 1.5] 核貸後總負債比 > 70% 極限
-    if (postLoanDti > DSR_VETO_THRESHOLD) {
-        vetoes.push(`核貸後總負債比 ${(postLoanDti*100).toFixed(1)}% 超過 70% 極限`);
-    }
-
-    // ⑧ [FIX 1.7] 到期年齡 > 75 直接否決
+    // ⑨ [FIX 1.7] 到期年齡 > 75 直接否決
     if (ageAtMaturity > AGE_HARD_VETO) {
         vetoes.push(`還款到期年齡 ${ageAtMaturity} 歲超過 ${AGE_HARD_VETO} 歲上限`);
     }
@@ -1012,16 +1343,19 @@ function renderGuarantorRows(count) {
             '<div class="form-group">' +
                 '<label>保證人姓名</label>' +
                 '<input type="text" class="g-name" placeholder="姓名（如：王大成）" value="' + escapeHtml(d.name) + '">' +
+                '<span class="error-msg"></span>' +
             '</div>' +
             '<div class="form-group">' +
                 '<label>月收入 (元)</label>' +
                 '<input type="number" class="g-income" placeholder="例如：50000" min="0" value="' + d.income + '">' +
                 '<span class="input-preview g-income-preview"></span>' +
+                '<span class="error-msg"></span>' +
             '</div>' +
             '<div class="form-group">' +
                 '<label>既有債務月付 (元)</label>' +
                 '<input type="number" class="g-debt" placeholder="0" min="0" value="' + d.debt + '">' +
                 '<span class="input-preview g-debt-preview"></span>' +
+                '<span class="error-msg"></span>' +
             '</div>';
         container.appendChild(r);
     }
@@ -1067,6 +1401,14 @@ function renderDashboard(result) {
     const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, statusText } = result;
 
     $('resScore').innerText = scoreDetail.total;
+    $('gaugeScoreVal').innerText = scoreDetail.total;
+    // SVG gauge 填色與進度
+    const gaugeEl = $('gaugeFill');
+    const gaugeCircumference = 2 * Math.PI * 58;  // ≈ 364.4
+    const scoreClamped = Math.max(0, Math.min(100, scoreDetail.total));
+    const gaugeOffset = gaugeCircumference * (1 - scoreClamped / 100);
+    gaugeEl.setAttribute('stroke-dasharray', String(gaugeCircumference));
+    gaugeEl.setAttribute('stroke-dashoffset', String(gaugeOffset));
     const gradeEl = $('resGrade');
     gradeEl.innerText = grade;
     const gradeColors  = { A:'#2e7d32', B:'#00695c', C:'#e65100', D:'#bf360c', E:'#c62828' };
@@ -1076,6 +1418,7 @@ function renderDashboard(result) {
     const gradeCard = gradeEl.closest('.result-stat');
     gradeCard.style.backgroundColor = gradeBgs[grade] || '#fff';
     gradeCard.style.borderColor = gradeBorders[grade] || '#edf2f7';
+    gaugeEl.setAttribute('stroke', gradeColors[grade] || '#1a237e');
 
     $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
     $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
@@ -1248,11 +1591,16 @@ function calculateLoan() {
     // [FIX 4.1] 輸入驗證（含負值防呆）
     const errors = validateInputs(input);
     if (errors.length > 0) {
-        alert('輸入資料有問題：\n' + errors.join('\n'));
+        const fieldErrors = validateInputsByField(input);
+        clearAllFieldErrors();
+        applyFieldErrors(fieldErrors);
         $('resultCard').style.display = 'none';
         $('btnPrint').style.display = 'none';
+        const firstEl = getFirstErrorElement(fieldErrors);
+        if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
+    clearAllFieldErrors();
 
     // 評分
     const scoreDetail = computeScore(input);
@@ -1306,6 +1654,68 @@ function calculateLoan() {
 // ============================================================
 // 初始化
 // ============================================================
+const FORM_DRAFT_KEY = 'cu_form_draft';
+const FORM_DRAFT_FIELDS = [
+    'memberId','appDate','income','age','existing_debt','internal_monthly','internal_balance',
+    'loan','years','rate','shares','stability','interaction','jcic','membership',
+    'collateral','guarantor_count','purpose','career','participation'
+];
+
+function saveFormDraft() {
+    try {
+        const data = {};
+        FORM_DRAFT_FIELDS.forEach(id => {
+            const el = $(id);
+            if (el) data[id] = el.value;
+        });
+        // 保證人動態欄位
+        const guarantors = Array.from(document.querySelectorAll('.guarantor-row')).map(row => ({
+            name: row.querySelector('.g-name').value,
+            income: row.querySelector('.g-income').value,
+            debt: row.querySelector('.g-debt').value,
+        }));
+        data._guarantors = guarantors;
+        localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
+    } catch (e) { /* localStorage 不可用時略過 */ }
+}
+
+function loadFormDraft() {
+    try {
+        const raw = localStorage.getItem(FORM_DRAFT_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        FORM_DRAFT_FIELDS.forEach(id => {
+            if (data[id] !== undefined) {
+                const el = $(id);
+                if (el) el.value = data[id];
+            }
+        });
+        // 重建保證人 row（會清空再 render 一次）
+        const gCount = parseInt($('guarantor_count').value) || 0;
+        renderGuarantorRows(gCount);
+        // 還原保證人資料
+        if (Array.isArray(data._guarantors) && data._guarantors.length > 0) {
+            const rows = document.querySelectorAll('.guarantor-row');
+            data._guarantors.forEach((g, i) => {
+                if (i >= rows.length) return;
+                const r = rows[i];
+                if (g.name !== undefined)   r.querySelector('.g-name').value   = g.name;
+                if (g.income !== undefined) r.querySelector('.g-income').value = g.income;
+                if (g.debt !== undefined)   r.querySelector('.g-debt').value   = g.debt;
+            });
+            bindGuarantorPreviews();
+        }
+        updateCollateralByYears();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function clearFormDraft() {
+    try { localStorage.removeItem(FORM_DRAFT_KEY); } catch (e) { /* noop */ }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // 申請日期預設今天
     const appDate = $('appDate');
@@ -1333,12 +1743,48 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGuarantorRows(parseInt(guarantorCountEl.value) || 0);
     guarantorCountEl.addEventListener('change', () => {
         renderGuarantorRows(parseInt(guarantorCountEl.value) || 0);
+        saveFormDraft();
     });
 
     // 擔保品聯動：年限變更時
     $('years').addEventListener('change', updateCollateralByYears);
     $('collateral').addEventListener('change', updateCollateralByYears);
     updateCollateralByYears();
+
+    // 草稿自動存：所有欄位的 input/change 事件
+    FORM_DRAFT_FIELDS.forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('input', saveFormDraft);
+        el.addEventListener('change', saveFormDraft);
+    });
+    // 保證人動態欄位：事件委派到容器
+    const guarantorList = $('guarantorList');
+    if (guarantorList) {
+        guarantorList.addEventListener('input', saveFormDraft);
+        guarantorList.addEventListener('change', saveFormDraft);
+    }
+
+    // 頁面載入時還原草稿（若存在）
+    loadFormDraft();
+
+    // 清除草稿按鈕
+    const clearBtn = $('clearDraftBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            if (confirm('確定要清除已填寫的草稿並重置表單？')) {
+                clearFormDraft();
+                location.reload();
+            }
+        });
+    }
+
+    // 區塊折疊
+    document.querySelectorAll('.card.collapsible .section-title').forEach(title => {
+        title.addEventListener('click', () => {
+            title.closest('.card.collapsible').classList.toggle('collapsed');
+        });
+    });
 });
 </script>
 
