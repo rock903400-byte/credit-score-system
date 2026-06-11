@@ -98,6 +98,9 @@
                     <label>貸款年限 (年)</label>
                     <input type="number" id="years" placeholder="例如：5" min="1">
                     <span class="error-msg"></span>
+                    <div id="yearsHint" class="notice-warn">
+                        ⚠️ 年限超過 20 年僅限「屋齡 20 年內自用住宅」擔保品（上限 30 年），請確認擔保品條件
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>年利率 (%)</label>
@@ -159,7 +162,7 @@
                         <option value="5">不足額擔保或純信用(股金2倍內)</option>
                         <option value="0">純信用借款 (超過股金2倍)</option>
                     </select>
-                    <div id="collateralLockMsg" style="display:none; margin-top:8px; padding:10px; background-color:#fff3e0; color:#e65100; border:1px solid #ffe0b2; border-radius:8px; font-size:0.85em; font-weight:600;">
+                    <div id="collateralLockMsg" class="notice-warn">
                         ⚠️ 貸款年限超過 7 年，系統已自動切換為「足額不動產抵押」
                     </div>
                 </div>
@@ -270,22 +273,58 @@
                 </div>
             </div>
             
+            <div class="score-breakdown">
+                <div class="score-breakdown-title">評分組成（5P 面向）</div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">還款能力</span>
+                    <div class="breakdown-bar"><div id="bd_ability" class="breakdown-fill"></div></div>
+                    <span class="breakdown-score"><span id="bd_ability_val"></span> / 35</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">借款人信用</span>
+                    <div class="breakdown-bar"><div id="bd_credit" class="breakdown-fill"></div></div>
+                    <span class="breakdown-score"><span id="bd_credit_val"></span> / 25</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">債權保障</span>
+                    <div class="breakdown-bar"><div id="bd_protection" class="breakdown-fill"></div></div>
+                    <span class="breakdown-score"><span id="bd_protection_val"></span> / 20</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">資金用途</span>
+                    <div class="breakdown-bar"><div id="bd_purpose" class="breakdown-fill"></div></div>
+                    <span class="breakdown-score"><span id="bd_purpose_val"></span> / 10</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">未來展望</span>
+                    <div class="breakdown-bar"><div id="bd_perspective" class="breakdown-fill"></div></div>
+                    <span class="breakdown-score"><span id="bd_perspective_val"></span> / 10</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label" title="還款到期年齡 >65 扣 5 分、>70 扣 10 分">年齡調整</span>
+                    <div class="breakdown-bar breakdown-bar-empty"></div>
+                    <span class="breakdown-score" id="bd_age_val"></span>
+                </div>
+            </div>
+
             <div class="gauge-container">
                 <div style="font-weight: 700; color: var(--primary-dark); margin-bottom: 5px;">每月還款總負擔（占月收入比例）</div>
                 <div style="font-size: 0.9em; color: var(--text-muted); margin-bottom: 10px;">計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入</div>
                 <div class="progress-container">
                     <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+                    <div class="progress-veto-marker" style="left: 70%;" title="否決線 70%：核貸後總負債比超過即不予核貸"></div>
                     <div id="progressLimit" class="progress-limit-marker" style="left: 0%;" title="該等級還款壓力上限"></div>
                 </div>
-                <div class="progress-labels">
-                    <span>0%</span>
-                    <span>30% 警戒</span>
-                    <span>50% 極限</span>
-                    <span>100%</span>
+                <div class="progress-scale">
+                    <span style="left: 0%;">0%</span>
+                    <span style="left: 30%;">30%</span>
+                    <span style="left: 50%;">50%</span>
+                    <span class="scale-veto" style="left: 70%;">70% 否決線</span>
+                    <span style="left: 100%;">100%</span>
                 </div>
                 <div style="font-size: 0.9em; color: var(--text-muted); margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
                     <span>預計總月負擔：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%
-                        <span id="dtiOverflowBadge" style="display:none; margin-left:8px; padding:2px 8px; background-color:#ffebee; color:#c62828; border:1px solid #ef9a9a; border-radius:4px; font-size:0.85em; font-weight:700;"></span>
+                        <span id="dtiOverflowBadge" class="overflow-badge"></span>
                     </span>
                     <span>本級別上限：<strong id="resMaxDtiTxt"></strong>%</span>
                 </div>
@@ -293,13 +332,13 @@
 
             <div id="resStatus" class="status-msg"></div>
 
-            <div id="minorWarn" style="display:none; margin-top:15px; padding:14px; border-radius:var(--border-radius); font-size:0.95em; font-weight:600; background-color:#fff3e0; color:#e65100; border:2px solid #ffb300;">
+            <div id="minorWarn" class="notice-warn notice-warn-strong">
                 注意：借款人為未成年（未滿18歲），依規須取得法定代理人書面同意，請附上同意書後再送件。
             </div>
 
             <div id="shareHint" style="display:none; margin-top: 15px; padding: 14px; border-radius: var(--border-radius); font-size: 0.9em; font-weight: 600;"></div>
 
-            <div style="margin-top: 20px; padding: 15px; background-color: #fcfcfc; border: 1px dashed #d1d9e6; border-radius: 8px; font-size: 0.85em; color: var(--text-muted);">
+            <div class="tip-box">
                 <strong>💡 專業小叮嚀：</strong><br>
                 「本級別上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不宜超過月收入的該比例，以維持良好的生活品質與信用風險控制。
             </div>
@@ -350,24 +389,28 @@
             <div class="print-section-title">二、 授信評核明細（五大評估面向）</div>
             <table class="print-table">
                 <tr>
-                    <th>一、還款能力 — 收入穩定性 / 年資</th>
+                    <th>一、還款能力 — 收入穩定性 / 年資<br><small>（<span id="p_score_ability"></span> / 35 分）</small></th>
                     <td id="p_stability"></td>
                 </tr>
                 <tr>
-                    <th>二、借款人信用 — 社內往來 / 聯徵紀錄</th>
+                    <th>二、借款人信用 — 社內往來 / 聯徵紀錄<br><small>（<span id="p_score_credit"></span> / 25 分）</small></th>
                     <td><span id="p_interaction"></span> / <span id="p_jcic"></span></td>
                 </tr>
                 <tr>
-                    <th>三、債權保障 — 擔保設定與保證人</th>
+                    <th>三、債權保障 — 擔保設定與保證人<br><small>（<span id="p_score_protection"></span> / 20 分）</small></th>
                     <td><span id="p_collateral"></span><br><div id="p_guarantor_print"></div></td>
                 </tr>
                 <tr>
-                    <th>四、資金用途</th>
+                    <th>四、資金用途<br><small>（<span id="p_score_purpose"></span> / 10 分）</small></th>
                     <td id="p_purpose"></td>
                 </tr>
                 <tr>
-                    <th>五、未來展望</th>
+                    <th>五、未來展望<br><small>（<span id="p_score_perspective"></span> / 10 分）</small></th>
                     <td><span id="p_career_print"></span> / <span id="p_participation_print"></span></td>
+                </tr>
+                <tr>
+                    <th>年齡調整</th>
+                    <td id="p_score_age"></td>
                 </tr>
             </table>
         </div>

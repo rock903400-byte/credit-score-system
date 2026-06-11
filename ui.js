@@ -188,6 +188,11 @@ function updateCollateralByYears() {
     } else {
         lockMsg.style.display = 'none';
     }
+    // 擔保放款一般上限 20 年，屋齡 20 年內自用住宅放寬至 30 年；>30 由法規否決擋下
+    const yearsHint = $('yearsHint');
+    if (yearsHint) {
+        yearsHint.style.display = (yearsVal > SECURED_YEARS_STANDARD && yearsVal <= MAX_SECURED_YEARS) ? 'block' : 'none';
+    }
 }
 
 // ============================================================
@@ -196,11 +201,12 @@ function updateCollateralByYears() {
 function renderDashboard(result) {
     const { input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit, postLoanDti, totalExposure, shareMult, statusText } = result;
 
-    $('gaugeScoreVal').textContent = scoreDetail.total;
+    // 顯示數字與指針一致 clamp 0–100（總分理論值可能因扣分為負）
+    const scoreClamped = Math.max(0, Math.min(100, scoreDetail.total));
+    $('gaugeScoreVal').textContent = scoreClamped;
     // SVG gauge 填色與進度
     const gaugeEl = $('gaugeFill');
     const gaugeCircumference = 2 * Math.PI * 58;  // ≈ 364.4
-    const scoreClamped = Math.max(0, Math.min(100, scoreDetail.total));
     const gaugeOffset = gaugeCircumference * (1 - scoreClamped / 100);
     gaugeEl.setAttribute('stroke-dasharray', String(gaugeCircumference));
     gaugeEl.setAttribute('stroke-dashoffset', String(gaugeOffset));
@@ -260,9 +266,27 @@ function renderDashboard(result) {
         }
         shareHint.className = `hint hint-${hintType}`;
         shareHint.innerText = hintMsg;
+        shareHint.style.display = 'block'; // 必須清掉 index.html 的 inline display:none，class 蓋不過 inline
     } else {
         shareHint.style.display = 'none';
     }
+
+    // 評分組成（5P）— computeScore 已回傳各面向分數，這裡只負責渲染
+    const breakdown = [
+        ['bd_ability',     scoreDetail.dsrScore + scoreDetail.stability, 35],
+        ['bd_credit',      scoreDetail.peopleScore,                      25],
+        ['bd_protection',  scoreDetail.protectionScore,                  20],
+        ['bd_purpose',     scoreDetail.purposeScore,                     10],
+        ['bd_perspective', scoreDetail.perspectiveScore,                 10],
+    ];
+    breakdown.forEach(([id, val, max]) => {
+        const pct = Math.max(0, Math.min(100, (val / max) * 100)); // peopleScore 可為負，bar 寬 clamp 0
+        $(id).style.width = pct + '%';
+        $(id + '_val').textContent = val;
+    });
+    const bdAge = $('bd_age_val');
+    bdAge.textContent = scoreDetail.ageScore === 0 ? '—' : `${scoreDetail.ageScore} 分`;
+    bdAge.classList.toggle('neg', scoreDetail.ageScore < 0);
 
     // 狀態訊息（[FIX 1.3] 否決清單以 <ul> 累積呈現）
     const statusEl = $('resStatus');
@@ -364,9 +388,19 @@ function renderPrintReport(result) {
     $('p_career_print').innerText = $('career').options[$('career').selectedIndex].text;
     $('p_participation_print').innerText = $('participation').options[$('participation').selectedIndex].text;
 
+    // 5P 各面向分數
+    $('p_score_ability').innerText = scoreDetail.dsrScore + scoreDetail.stability;
+    $('p_score_credit').innerText = scoreDetail.peopleScore;
+    $('p_score_protection').innerText = scoreDetail.protectionScore;
+    $('p_score_purpose').innerText = scoreDetail.purposeScore;
+    $('p_score_perspective').innerText = scoreDetail.perspectiveScore;
+    $('p_score_age').innerText = scoreDetail.ageScore === 0
+        ? `無（還款到期年齡 ${ageAtMaturity} 歲）`
+        : `${scoreDetail.ageScore} 分（還款到期年齡 ${ageAtMaturity} 歲）`;
+
     // 評估結果
     $('p_grade').innerText = grade;
-    $('p_score').innerText = scoreDetail.total;
+    $('p_score').innerText = Math.max(0, Math.min(100, scoreDetail.total));
     $('p_dti').innerText = (postLoanDti * 100).toFixed(1);
     $('p_maxdti').innerText = (maxDti * 100);
     $('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');

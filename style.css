@@ -313,6 +313,56 @@ button {
     text-shadow: 1px 1px 0px rgba(0,0,0,0.05);
 }
 
+/* 評分組成（5P 分項橫條） */
+.score-breakdown {
+    margin: 5px 0 25px;
+    background: #fff;
+    border: 1px solid #edf2f7;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.score-breakdown-title {
+    font-weight: 700;
+    color: var(--primary-dark);
+    margin-bottom: 14px;
+}
+.breakdown-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 76px;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.breakdown-row:last-child { margin-bottom: 0; }
+.breakdown-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text-main);
+}
+.breakdown-bar {
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 5px;
+    overflow: hidden;
+}
+.breakdown-bar-empty { background: transparent; }
+.breakdown-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+    transition: width 0.8s ease;
+}
+.breakdown-score {
+    font-size: 0.9em;
+    font-weight: 700;
+    color: var(--primary-dark);
+    text-align: right;
+    white-space: nowrap;
+}
+.breakdown-score.neg { color: #c62828; }
+
 /* 儀表板進度條 */
 .gauge-container {
     margin: 30px 0;
@@ -348,12 +398,32 @@ button {
     box-shadow: 0 0 5px rgba(211, 47, 47, 0.5);
 }
 
-.progress-labels {
-    display: flex;
-    justify-content: space-between;
+/* 刻度依真實百分比定位（取代舊 space-between 平均分布造成的位置失真） */
+.progress-scale {
+    position: relative;
+    height: 1.4em;
     font-size: 0.85em;
     color: var(--text-muted);
     margin-top: 5px;
+}
+.progress-scale span {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+.progress-scale span:first-child { transform: none; }            /* 0% 靠左對齊 */
+.progress-scale span:last-child { transform: translateX(-100%); } /* 100% 靠右不出界 */
+.progress-scale .scale-veto { color: #c62828; font-weight: 700; }
+
+/* 70% 否決線（固定）— 與本級上限 marker（實線）以虛線區分 */
+.progress-veto-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 3px dashed #c62828;
+    z-index: 9;
+    opacity: 0.85;
 }
 
 .status-msg {
@@ -408,6 +478,50 @@ button {
 /* 擔保品鎖定提示 */
 #collateralLockMsg { user-select: none; }
 
+/* 橘色警示框（yearsHint / collateralLockMsg / minorWarn 共用；原 inline style 收斂） */
+.notice-warn {
+    display: none;
+    margin-top: 8px;
+    padding: 10px;
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe0b2;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.notice-warn-strong {
+    margin-top: 15px;
+    padding: 14px;
+    border-radius: var(--border-radius);
+    font-size: 0.95em;
+    border: 2px solid #ffb300;
+}
+
+/* DTI 溢出徽章 */
+.overflow-badge {
+    display: none;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 700;
+}
+
+/* 專業小叮嚀框 */
+.tip-box {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #fcfcfc;
+    border: 1px dashed #d1d9e6;
+    border-radius: 8px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
 /* 列印專屬樣式 */
 .print-area { display: none; }
 
@@ -448,8 +562,10 @@ button {
         gap: 12px;
     }
     .result-stat-value { font-size: 1.4em; }
+    .score-breakdown { padding: 14px; }
+    .breakdown-row { grid-template-columns: 86px 1fr 64px; gap: 8px; }
     .gauge-container { padding: 14px; }
-    .progress-labels { font-size: 0.75em; }
+    .progress-scale { font-size: 0.75em; }
     .status-msg { font-size: 1.05em; padding: 16px; }
 }
 
@@ -483,8 +599,15 @@ button {
     .guarantor-row { background: #0f172a; border-color: #334155; }
     .score-gauge { background: #0f172a; border-color: #334155; }
     .gauge-track { stroke: #334155; }
+    .score-breakdown { background: #0f172a; border-color: #334155; }
+    .breakdown-bar { background: #334155; }
+    .breakdown-bar-empty { background: transparent; }
     .hint-info { background-color: #1e293b; color: #a5b4fc; border-color: #334155; }
     .input-preview { color: #a5b4fc; }
+    .notice-warn { background-color: #3a2a12; color: #fbbf24; border-color: #92600a; }
+    .notice-warn-strong { border-color: #b45309; }
+    .overflow-badge { background-color: #3f1d1d; color: #f87171; border-color: #7f1d1d; }
+    .tip-box { background-color: #1e293b; border-color: #334155; }
 }
 
 /* 折疊面板焦點樣式 (鍵盤無障礙) */
