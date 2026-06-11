@@ -53,6 +53,11 @@ h1::after {
     border-radius: 2px;
 }
 
+.header-sub {
+    color: var(--text-muted);
+    margin-top: 15px;
+}
+
 .card {
     background: var(--card-bg);
     padding: 30px;
@@ -213,6 +218,19 @@ button {
     background: linear-gradient(135deg, #2e7d32, #43a047);
     display: none;
 }
+
+/* 清除草稿 — 無底色的次要按鈕 */
+.btn-clear-draft {
+    background: transparent;
+    color: var(--text-muted);
+    box-shadow: none;
+    font-size: 0.9em;
+    padding: 8px 16px;
+    flex: initial;
+    min-width: auto;
+    width: auto;
+    display: inline-block;
+}
 .btn-print:hover {
     background: linear-gradient(135deg, #1b5e20, #2e7d32);
     transform: translateY(-2px);
@@ -313,6 +331,23 @@ button {
     text-shadow: 1px 1px 0px rgba(0,0,0,0.05);
 }
 
+.stat-suffix {
+    font-size: 0.6em;
+    color: var(--text-muted);
+}
+
+/* 等級卡片配色（grade-A~E 由 renderDashboard 切換；深色模式於下方覆寫） */
+.result-stat.grade-A { background: #e8f5e9; border-color: #c8e6c9; }
+.result-stat.grade-B { background: #e0f2f1; border-color: #b2dfdb; }
+.result-stat.grade-C { background: #fff3e0; border-color: #ffe0b2; }
+.result-stat.grade-D { background: #fbe9e7; border-color: #ffccbc; }
+.result-stat.grade-E { background: #ffebee; border-color: #ffcdd2; }
+.result-stat.grade-A .result-stat-value { color: #2e7d32; }
+.result-stat.grade-B .result-stat-value { color: #00695c; }
+.result-stat.grade-C .result-stat-value { color: #e65100; }
+.result-stat.grade-D .result-stat-value { color: #bf360c; }
+.result-stat.grade-E .result-stat-value { color: #c62828; }
+
 /* 評分組成（5P 分項橫條） */
 .score-breakdown {
     margin: 5px 0 25px;
@@ -370,6 +405,26 @@ button {
     padding: 20px;
     border-radius: 15px;
 }
+
+.gauge-heading {
+    font-weight: 700;
+    color: var(--primary-dark);
+    margin-bottom: 5px;
+}
+.gauge-sub {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+.dti-footer {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.dti-value { color: var(--primary-color); }
 
 .progress-container {
     width: 100%;
@@ -460,6 +515,7 @@ button {
 .progress-limit-marker.hidden { display: none; }
 
 /* 動態保證人列 */
+#guarantorContainer { margin-top: 15px; }
 #guarantorList { margin-top: 5px; }
 .guarantor-row {
     display: grid;
@@ -603,6 +659,25 @@ button {
     .breakdown-bar { background: #334155; }
     .breakdown-bar-empty { background: transparent; }
     .hint-info { background-color: #1e293b; color: #a5b4fc; border-color: #334155; }
+    .hint-success { background-color: #14331f; color: #81c784; border-color: #1b5e20; }
+    .hint-warn    { background-color: #3a2a12; color: #ffb74d; border-color: #92600a; }
+    .hint-error   { background-color: #3f1d1d; color: #f87171; border-color: #7f1d1d; }
+    .status-pass { background-color: #14331f; color: #81c784; border-color: #1b5e20; }
+    .status-warn { background-color: #3a2a12; color: #ffb74d; border-color: #92600a; }
+    .status-fail { background-color: #3f1d1d; color: #f87171; border-color: #7f1d1d; }
+    .error-msg { color: #f87171; }
+    input.has-error, select.has-error { background-color: #3f1d1d; border-color: #ef5350; }
+    .breakdown-score.neg { color: #f87171; }
+    .result-stat.grade-A { background: #14331f; border-color: #1b5e20; }
+    .result-stat.grade-B { background: #0e2a28; border-color: #00695c; }
+    .result-stat.grade-C { background: #3a2a12; border-color: #92600a; }
+    .result-stat.grade-D { background: #3a1c10; border-color: #bf360c; }
+    .result-stat.grade-E { background: #3f1d1d; border-color: #7f1d1d; }
+    .result-stat.grade-A .result-stat-value { color: #81c784; }
+    .result-stat.grade-B .result-stat-value { color: #4db6ac; }
+    .result-stat.grade-C .result-stat-value { color: #ffb74d; }
+    .result-stat.grade-D .result-stat-value { color: #ff8a65; }
+    .result-stat.grade-E .result-stat-value { color: #f87171; }
     .input-preview { color: #a5b4fc; }
     .notice-warn { background-color: #3a2a12; color: #fbbf24; border-color: #92600a; }
     .notice-warn-strong { border-color: #b45309; }

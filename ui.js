@@ -212,13 +212,11 @@ function renderDashboard(result) {
     gaugeEl.setAttribute('stroke-dashoffset', String(gaugeOffset));
     const gradeEl = $('resGrade');
     gradeEl.innerText = grade;
-    const gradeColors  = { A:'#2e7d32', B:'#00695c', C:'#e65100', D:'#bf360c', E:'#c62828' };
-    const gradeBgs     = { A:'#e8f5e9', B:'#e0f2f1', C:'#fff3e0', D:'#fbe9e7', E:'#ffebee' };
-    const gradeBorders = { A:'#c8e6c9', B:'#b2dfdb', C:'#ffe0b2', D:'#ffccbc', E:'#ffcdd2' };
-    gradeEl.style.color = gradeColors[grade] || '#000051';
+    // 卡片底色/邊框/文字色交給 .grade-A~E（含深色模式覆寫）；JS 只留 SVG stroke
+    const gradeColors = { A:'#2e7d32', B:'#00695c', C:'#e65100', D:'#bf360c', E:'#c62828' };
     const gradeCard = gradeEl.closest('.result-stat');
-    gradeCard.style.backgroundColor = gradeBgs[grade] || '#fff';
-    gradeCard.style.borderColor = gradeBorders[grade] || '#edf2f7';
+    gradeCard.classList.remove('grade-A', 'grade-B', 'grade-C', 'grade-D', 'grade-E');
+    if (gradeColors[grade]) gradeCard.classList.add('grade-' + grade);
     gaugeEl.setAttribute('stroke', gradeColors[grade] || '#1a237e');
 
     $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
@@ -550,6 +548,10 @@ function clearFormDraft() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 主按鈕（與其餘綁定一致走 addEventListener，HTML 不掛 onclick）
+    $('btnCalc').addEventListener('click', calculateLoan);
+    $('btnPrint').addEventListener('click', () => window.print());
+
     // 申請日期預設今天
     const appDate = $('appDate');
     if (appDate && !appDate.value) {

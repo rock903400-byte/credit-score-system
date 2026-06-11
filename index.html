@@ -12,7 +12,7 @@
     <div class="no-print">
         <div class="header">
             <h1>信用評分與核貸試算系統</h1>
-            <p style="color: var(--text-muted); margin-top: 15px;">儲蓄互助社授信試算工具</p>
+            <p class="header-sub">儲蓄互助社授信試算工具</p>
         </div>
 
         <div class="card collapsible">
@@ -178,7 +178,7 @@
                     </select>
                 </div>
             </div>
-            <div id="guarantorContainer" style="margin-top:15px;">
+            <div id="guarantorContainer">
                 <div id="guarantorList"></div>
             </div>
             </div>
@@ -230,12 +230,12 @@
         </div>
 
         <div class="btn-group">
-            <button class="btn-calc" onclick="calculateLoan()">開始授信評分</button>
-            <button id="btnPrint" class="btn-print" onclick="window.print()">列印正式審查報告</button>
+            <button id="btnCalc" class="btn-calc">開始授信評分</button>
+            <button id="btnPrint" class="btn-print">列印正式審查報告</button>
         </div>
 
         <div style="text-align:center; margin-top:15px;">
-            <button id="clearDraftBtn" type="button" style="background:transparent; color:var(--text-muted); box-shadow:none; font-size:0.9em; padding:8px 16px; flex:initial; min-width:auto; width:auto; display:inline-block;">
+            <button id="clearDraftBtn" type="button" class="btn-clear-draft">
                 🗑 清除草稿
             </button>
         </div>
@@ -257,19 +257,19 @@
                 </div>
                 <div class="result-stat">
                     <span class="result-stat-label">信用等級</span>
-                    <span id="resGrade" class="result-stat-value result-value-highlight"></span> <span style="font-size: 0.6em; color: var(--text-muted);">級</span>
+                    <span id="resGrade" class="result-stat-value result-value-highlight"></span> <span class="stat-suffix">級</span>
                 </div>
                 <div class="result-stat">
                     <span class="result-stat-label">評分可貸額度</span>
-                    <span id="resLimit" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">元</span>
+                    <span id="resLimit" class="result-stat-value"></span> <span class="stat-suffix">元</span>
                 </div>
                 <div class="result-stat">
                     <span class="result-stat-label">申請額 / 股金倍數</span>
-                    <span id="resShareMult" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">倍</span>
+                    <span id="resShareMult" class="result-stat-value"></span> <span class="stat-suffix">倍</span>
                 </div>
                 <div class="result-stat">
                     <span class="result-stat-label">在本社借款總金額</span>
-                    <span id="resTotalExposure" class="result-stat-value"></span> <span style="font-size: 0.6em; color: var(--text-muted);">元</span>
+                    <span id="resTotalExposure" class="result-stat-value"></span> <span class="stat-suffix">元</span>
                 </div>
             </div>
             
@@ -308,8 +308,8 @@
             </div>
 
             <div class="gauge-container">
-                <div style="font-weight: 700; color: var(--primary-dark); margin-bottom: 5px;">每月還款總負擔（占月收入比例）</div>
-                <div style="font-size: 0.9em; color: var(--text-muted); margin-bottom: 10px;">計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入</div>
+                <div class="gauge-heading">每月還款總負擔（占月收入比例）</div>
+                <div class="gauge-sub">計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入</div>
                 <div class="progress-container">
                     <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
                     <div class="progress-veto-marker" style="left: 70%;" title="否決線 70%：核貸後總負債比超過即不予核貸"></div>
@@ -322,8 +322,8 @@
                     <span class="scale-veto" style="left: 70%;">70% 否決線</span>
                     <span style="left: 100%;">100%</span>
                 </div>
-                <div style="font-size: 0.9em; color: var(--text-muted); margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span>預計總月負擔：<strong id="resTotalDti" style="color: var(--primary-color);"></strong>%
+                <div class="dti-footer">
+                    <span>預計總月負擔：<strong id="resTotalDti" class="dti-value"></strong>%
                         <span id="dtiOverflowBadge" class="overflow-badge"></span>
                     </span>
                     <span>本級別上限：<strong id="resMaxDtiTxt"></strong>%</span>
@@ -336,7 +336,7 @@
                 注意：借款人為未成年（未滿18歲），依規須取得法定代理人書面同意，請附上同意書後再送件。
             </div>
 
-            <div id="shareHint" style="display:none; margin-top: 15px; padding: 14px; border-radius: var(--border-radius); font-size: 0.9em; font-weight: 600;"></div>
+            <div id="shareHint" class="hint" style="display:none"></div>
 
             <div class="tip-box">
                 <strong>💡 專業小叮嚀：</strong><br>
