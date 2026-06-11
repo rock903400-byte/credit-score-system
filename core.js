@@ -12,6 +12,8 @@ const AGE_SCORE_MILD           = -5;
 const NATURAL_PERSON_CAP       = 10_000_000;
 const CREDIT_FLOOR_PER_SHARE   = 1_000_000;
 const LONG_TERM_YEARS          = 7;
+const SECURED_YEARS_STANDARD   = 20;   // 擔保放款一般上限（擔保放款辦法第三條之一）
+const MAX_SECURED_YEARS        = 30;   // 屋齡 20 年內自用住宅放寬上限
 const MAX_GUARANTORS           = 5;
 const GUARANTOR_SCORE_TABLE    = { 0:0, 1:4, 2:6, 3:7, 4:8, 5:9 };
 const GRADE_THRESHOLDS         = { A: 90, B: 80, C: 70, D: 60 };
@@ -159,8 +161,8 @@ function computeScore(input) {
         }
     }
 
-    // Protection (20%)
-    const protectionScore = parseInt(input.collateral) + (GUARANTOR_SCORE_TABLE[input.guarantorCount] || 0) + guarantorDsrScore;
+    // Protection (20%) — 擔保 12 + 保證人 9 + 保證人DSR 5 理論值 26，封頂 20 維持 5P 權重
+    const protectionScore = Math.min(20, parseInt(input.collateral) + (GUARANTOR_SCORE_TABLE[input.guarantorCount] || 0) + guarantorDsrScore);
 
     // Purpose (10%)
     const purposeScore = input.purpose === 'veto' ? 0 : (parseInt(input.purpose) || 0);
@@ -226,6 +228,11 @@ function applyRegulatoryVetoes(input) {
         vetoes.push(`貸款年限 ${input.years} 年超過 ${LONG_TERM_YEARS} 年，須以足額不動產抵押為擔保，不得僅以股金或信用方式辦理`);
     }
 
+    // ④-1 擔保放款最長 30 年（屋齡 20 年內自用住宅；一般 20 年由 UI 提示）
+    if (input.years > MAX_SECURED_YEARS) {
+        vetoes.push(`貸款年限 ${input.years} 年超過擔保放款最長期限 ${MAX_SECURED_YEARS} 年（屋齡 20 年內自用住宅上限 30 年，一般擔保品上限 ${SECURED_YEARS_STANDARD} 年）`);
+    }
+
     // ⑤ 擔保品 '12'（足額股金內借款）申請金額不得超過股金（僅限 ≤7 年）
     if (input.collateral === '12' && input.years <= LONG_TERM_YEARS && input.proposedLoan > input.shares) {
         vetoes.push(`足額股金內借款申請金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）不得超過股金餘額（${input.shares.toLocaleString('zh-TW')} 元）`);
@@ -270,8 +277,11 @@ function computeMaxLoan(input, maxDti) {
 
 function applyLegalCeiling(input, maxLoanLimit) {
     let ceiling;
-    if (input.collateral === '10' || input.collateral === '12') {
+    if (input.collateral === '10') {
         ceiling = NATURAL_PERSON_CAP;
+    } else if (input.collateral === '12') {
+        // 足額股金內借款：可貸上限即股金餘額（與否決規則⑤一致）
+        ceiling = Math.min(NATURAL_PERSON_CAP, input.shares);
     } else {
         ceiling = input.shares + CREDIT_FLOOR_PER_SHARE;
     }
