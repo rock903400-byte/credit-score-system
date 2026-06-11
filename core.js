@@ -2,8 +2,11 @@
 // 常數（評分門檻、法規上限、評等等級）
 // ============================================================
 const DSR_VETO_THRESHOLD       = 0.70;
-const DSR_TIER_HIGH            = 0.50;
-const DSR_TIER_VERY_HIGH       = 0.60;
+// DSR 給分級距 [上限(不含), 分數] — 每 5% 一檔消除斷崖（原 50/60 邊界一步差 5~10 分），
+// 幹部仍可紙本對照複核；≥70% 給 0 分並由否決規則處理
+const DSR_SCORE_TIERS          = [
+    [0.40, 20], [0.45, 18], [0.50, 16], [0.55, 13], [0.60, 10], [0.65, 6], [0.70, 3],
+];
 const AGE_HARD_VETO            = 75;
 const AGE_SOFT_PENALTY         = 70;
 const AGE_SOFT_PENALTY_MILD    = 65;
@@ -141,9 +144,9 @@ function computeScore(input) {
     // [FIX 1.6] DSR 含社外 + 本社月付
     const baselineDsr = (input.existingDebt + input.internalMonthly) / input.income;
     let dsrScore = 0;
-    if (baselineDsr < DSR_TIER_HIGH)      dsrScore = 20;
-    else if (baselineDsr < DSR_TIER_VERY_HIGH) dsrScore = 15;
-    else if (baselineDsr < DSR_VETO_THRESHOLD) dsrScore = 5;
+    for (const [limit, score] of DSR_SCORE_TIERS) {
+        if (baselineDsr < limit) { dsrScore = score; break; }
+    }
 
     // People (25%)
     const jcicScore = input.jcic === 'veto' ? 0 : (parseInt(input.jcic) || 0);

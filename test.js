@@ -160,6 +160,39 @@ test('income=0 回傳零分物件', () => {
   assert(r.total===0 && r.dsr===0 && r.dsrScore===0 && r.ageScore===0, 'got:'+JSON.stringify(r));
 });
 
+console.log('\n── DSR 給分級距（每 5% 一檔） (13) ──');
+// income 100000、existingDebt = DSR×100000，逐一打在級距邊界上
+[
+  [0.399, 20], [0.40, 18], [0.449, 18], [0.45, 16], [0.499, 16],
+  [0.50, 13], [0.549, 13], [0.55, 10], [0.599, 10], [0.60, 6],
+  [0.649, 6], [0.65, 3], [0.699, 3],
+].forEach(([dsr, expected]) => {
+  test(`DSR ${(dsr*100).toFixed(1)}% → ${expected} 分`, () => {
+    const inp = { income:100000,age:40,years:5,ratePercent:3,existingDebt:dsr*100000,internalMonthly:0,proposedLoan:200000,
+      incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+      internalBalance:0,shares:100000,guarantors:[] };
+    assert(CS(inp).dsrScore === expected, 'got:'+CS(inp).dsrScore);
+  });
+});
+test('DSR 70% → 0 分（否決由 ARV 處理）', () => {
+  const inp = { income:100000,age:40,years:5,ratePercent:3,existingDebt:70000,internalMonthly:0,proposedLoan:200000,
+    incomeStability:6,tenure:4,interaction:10,jcic:'10',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    internalBalance:0,shares:100000,guarantors:[] };
+  assert(CS(inp).dsrScore === 0, 'got:'+CS(inp).dsrScore);
+});
+
+console.log('\n── 聯徵中間檔 jcic=2 (2) ──');
+test('jcic=2 計入 peopleScore（10+2+5=17）', () => {
+  const inp = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:200000,
+    incomeStability:6,tenure:4,interaction:10,jcic:'2',membership:5,collateral:'10',guarantorCount:0,purpose:'10',career:6,participation:4,
+    internalBalance:0,shares:100000,guarantors:[] };
+  assert(CS(inp).peopleScore === 17, 'got:'+CS(inp).peopleScore);
+});
+test('jcic=2 不觸發聯徵否決', () => {
+  const i = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,jcic:'2',purpose:'10',collateral:'10',shares:200000,internalBalance:0 };
+  assert(!ARV(i).vetoes.some(v=>v.includes('聯徵')), 'got:'+JSON.stringify(ARV(i).vetoes));
+});
+
 console.log('\n── applyRegulatoryVetoes (8) ──');
 test('到期>75 → veto', () => {
   const i = { income:80000,age:72,years:10,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,collateral:'10',shares:200000,internalBalance:0 };

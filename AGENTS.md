@@ -12,7 +12,7 @@ Open `index.html` in any browser (double-click or `file:///`).
 node test.js
 ```
 
-43 unit tests covering: PMT, formatAmount, escapeHtml, validateInputs, validateInputsByField, computeScore, applyRegulatoryVetoes, determineGrade, computeMaxLoan, applyLegalCeiling.
+59 unit tests covering: PMT, formatAmount, escapeHtml, validateInputs, validateInputsByField, computeScore, DSR score tiers, applyRegulatoryVetoes, determineGrade, computeMaxLoan, applyLegalCeiling.
 
 Uses Node.js `vm` sandbox to extract and execute `core.js` directly — no browser, no DOM mock needed.
 
@@ -55,6 +55,7 @@ Uses Node.js `vm` sandbox to extract and execute `core.js` directly — no brows
 
 ```js
 DSR_VETO_THRESHOLD       = 0.70
+DSR_SCORE_TIERS          = [[0.40,20],[0.45,18],[0.50,16],[0.55,13],[0.60,10],[0.65,6],[0.70,3]]  // 每5%一檔，[上限(不含),分數]，≥70%→0
 AGE_HARD_VETO            = 75
 AGE_SOFT_PENALTY         = 70
 AGE_SOFT_PENALTY_MILD    = 65
