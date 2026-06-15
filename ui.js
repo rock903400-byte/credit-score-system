@@ -7,6 +7,7 @@ const $ = id => document.getElementById(id);
 // 解析與驗證輸入（DOM 關聯部分）
 // ============================================================
 function parseInputs() {
+    const consolidationMode = $('consolidationMode').checked;
     return {
         memberId:       $('memberId').value.trim(),
         appDate:        $('appDate').value,
@@ -15,6 +16,10 @@ function parseInputs() {
         existingDebt:   parseFloat($('existing_debt').value) || 0,
         internalMonthly:parseFloat($('internal_monthly').value) || 0,
         internalBalance:parseFloat($('internal_balance').value) || 0,
+        internalMonthly2: consolidationMode ? (parseFloat($('internal_monthly2').value) || 0) : 0,
+        internalBalance2: consolidationMode ? (parseFloat($('internal_balance2').value) || 0) : 0,
+        internalYears2: consolidationMode ? (parseFloat($('internal_years2').value) || 0) : 0,
+        internalRate2: consolidationMode ? (parseFloat($('internal_rate2').value) || 0) : 0,
         proposedLoan:   parseFloat($('loan').value) || 0,
         years:          parseInt($('years').value) || 0,
         ratePercent:    parseFloat($('rate').value) || 0,
@@ -25,11 +30,16 @@ function parseInputs() {
         jcic:           $('jcic').value,
         membership:     parseInt($('membership').value) || 0,
         collateral:     $('collateral').value,
+        appraisalValue: parseFloat($('appraisalValue').value) || 0,
+        collateralZone: $('collateralZone').value,
+        houseAge:       parseInt($('houseAge').value) || 0,
+        appraisalAge:   parseInt($('appraisalAge').value) || 0,
         guarantorCount:  parseInt($('guarantor_count').value) || 0,
         guarantors: Array.from(document.querySelectorAll('.guarantor-row')).map(row => ({
             name: row.querySelector('.g-name').value.trim(),
             income: parseFloat(row.querySelector('.g-income').value) || 0,
             debt: parseFloat(row.querySelector('.g-debt').value) || 0,
+            type: row.querySelector('.g-type').value,
         })),
         purpose:        $('purpose').value,
         career:         parseInt($('career').value) || 0,
@@ -129,13 +139,22 @@ function renderGuarantorRows(count) {
         name: row.querySelector('.g-name').value,
         income: row.querySelector('.g-income').value,
         debt: row.querySelector('.g-debt').value,
+        type: row.querySelector('.g-type') ? row.querySelector('.g-type').value : 'non_member',
     }));
     container.innerHTML = '';
     for (let i = 0; i < count; i++) {
-        const d = existingData[i] || { name: '', income: '', debt: '' };
+        const d = existingData[i] || { name: '', income: '', debt: '', type: 'non_member' };
         const r = document.createElement('div');
         r.className = 'guarantor-row';
         r.innerHTML =
+            '<div class="form-group">' +
+                '<label>保證人類型</label>' +
+                '<select class="g-type">' +
+                    '<option value="member" ' + (d.type === 'member' ? 'selected' : '') + '>社員保證人</option>' +
+                    '<option value="non_member" ' + (d.type === 'non_member' ? 'selected' : '') + '>非社員保證人</option>' +
+                '</select>' +
+                '<span class="error-msg"></span>' +
+            '</div>' +
             '<div class="form-group">' +
                 '<label>保證人姓名</label>' +
                 '<input type="text" class="g-name" placeholder="姓名（如：王大成）" value="' + escapeHtml(d.name) + '">' +
@@ -162,14 +181,32 @@ function bindGuarantorPreviews() {
     document.querySelectorAll('.guarantor-row').forEach(row => {
         const incomeInput = row.querySelector('.g-income');
         const debtInput = row.querySelector('.g-debt');
+        const typeSelect = row.querySelector('.g-type');
         const incomePreview = row.querySelector('.g-income-preview');
         const debtPreview = row.querySelector('.g-debt-preview');
         const updateIncome = () => { incomePreview.innerText = formatAmount(parseFloat(incomeInput.value) || 0); };
         const updateDebt = () => { debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0); };
+        const updateType = () => {
+            const isMember = typeSelect.value === 'member';
+            const debtInput = row.querySelector('.g-debt');
+            const debtPreview = row.querySelector('.g-debt-preview');
+            if (isMember) {
+                debtInput.disabled = true;
+                debtInput.value = '';
+                debtPreview.innerText = '（社員債務將自動帶入）';
+            } else {
+                debtInput.disabled = false;
+                debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0);
+            }
+        };
         incomeInput.addEventListener('input', updateIncome);
         debtInput.addEventListener('input', updateDebt);
+        if (typeSelect) {
+            typeSelect.addEventListener('change', updateType);
+        }
         updateIncome();
         updateDebt();
+        if (typeSelect) updateType();
     });
 }
 
@@ -192,6 +229,23 @@ function updateCollateralByYears() {
     const yearsHint = $('yearsHint');
     if (yearsHint) {
         yearsHint.style.display = (yearsVal > SECURED_YEARS_STANDARD && yearsVal <= MAX_SECURED_YEARS) ? 'block' : 'none';
+    }
+    // 顯示/隱藏擔保放款相關欄位
+    const isSecuredLoan = collateralEl.value === '10';
+    const appraisalGroup = $('collateralAppraisalGroup');
+    const zoneGroup = $('collateralZoneGroup');
+    const houseAgeGroup = $('houseAgeGroup');
+    const appraisalAgeGroup = $('appraisalAgeGroup');
+    if (isSecuredLoan) {
+        appraisalGroup.style.display = 'block';
+        zoneGroup.style.display = 'block';
+        houseAgeGroup.style.display = 'block';
+        appraisalAgeGroup.style.display = 'block';
+    } else {
+        appraisalGroup.style.display = 'none';
+        zoneGroup.style.display = 'none';
+        houseAgeGroup.style.display = 'none';
+        appraisalAgeGroup.style.display = 'none';
     }
 }
 
@@ -338,6 +392,34 @@ function renderDashboard(result) {
     sealEl.classList.remove('system-seal-pass', 'system-seal-fail', 'system-seal-warn');
     sealEl.classList.add(`system-seal-${result.sealType}`);
 
+    // 顯示建議增貸額度
+    if (result.suggestedLoan) {
+        const suggested = result.suggestedLoan;
+        let html = '';
+        if (suggested.general > 0) {
+            html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+        }
+        if (suggested.consolidation > 0) {
+            html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+        }
+        if (html) {
+            $('suggestedLoanText').innerHTML = html;
+            $('suggestedLoanBox').style.display = 'block';
+        }
+    }
+
+    // 顯示整併貸款試算
+    if (result.consolidationScenario) {
+        const cs = result.consolidationScenario;
+        let html = `現狀月付：${formatAmount(cs.currentTotalMonthly)}<br>`;
+        html += `整併後月付：${formatAmount(cs.consolidationMonthly)}<br>`;
+        html += `月省/增：${cs.monthlySavings >= 0 ? '+' : ''}${formatAmount(cs.monthlySavings)}<br>`;
+        html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
+        html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}`;
+        $('consolidationText').innerHTML = html;
+        $('consolidationBox').style.display = 'block';
+    }
+
     $('resultCard').style.display = 'block';
     $('btnPrint').style.display = 'block';
     $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -407,6 +489,34 @@ function renderPrintReport(result) {
 
     $('p_grade2').innerText = grade;
     $('p_maxdti2').innerText = (maxDti * 100);
+
+    // 列印建議增貸額度
+    if (result.suggestedLoan) {
+        const suggested = result.suggestedLoan;
+        let html = '';
+        if (suggested.general > 0) {
+            html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+        }
+        if (suggested.consolidation > 0) {
+            html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+        }
+        if (html) {
+            $('p_suggested_loan').innerHTML = html;
+            $('p_suggested_loan').style.display = 'block';
+        }
+    }
+
+    // 列印整併貸款試算
+    if (result.consolidationScenario) {
+        const cs = result.consolidationScenario;
+        let html = `現狀月付：${formatAmount(cs.currentTotalMonthly)}<br>`;
+        html += `整併後月付：${formatAmount(cs.consolidationMonthly)}<br>`;
+        html += `月省/增：${cs.monthlySavings >= 0 ? '+' : ''}${formatAmount(cs.monthlySavings)}<br>`;
+        html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
+        html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}`;
+        $('p_consolidation_print').innerHTML = html;
+        $('p_consolidation_print').style.display = 'block';
+    }
 }
 
 // ============================================================
@@ -471,10 +581,16 @@ function calculateLoan() {
         sealType = 'pass';
     }
 
+    // 計算建議增貸額度
+    const suggestedLoan = computeSuggestedAdditionalLoan(input, maxDti, input.internalMonthly2, input.internalBalance2);
+
+    // 計算整併貸款試算
+    const consolidationScenario = computeConsolidationScenario(input, input.internalMonthly2, input.internalBalance2, input.internalYears2, input.internalRate2);
+
     const result = {
         input, scoreDetail, isVetoed, vetoes, grade, maxDti, maxLoanLimit,
         newLoanMonthlyPmt, postLoanDti, totalExposure, shareMult, ageAtMaturity,
-        statusText, sealText, sealType
+        statusText, sealText, sealType, suggestedLoan, consolidationScenario
     };
 
     renderDashboard(result);
@@ -488,8 +604,10 @@ function calculateLoan() {
 const FORM_DRAFT_KEY = 'cu_form_draft';
 const FORM_DRAFT_FIELDS = [
     'memberId','appDate','income','age','existing_debt','internal_monthly','internal_balance',
+    'internal_monthly2','internal_balance2','internal_years2','internal_rate2',
     'loan','years','rate','shares','incomeStability','tenure','interaction','jcic','membership',
-    'collateral','guarantor_count','purpose','career','participation'
+    'collateral','appraisalValue','collateralZone','houseAge','appraisalAge',
+    'guarantor_count','purpose','career','participation'
 ];
 
 function saveFormDraft() {
@@ -504,6 +622,7 @@ function saveFormDraft() {
             name: row.querySelector('.g-name').value,
             income: row.querySelector('.g-income').value,
             debt: row.querySelector('.g-debt').value,
+            type: row.querySelector('.g-type') ? row.querySelector('.g-type').value : 'non_member',
         }));
         data._guarantors = guarantors;
         localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
@@ -533,6 +652,7 @@ function loadFormDraft() {
                 if (g.name !== undefined)   r.querySelector('.g-name').value   = g.name;
                 if (g.income !== undefined) r.querySelector('.g-income').value = g.income;
                 if (g.debt !== undefined)   r.querySelector('.g-debt').value   = g.debt;
+                if (g.type !== undefined && r.querySelector('.g-type')) r.querySelector('.g-type').value = g.type;
             });
             bindGuarantorPreviews();
         }
@@ -560,7 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 金額欄位即時預覽
-    const moneyFields = ['income', 'existing_debt', 'internal_monthly', 'internal_balance', 'loan', 'shares'];
+    const moneyFields = ['income', 'existing_debt', 'internal_monthly', 'internal_balance', 'internal_monthly2', 'internal_balance2', 'loan', 'shares'];
     moneyFields.forEach(id => {
         const input = $(id);
         const preview = $('preview_' + id);
@@ -613,6 +733,110 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // 整併模式切換
+    const consolidationMode = $('consolidationMode');
+    if (consolidationMode) {
+        consolidationMode.addEventListener('change', () => {
+            const internal2Group = $('internal2Group');
+            const internalBalance2Group = $('internalBalance2Group');
+            const internalYears2Group = $('internalYears2Group');
+            const internalRate2Group = $('internalRate2Group');
+            if (consolidationMode.checked) {
+                internal2Group.style.display = 'block';
+                internalBalance2Group.style.display = 'block';
+                internalYears2Group.style.display = 'block';
+                internalRate2Group.style.display = 'block';
+            } else {
+                internal2Group.style.display = 'none';
+                internalBalance2Group.style.display = 'none';
+                internalYears2Group.style.display = 'none';
+                internalRate2Group.style.display = 'none';
+            }
+            saveFormDraft();
+        });
+    }
+
+    // 社外債務估算按鈕
+    const debtEstimatorBtn = $('btnDebtEstimator');
+    if (debtEstimatorBtn) {
+        debtEstimatorBtn.addEventListener('click', () => {
+            const modal = $('debtEstimatorModal');
+            if (modal) modal.style.display = 'flex';
+        });
+    }
+
+    const closeDebtEstimator = $('closeDebtEstimator');
+    if (closeDebtEstimator) {
+        closeDebtEstimator.addEventListener('click', () => {
+            const modal = $('debtEstimatorModal');
+            if (modal) modal.style.display = 'none';
+        });
+    }
+
+    const cancelDebtEstimator = $('cancelDebtEstimator');
+    if (cancelDebtEstimator) {
+        cancelDebtEstimator.addEventListener('click', () => {
+            const modal = $('debtEstimatorModal');
+            if (modal) modal.style.display = 'none';
+        });
+    }
+
+    const applyDebtEstimator = $('applyDebtEstimator');
+    if (applyDebtEstimator) {
+        applyDebtEstimator.addEventListener('click', () => {
+            const debtType = document.querySelector('input[name="debtType"]:checked').value;
+            let principal = 0, rate = 0, years = 0;
+            if (debtType === 'mortgage') {
+                principal = parseFloat($('debtPrincipal').value) || 0;
+                rate = parseFloat($('debtRate').value) || 2.5;
+                years = parseFloat($('debtYears').value) || 20;
+            } else if (debtType === 'car') {
+                principal = parseFloat($('debtPrincipal').value) || 0;
+                rate = parseFloat($('debtRate').value) || 3.5;
+                years = parseFloat($('debtYears').value) || 5;
+            } else if (debtType === 'credit') {
+                principal = parseFloat($('debtPrincipal').value) || 0;
+                rate = parseFloat($('debtRate').value) || 15;
+                years = parseFloat($('debtYears').value) || 0.5;
+            } else {
+                principal = parseFloat($('debtPrincipal').value) || 0;
+                rate = parseFloat($('debtRate').value) || 5;
+                years = parseFloat($('debtYears').value) || 3;
+            }
+            const monthly = pmt(principal, rate, years);
+            $('existing_debt').value = Math.round(monthly);
+            saveFormDraft();
+            const modal = $('debtEstimatorModal');
+            if (modal) modal.style.display = 'none';
+        });
+    }
+
+    // 區塊折疊（滑鼠 + 鍵盤無障礙）
+    document.querySelectorAll('.card.collapsible .section-title').forEach(title => {
+        const card = title.closest('.card.collapsible');
+        const panel = title.nextElementSibling;
+
+        title.setAttribute('role', 'button');
+        title.setAttribute('tabindex', '0');
+        title.setAttribute('aria-expanded', String(!card.classList.contains('collapsed')));
+        if (!panel.id) panel.id = 'panel-' + Math.random().toString(36).slice(2);
+        title.setAttribute('aria-controls', panel.id);
+
+        const toggle = () => {
+            const isCollapsed = card.classList.toggle('collapsed');
+            title.setAttribute('aria-expanded', String(!isCollapsed));
+        };
+
+        title.addEventListener('click', toggle);
+        title.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle();
+            }
+        });
+    });
+}
 
     // 區塊折疊（滑鼠 + 鍵盤無障礙）
     document.querySelectorAll('.card.collapsible .section-title').forEach(title => {

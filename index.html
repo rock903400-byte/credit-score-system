@@ -50,7 +50,10 @@
                     <label>社外債務每月應繳總額 (元)<br>
                         <small style="color: var(--text-muted); font-weight: normal;">(銀行房貸、車貸、信貸、信用卡分期等)</small>
                     </label>
-                    <input type="number" id="existing_debt" class="highlight-input" placeholder="0" min="0">
+                    <div style="display:flex; gap:8px; align-items:flex-end;">
+                        <input type="number" id="existing_debt" class="highlight-input" placeholder="0" min="0" style="flex:1;">
+                        <button type="button" id="btnDebtEstimator" class="btn-debt-estimator" title="估算社外債務">🔍 估算</button>
+                    </div>
                     <span class="input-preview" id="preview_existing_debt"></span>
                     <span class="error-msg"></span>
                 </div>
@@ -68,6 +71,33 @@
                     </label>
                     <input type="number" id="internal_balance" placeholder="0" min="0">
                     <span class="input-preview" id="preview_internal_balance"></span>
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="consolidationMode"> 啟用整併模式（有第二筆既有貸款）
+                    </label>
+                </div>
+                <div class="form-group" id="internal2Group" style="display:none;">
+                    <label>第二筆既有貸款每月應繳額 (元)</label>
+                    <input type="number" id="internal_monthly2" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_internal_monthly2"></span>
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group" id="internalBalance2Group" style="display:none;">
+                    <label>第二筆既有貸款餘額 (元)</label>
+                    <input type="number" id="internal_balance2" placeholder="0" min="0">
+                    <span class="input-preview" id="preview_internal_balance2"></span>
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group" id="internalYears2Group" style="display:none;">
+                    <label>第二筆既有貸款剩餘年限 (年)</label>
+                    <input type="number" id="internal_years2" placeholder="例如：3" min="0" step="0.5">
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group" id="internalRate2Group" style="display:none;">
+                    <label>第二筆既有貸款利率 (%)</label>
+                    <input type="number" id="internal_rate2" placeholder="例如：3" step="0.01" min="0">
                     <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
@@ -159,13 +189,36 @@
                     <label>擔保品設定</label>
                     <select id="collateral">
                         <option value="12">足額股金內借款 (極優)</option>
-                        <option value="10">足額不動產抵押</option>
+                        <option value="10">足額不動產抵押 (擔保放款)</option>
                         <option value="5">不足額擔保或純信用(股金2倍內)</option>
                         <option value="0">純信用借款 (超過股金2倍)</option>
                     </select>
                     <div id="collateralLockMsg" class="notice-warn">
                         ⚠️ 貸款年限超過 7 年，系統已自動切換為「足額不動產抵押」
                     </div>
+                </div>
+                <div class="form-group" id="collateralAppraisalGroup" style="display:none;">
+                    <label>擔保品鑑估價值 (元)<br><small style="color: var(--text-muted); font-weight: normal;">(依擔保放款辦法第 10 條，放款上限為鑑估價值 × LTV 比率)</small></label>
+                    <input type="number" id="appraisalValue" placeholder="例如：10000000" min="0">
+                    <span class="input-preview" id="preview_appraisalValue"></span>
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group" id="collateralZoneGroup" style="display:none;">
+                    <label>都市計畫區分<br><small style="color: var(--text-muted); font-weight: normal;">(住宅/商業/文教區 LTV 85%，其他 70%)</small></label>
+                    <select id="collateralZone">
+                        <option value="residential_commercial_educational">住宅區、商業區、文教區 (LTV 85%)</option>
+                        <option value="other" selected>其他區段 (LTV 70%)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="houseAgeGroup" style="display:none;">
+                    <label>屋齡 (年)<br><small style="color: var(--text-muted); font-weight: normal;">(≤20 年自用住宅最長 30 年，>20 年最長 20 年)</small></label>
+                    <input type="number" id="houseAge" placeholder="例如：15" min="0" max="100">
+                    <span class="error-msg"></span>
+                </div>
+                <div class="form-group" id="appraisalAgeGroup" style="display:none;">
+                    <label>鑑價報告年數 (年)<br><small style="color: var(--text-muted); font-weight: normal;">(逾 10 年須重新鑑價)</small></label>
+                    <input type="number" id="appraisalAge" placeholder="例如：3" min="0" max="50">
+                    <span class="error-msg"></span>
                 </div>
                 <div class="form-group">
                     <label>保證人人數</label>
@@ -339,6 +392,16 @@
 
             <div id="shareHint" class="hint" style="display:none"></div>
 
+            <div id="suggestedLoanBox" class="tip-box" style="display:none; border-color: var(--primary); background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));">
+                <strong>💡 建議增貸額度參考：</strong><br>
+                <span id="suggestedLoanText"></span>
+            </div>
+
+            <div id="consolidationBox" class="tip-box" style="display:none; border-color: #ff9800; background: linear-gradient(135deg, #fff8e1, #fff3e0);">
+                <strong>🔄 整併貸款試算：</strong><br>
+                <span id="consolidationText"></span>
+            </div>
+
             <div class="tip-box">
                 <strong>💡 專業小叮嚀：</strong><br>
                 「本級別上限：<span id="resMaxDtiTxt2"></span>%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不宜超過月收入的該比例，以維持良好的生活品質與信用風險控制。
@@ -382,6 +445,14 @@
                 <tr>
                     <th>社內股金餘額 / 申請額倍數</th>
                     <td id="p_shares_info"></td>
+                </tr>
+                <tr id="p_collateral_detail_row" style="display:none;">
+                    <th>擔保品鑑估資訊<br><small>(鑑估價值 / 區分 / LTV / 上限)</small></th>
+                    <td id="p_collateral_detail"></td>
+                </tr>
+                <tr id="p_consolidation_row" style="display:none;">
+                    <th>整併貸款試算<br><small>(現狀月付 / 整併後月付 / 月省/增)</small></th>
+                    <td id="p_consolidation_info"></td>
                 </tr>
             </table>
         </div>
@@ -436,6 +507,8 @@
                     </td>
                 </tr>
             </table>
+            <div id="p_suggested_loan" style="display:none; margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 13px;"></div>
+            <div id="p_consolidation_print" style="display:none; margin-top: 10px; padding: 10px; background: #fff8e1; border-radius: 4px; font-size: 13px;"></div>
             <div id="p_status" style="margin-top: 15px; font-weight: bold; padding: 10px; border: 1px solid #1a237e; background: #fff; text-align: center; width: 100%;"></div>
         </div>
 
@@ -449,6 +522,49 @@
 
         <div class="disclaimer">
             本報告書由信用評分系統自動生成，僅供內部授信審核參考之用。借款人實際核貸金額、利率及條件，仍須依據本社授信規章辦理，並以「放款委員會」之最終審議決議為準。
+        </div>
+    </div>
+</div>
+
+<!-- 社外債務估算 Modal -->
+<div id="debtEstimatorModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>社外債務月付估算</h3>
+            <button type="button" class="modal-close" id="closeDebtEstimator">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>債務類型</label>
+                <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="debtType" value="mortgage" checked> 房貸</label>
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="debtType" value="car"> 車貸</label>
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="debtType" value="credit"> 信用卡分期/現金卡</label>
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="debtType" value="personal"> 其他信貸</label>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>貸款/分期本金 (元)</label>
+                    <input type="number" id="debtPrincipal" placeholder="例如：5000000" min="0">
+                </div>
+                <div class="form-group">
+                    <label>年利率 (%)</label>
+                    <input type="number" id="debtRate" placeholder="2.5" step="0.01" min="0" max="20">
+                </div>
+                <div class="form-group">
+                    <label>剩餘年限/期數 (年)</label>
+                    <input type="number" id="debtYears" placeholder="20" min="0.5" step="0.5" max="30">
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:16px; padding:12px; background:var(--bg-tertiary); border-radius:8px;">
+                <strong>估算月付：</strong>
+                <span id="debtEstimatedMonthly" style="font-size:1.2em; color:var(--primary); margin-left:8px;">0 元</span>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+                <button type="button" class="btn-secondary" id="cancelDebtEstimator">取消</button>
+                <button type="button" class="btn-primary" id="applyDebtEstimator">填入主表單</button>
+            </div>
         </div>
     </div>
 </div>

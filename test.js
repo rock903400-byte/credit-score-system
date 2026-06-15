@@ -211,15 +211,18 @@ test('用途veto → veto', () => {
   assert(ARV(i).vetoes.some(v=>v.includes('用途')));
 });
 test('正常案 0 否決', () => {
-  const i = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0 };
+  const i = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0,
+    appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3 };
   assert(ARV(i).vetoes.length === 0, 'got:'+ARV(i).vetoes.join(';'));
 });
 test('income=0 → postLoanDti=Infinity', () => {
-  const i = { income:0,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,collateral:'10',shares:200000,internalBalance:0 };
+  const i = { income:0,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:500000,collateral:'10',shares:200000,internalBalance:0,
+    appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3 };
   assert(ARV(i).postLoanDti === Infinity);
 });
 test('擔保品12 ≤7年 loan>shares → veto', () => {
-  const i = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:300000,collateral:'12',shares:200000,internalBalance:0 };
+  const i = { income:80000,age:40,years:5,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:300000,collateral:'12',shares:200000,internalBalance:0,
+    appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3 };
   assert(ARV(i).vetoes.some(v=>v.includes('足額股金內借款')));
 });
 test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
@@ -227,17 +230,19 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
   const v = ARV(i).vetoes;
   assert(!v.some(x=>x.includes('足額股金內借款')), '不應觸發12規則，got:'+v.join(';'));
 });
-test('源碼：9 條否決規則（含擔保品12、年限30年）', () => {
+test('源碼：14 條否決規則（含擔保品12、年限30年 + 擔保放款新規則）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(src.indexOf('function applyRegulatoryVetoes'), src.indexOf('function determineGrade'));
-  assert((vf.match(/vetoes\.push/g)||[]).length === 9, 'got:'+(vf.match(/vetoes\.push/g)||[]).length);
+  assert((vf.match(/vetoes\.push/g)||[]).length === 14, 'got:'+(vf.match(/vetoes\.push/g)||[]).length);
 });
 test('年限 35 年 → veto（擔保放款最長 30 年）', () => {
-  const i = { income:80000,age:30,years:35,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:5_000_000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0 };
+  const i = { income:80000,age:30,years:35,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:5_000_000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0,
+    appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3 };
   assert(ARV(i).vetoes.some(v=>v.includes('30 年')), 'got:'+ARV(i).vetoes.join(';'));
 });
 test('年限 25 年 + 不動產 → 不觸發年限否決', () => {
-  const i = { income:80000,age:35,years:25,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:5_000_000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0 };
+  const i = { income:80000,age:35,years:25,ratePercent:3,existingDebt:0,internalMonthly:0,proposedLoan:5_000_000,jcic:'10',purpose:'10',collateral:'10',shares:200000,internalBalance:0,
+    appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3 };
   assert(ARV(i).vetoes.length === 0, 'got:'+ARV(i).vetoes.join(';'));
 });
 
@@ -252,7 +257,7 @@ test('DTI=0→0', () => assert(CML({income:50000,existingDebt:0,internalMonthly:
 
 console.log('\n── applyLegalCeiling (3) ──');
 test('信用借款=股金+100萬', () => { const i={collateral:'0',shares:200000,internalBalance:0,age:40}; assert(ALC(i,10_000_000)===1_200_000, 'got:'+ALC(i,10_000_000)); });
-test('不動產上限=1000萬', () => { const i={collateral:'10',shares:200000,internalBalance:0,age:40}; assert(ALC(i,10_000_000)===10_000_000); });
+test('不動產上限=1000萬', () => { const i={collateral:'10',shares:200000,internalBalance:0,age:40,appraisalValue:10_000_000,collateralZone:'residential_commercial_educational',houseAge:10,appraisalAge:3}; assert(ALC(i,10_000_000)===8_500_000); });
 test('股金內借款上限=股金（與規則⑤一致）', () => { const i={collateral:'12',shares:200000,internalBalance:0,age:40}; assert(ALC(i,10_000_000)===200_000, 'got:'+ALC(i,10_000_000)); });
 
 console.log('\n── 債權保障封頂 (1) ──');

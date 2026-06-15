@@ -2,8 +2,6 @@
 // 常數（評分門檻、法規上限、評等等級）
 // ============================================================
 const DSR_VETO_THRESHOLD       = 0.70;
-// DSR 給分級距 [上限(不含), 分數] — 每 5% 一檔消除斷崖（原 50/60 邊界一步差 5~10 分），
-// 幹部仍可紙本對照複核；≥70% 給 0 分並由否決規則處理
 const DSR_SCORE_TIERS          = [
     [0.40, 20], [0.45, 18], [0.50, 16], [0.55, 13], [0.60, 10], [0.65, 6], [0.70, 3],
 ];
@@ -15,12 +13,21 @@ const AGE_SCORE_MILD           = -5;
 const NATURAL_PERSON_CAP       = 10_000_000;
 const CREDIT_FLOOR_PER_SHARE   = 1_000_000;
 const LONG_TERM_YEARS          = 7;
-const SECURED_YEARS_STANDARD   = 20;   // 擔保放款一般上限（擔保放款辦法第三條之一）
-const MAX_SECURED_YEARS        = 30;   // 屋齡 20 年內自用住宅放寬上限
+const SECURED_YEARS_STANDARD   = 20;
+const MAX_SECURED_YEARS        = 30;
 const MAX_GUARANTORS           = 5;
 const GUARANTOR_SCORE_TABLE    = { 0:0, 1:4, 2:6, 3:7, 4:8, 5:9 };
+const GUARANTOR_TYPE_WEIGHT    = { member: 1.0, non_member: 0.7 };
 const GRADE_THRESHOLDS         = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS         = { A: 0.60, B: 0.50, C: 0.40, D: 0.30 };
+
+// 擔保放款 LTV 上限（擔保放款辦法第 10、10-1 條）
+const LTV_RATIOS = {
+    residential_commercial_educational: 0.85,  // 都市計畫住宅區、商業區、文教區
+    other: 0.70                                 // 其他區段
+};
+const MORTGAGE_REGISTRATION_RATIO = 1.2;        // 抵押權設定 ≥ 放款金額 × 120%（第 11 條）
+const COLLATERAL_REAPPRAISAL_YEARS = 10;        // 鑑價報告逾 10 年須重鑑（第 12 條）
 
 // ============================================================
 // 工具函式
@@ -164,8 +171,16 @@ function computeScore(input) {
         }
     }
 
-    // Protection (20%) — 擔保 12 + 保證人 9 + 保證人DSR 5 理論值 26，封頂 20 維持 5P 權重
-    const protectionScore = Math.min(20, parseInt(input.collateral) + (GUARANTOR_SCORE_TABLE[input.guarantorCount] || 0) + guarantorDsrScore);
+    // Protection (20%) — 擔保 12 + 保證人(加權) 9 + 保證人DSR 5 理論值 26，封頂 20 維持 5P 權重
+    let effectiveGuarantorCount = 0;
+    if (input.guarantors && input.guarantors.length > 0) {
+        input.guarantors.forEach(g => {
+            const weight = GUARANTOR_TYPE_WEIGHT[g.type] || 1.0;
+            effectiveGuarantorCount += weight;
+        });
+    }
+    effectiveGuarantorCount = Math.round(effectiveGuarantorCount);
+    const protectionScore = Math.min(20, parseInt(input.collateral) + (GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0) + guarantorDsrScore);
 
     // Purpose (10%)
     const purposeScore = input.purpose === 'veto' ? 0 : (parseInt(input.purpose) || 0);
@@ -256,6 +271,33 @@ function applyRegulatoryVetoes(input) {
         vetoes.push(`還款到期年齡 ${ageAtMaturity} 歲超過 ${AGE_HARD_VETO} 歲上限`);
     }
 
+    // ⑩ 擔保放款：貸款金額不得超過鑑估價值 × LTV 上限（辦法第 10、10-1 條）
+    if (input.collateral === '10') {
+        const appraisal = input.appraisalValue || 0;
+        const zone = input.collateralZone || 'other';
+        const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
+        const ltvCeiling = Math.floor(appraisal * ltv);
+        if (input.proposedLoan > ltvCeiling) {
+            vetoes.push(`擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × LTV ${(ltv*100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元`);
+        }
+        // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
+        const requiredMortgage = input.proposedLoan * MORTGAGE_REGISTRATION_RATIO;
+        if (requiredMortgage > ltvCeiling) {
+            vetoes.push(`抵押權設定金額（放款 × 120% = ${Math.ceil(requiredMortgage).toLocaleString('zh-TW')} 元）超過鑑估價值 LTV 上限（${ltvCeiling.toLocaleString('zh-TW')} 元），請確認鑑估價值或降低放款金額`);
+        }
+        // ⑩-2 屋齡與年限檢核（辦法第 3 條之 1）
+        const houseAge = input.houseAge || 0;
+        if (houseAge <= 20 && input.years > MAX_SECURED_YEARS) {
+            vetoes.push(`屋齡 ${houseAge} 年 ≤ 20 年之自用住宅，貸款年限上限 ${MAX_SECURED_YEARS} 年，目前 ${input.years} 年超過上限`);
+        } else if (houseAge > 20 && input.years > SECURED_YEARS_STANDARD) {
+            vetoes.push(`屋齡 ${houseAge} 年 > 20 年，貸款年限上限 ${SECURED_YEARS_STANDARD} 年，目前 ${input.years} 年超過上限`);
+        }
+        // ⑩-3 鑑價報告逾 10 年須重鑑（辦法第 12 條）
+        if (input.appraisalAge && input.appraisalAge > COLLATERAL_REAPPRAISAL_YEARS) {
+            vetoes.push(`擔保品鑑價報告已逾 ${COLLATERAL_REAPPRAISAL_YEARS} 年（目前 ${input.appraisalAge} 年），須重新辦理鑑價`);
+        }
+    }
+
     return { vetoes, newLoanMonthlyPmt, postLoanDti };
 }
 
@@ -278,12 +320,46 @@ function computeMaxLoan(input, maxDti) {
     return maxAvailablePmt / factor;
 }
 
+// 計算建議增貸額度（一般增貸 + 整併增貸）
+function computeSuggestedAdditionalLoan(input, maxDti, internalMonthly2 = 0, internalBalance2 = 0) {
+    if (maxDti <= 0) return { general: 0, consolidation: 0 };
+    const totalExistingMonthly = input.existingDebt + input.internalMonthly + internalMonthly2;
+    const maxAvailablePmt = (input.income * maxDti) - totalExistingMonthly;
+    if (maxAvailablePmt <= 0) return { general: 0, consolidation: 0 };
+    const r = (input.ratePercent / 100) / 12;
+    const n = input.years * 12;
+    const factor = r === 0 ? (1/n) : r * Math.pow(1+r, n) / (Math.pow(1+r, n) - 1);
+    const generalAmount = maxAvailablePmt / factor;
+    const consolidationAmount = generalAmount + input.internalBalance + internalBalance2;
+    return { general: generalAmount, consolidation: consolidationAmount };
+}
+
+// 整併貸款試算：將既有貸款併入新貸款
+function computeConsolidationScenario(input, internalMonthly2 = 0, internalBalance2 = 0, internalYears2 = 0, internalRate2 = 0) {
+    const newLoanMonthlyPmt = pmt(input.proposedLoan, input.ratePercent, input.years);
+    const totalMonthly = input.existingDebt + input.internalMonthly + internalMonthly2 + newLoanMonthlyPmt;
+    const consolidationLoanAmount = input.proposedLoan + input.internalBalance + internalBalance2;
+    const consolidationMonthly = pmt(consolidationLoanAmount, input.ratePercent, input.years);
+    const monthlySavings = (input.internalMonthly + internalMonthly2) - consolidationMonthly;
+    return {
+        currentTotalMonthly: input.internalMonthly + internalMonthly2,
+        newLoanMonthlyPmt,
+        totalMonthlyAfterNew: input.internalMonthly + internalMonthly2 + newLoanMonthlyPmt,
+        consolidationLoanAmount,
+        consolidationMonthly,
+        monthlySavings,
+        totalExposure: input.internalBalance + internalBalance2 + input.proposedLoan
+    };
+}
+
 function applyLegalCeiling(input, maxLoanLimit) {
     let ceiling;
     if (input.collateral === '10') {
-        ceiling = NATURAL_PERSON_CAP;
+        const appraisal = input.appraisalValue || 0;
+        const zone = input.collateralZone || 'other';
+        const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
+        ceiling = Math.min(NATURAL_PERSON_CAP, Math.floor(appraisal * ltv));
     } else if (input.collateral === '12') {
-        // 足額股金內借款：可貸上限即股金餘額（與否決規則⑤一致）
         ceiling = Math.min(NATURAL_PERSON_CAP, input.shares);
     } else {
         ceiling = input.shares + CREDIT_FLOOR_PER_SHARE;
