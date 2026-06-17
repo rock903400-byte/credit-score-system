@@ -9,22 +9,44 @@ const coreJs = fs.readFileSync(__dirname + '/core.js', 'utf8');
 // Sandbox similar to test.js
 const sandbox = {
   console,
-  Math, Date, String, Number, Array, Object, JSON, RegExp,
-  parseInt, parseFloat, isNaN,
-  setTimeout, clearTimeout, setInterval, clearInterval,
+  Math,
+  Date,
+  String,
+  Number,
+  Array,
+  Object,
+  JSON,
+  RegExp,
+  parseInt,
+  parseFloat,
+  isNaN,
+  setTimeout,
+  clearTimeout,
+  setInterval,
+  clearInterval,
   localStorage: {
     _store: {},
-    getItem(k) { return this._store[k] ?? null; },
-    setItem(k, v) { this._store[k] = v; },
-    removeItem(k) { delete this._store[k]; },
+    getItem(k) {
+      return this._store[k] ?? null;
+    },
+    setItem(k, v) {
+      this._store[k] = v;
+    },
+    removeItem(k) {
+      delete this._store[k];
+    },
   },
 };
 
 vm.runInNewContext(coreJs, sandbox);
 const { computeScore, applyRegulatoryVetoes } = sandbox;
 
-function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-function randChoice(arr) { return arr[randInt(0, arr.length - 1)]; }
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function randChoice(arr) {
+  return arr[randInt(0, arr.length - 1)];
+}
 
 const errors = [];
 const results = [];
@@ -41,10 +63,22 @@ for (let i = 0; i < 10000; i++) {
   const incomeStability = randInt(0, 10);
   const tenure = randInt(0, 10);
   const interaction = randInt(-20, 20);
-  const jcicValues = ['10','9','8','7','6','5','4','3','2','1','veto'];
+  const jcicValues = [
+    '10',
+    '9',
+    '8',
+    '7',
+    '6',
+    '5',
+    '4',
+    '3',
+    '2',
+    '1',
+    'veto',
+  ];
   const jcic = randChoice(jcicValues);
   const membership = randInt(0, 5);
-  const collateralOptions = ['0','5','10','12'];
+  const collateralOptions = ['0', '5', '10', '12'];
   const collateral = randChoice(collateralOptions);
   const guarantorCount = randInt(0, 5);
   const guarantors = [];
@@ -52,16 +86,31 @@ for (let i = 0; i < 10000; i++) {
     const gName = `g${g}`;
     const gIncome = randInt(20000, 100000);
     const gDebt = randInt(0, Math.floor(gIncome * 0.5));
-    const gType = randChoice(['member','non_member']);
+    const gType = randChoice(['member', 'non_member']);
     guarantors.push({ name: gName, income: gIncome, debt: gDebt, type: gType });
   }
-  const purpose = randChoice(['10','9','8','7','6','5','4','3','2','1','veto']);
+  const purpose = randChoice([
+    '10',
+    '9',
+    '8',
+    '7',
+    '6',
+    '5',
+    '4',
+    '3',
+    '2',
+    '1',
+    'veto',
+  ]);
   const career = randInt(0, 10);
   const participation = randInt(0, 10);
   const internalBalance = randInt(0, 200000);
   const shares = randInt(0, 500000);
   const appraisalValue = randInt(0, 20000000);
-  const collateralZone = randChoice(['residential_commercial_educational','other']);
+  const collateralZone = randChoice([
+    'residential_commercial_educational',
+    'other',
+  ]);
   const houseAge = randInt(0, 30);
   const appraisalAge = randInt(0, 15);
 

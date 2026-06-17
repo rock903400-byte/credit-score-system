@@ -95,7 +95,10 @@ function randomInput() {
 
   if (collateral === '10') {
     input.appraisalValue = randInt(500000, 20000000);
-    input.collateralZone = randChoice(['residential_commercial_educational', 'other']);
+    input.collateralZone = randChoice([
+      'residential_commercial_educational',
+      'other',
+    ]);
     input.houseAge = randInt(0, 40);
     input.appraisalAge = randInt(0, 12);
   }
@@ -131,7 +134,10 @@ for (let i = 0; i < 1000; i++) {
 }
 
 console.log('--- Simulation Summary (1000 users) ---');
-console.log('Average total score:', (stats.totalScore / stats.totalCount).toFixed(2));
+console.log(
+  'Average total score:',
+  (stats.totalScore / stats.totalCount).toFixed(2)
+);
 console.log('Grade distribution:', stats.gradeCounts);
 console.log('Number of vetoed cases:', stats.vetoCount);
 console.log('Exceptions encountered:', stats.exceptions);

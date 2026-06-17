@@ -7,9 +7,15 @@
     "test": "node test.js",
     "test:e2e": "playwright test",
     "test:all": "node test.js && playwright test",
-    "serve": "node serve.js"
+    "serve": "node serve.js",
+    "lint": "eslint . --ext .js",
+    "format": "prettier --write .",
+    "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.48.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5"
   }
 }
