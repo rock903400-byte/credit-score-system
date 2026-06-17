@@ -4,6 +4,69 @@
 const $ = id => document.getElementById(id);
 
 // ============================================================
+// Modal 無障礙：focus trap + Esc 關閉 + scroll lock + focus 還原
+// ============================================================
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let _modalReturnFocus = null;
+let _modalEscHandler = null;
+let _modalTrapHandler = null;
+
+function getFocusable(modalEl) {
+    return Array.from(modalEl.querySelectorAll(FOCUSABLE_SELECTOR))
+        .filter(el => el.offsetParent !== null || el === document.activeElement);
+}
+
+function openModal(modalEl) {
+    if (!modalEl) return;
+    _modalReturnFocus = document.activeElement;
+    modalEl.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // focus 第一個可聚焦元素
+    const focusable = getFocusable(modalEl);
+    if (focusable.length > 0) focusable[0].focus();
+
+    // Esc 關閉
+    _modalEscHandler = (e) => {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            closeModal(modalEl);
+        }
+    };
+    document.addEventListener('keydown', _modalEscHandler);
+
+    // focus trap
+    _modalTrapHandler = (e) => {
+        if (e.key !== 'Tab') return;
+        const items = getFocusable(modalEl);
+        if (items.length === 0) { e.preventDefault(); return; }
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || !modalEl.contains(active))) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && (active === last || !modalEl.contains(active))) {
+            e.preventDefault();
+            first.focus();
+        }
+    };
+    modalEl.addEventListener('keydown', _modalTrapHandler);
+}
+
+function closeModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.style.display = 'none';
+    document.body.style.overflow = '';
+    if (_modalEscHandler) { document.removeEventListener('keydown', _modalEscHandler); _modalEscHandler = null; }
+    if (_modalTrapHandler) { modalEl.removeEventListener('keydown', _modalTrapHandler); _modalTrapHandler = null; }
+    if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
+        _modalReturnFocus.focus();
+        _modalReturnFocus = null;
+    }
+}
+
+// ============================================================
 // 解析與驗證輸入（DOM 關聯部分）
 // ============================================================
 function parseInputs() {
@@ -190,14 +253,10 @@ function bindGuarantorPreviews() {
             const isMember = typeSelect.value === 'member';
             const debtInput = row.querySelector('.g-debt');
             const debtPreview = row.querySelector('.g-debt-preview');
-            if (isMember) {
-                debtInput.disabled = true;
-                debtInput.value = '';
-                debtPreview.innerText = '（社員債務將自動帶入）';
-            } else {
-                debtInput.disabled = false;
-                debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0);
-            }
+            // 社員／非社員皆可手填債務月付；社員可填其在本社既有債務，非社員可填其社外債務
+            debtInput.disabled = false;
+            debtInput.placeholder = isMember ? '該社員在本社的既有債務月付' : '該保證人之社外債務月付';
+            debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0);
         };
         incomeInput.addEventListener('input', updateIncome);
         debtInput.addEventListener('input', updateDebt);
@@ -446,13 +505,52 @@ function renderPrintReport(result) {
         ? `${input.shares.toLocaleString('zh-TW')} 元 / 倍數 ${shareMult.toFixed(1)} 倍`
         : '未填寫';
 
+    // 擔保品鑑估資訊（僅擔保放款 collateral=10 時顯示）
+    const collateralDetailRow = $('p_collateral_detail_row');
+    if (collateralDetailRow) {
+        if (input.collateral === '10') {
+            const appraisal = input.appraisalValue || 0;
+            const zone = input.collateralZone || 'other';
+            const ltvPct = (LTV_RATIOS[zone] || LTV_RATIOS.other) * 100;
+            const ltvCeiling = Math.floor(appraisal * (LTV_RATIOS[zone] || LTV_RATIOS.other));
+            const zoneText = zone === 'residential_commercial_educational' ? '住宅/商業/文教區' : '其他區段';
+            $('p_collateral_detail').innerText =
+                `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / LTV ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
+                `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
+            collateralDetailRow.style.display = '';
+        } else {
+            collateralDetailRow.style.display = 'none';
+        }
+    }
+
+    // 整併資訊（僅在整併模式且有第二筆資料時顯示於案件基本資料表）
+    const consolidationRow = $('p_consolidation_row');
+    if (consolidationRow) {
+        if (result.consolidationScenario && (input.internalMonthly2 > 0 || input.internalBalance2 > 0)) {
+            const cs = result.consolidationScenario;
+            $('p_consolidation_info').innerText =
+                `現狀月付 ${formatAmount(cs.currentTotalMonthly)} / 整併後月付 ${formatAmount(cs.consolidationMonthly)} / ` +
+                `月${cs.monthlySavings >= 0 ? '省' : '增'} ${formatAmount(Math.abs(cs.monthlySavings))}`;
+            consolidationRow.style.display = '';
+        } else {
+            consolidationRow.style.display = 'none';
+        }
+    }
+
     // [FIX 1.8] 5P 明細使用語意化 ID
-    const stabText = $('incomeStability').options[$('incomeStability').selectedIndex].text;
-    const tenText = $('tenure').options[$('tenure').selectedIndex].text;
+    // 取 select 顯示文字；若 value 不在 options（草稿值與當前選項不符）則回退為 '—'
+    const selText = (id) => {
+        const el = $(id);
+        if (!el || el.selectedIndex < 0) return '—';
+        const opt = el.options[el.selectedIndex];
+        return opt ? opt.text : '—';
+    };
+    const stabText = selText('incomeStability');
+    const tenText = selText('tenure');
     $('p_stability').innerText = stabText + ' / ' + tenText;
-    $('p_interaction').innerText = $('interaction').options[$('interaction').selectedIndex].text;
-    $('p_jcic').innerText = $('jcic').options[$('jcic').selectedIndex].text;
-    $('p_collateral').innerText = $('collateral').options[$('collateral').selectedIndex].text;
+    $('p_interaction').innerText = selText('interaction');
+    $('p_jcic').innerText = selText('jcic');
+    $('p_collateral').innerText = selText('collateral');
     if (input.guarantors && input.guarantors.length > 0) {
         let html = '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>月收入</th><th>既有債務月付</th><th>DSR</th></tr>';
         input.guarantors.forEach(g => {
@@ -464,9 +562,9 @@ function renderPrintReport(result) {
     } else {
         $('p_guarantor_print').innerText = '無';
     }
-    $('p_purpose').innerText = $('purpose').options[$('purpose').selectedIndex].text;
-    $('p_career_print').innerText = $('career').options[$('career').selectedIndex].text;
-    $('p_participation_print').innerText = $('participation').options[$('participation').selectedIndex].text;
+    $('p_purpose').innerText = selText('purpose');
+    $('p_career_print').innerText = selText('career');
+    $('p_participation_print').innerText = selText('participation');
 
     // 5P 各面向分數
     $('p_score_ability').innerText = scoreDetail.dsrScore + scoreDetail.stability;
@@ -520,9 +618,60 @@ function renderPrintReport(result) {
 }
 
 // ============================================================
+// 結果過期狀態管理
+// ============================================================
+let lastCalculatedAt = null;
+let isResultStale = false;
+
+function markResultStale() {
+    const card = $('resultCard');
+    if (!card || card.style.display === 'none' || isResultStale) return;
+    isResultStale = true;
+    card.classList.add('stale');
+    $('btnCalc').classList.add('btn-stale');
+    const banner = $('staleBanner');
+    if (banner) banner.style.display = 'block';
+    const ts = $('calcTimestamp');
+    if (ts && lastCalculatedAt) {
+        ts.textContent = '計算時間 ' + formatTime(lastCalculatedAt) + '（資料已變更）';
+        ts.classList.add('stale');
+    }
+}
+
+function clearResultStale() {
+    isResultStale = false;
+    $('resultCard').classList.remove('stale');
+    $('btnCalc').classList.remove('btn-stale');
+    const banner = $('staleBanner');
+    if (banner) banner.style.display = 'none';
+    const ts = $('calcTimestamp');
+    if (ts) ts.classList.remove('stale');
+}
+
+function formatTime(d) {
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+}
+
+function setCalcLoading(loading) {
+    const btn = $('btnCalc');
+    if (loading) {
+        btn.disabled = true;
+        btn.classList.add('loading');
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>計算中…';
+    } else {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.innerHTML = '開始授信評分';
+    }
+}
+
+// ============================================================
 // 主流程
 // ============================================================
 function calculateLoan() {
+    setCalcLoading(true);
     try {
     // 擔保品聯動保險：確保之前年的變更已同步（若未失焦）
     updateCollateralByYears();
@@ -595,7 +744,12 @@ function calculateLoan() {
 
     renderDashboard(result);
     renderPrintReport(result);
+    lastCalculatedAt = new Date();
+    clearResultStale();
+    const ts = $('calcTimestamp');
+    if (ts) ts.textContent = '計算時間 ' + formatTime(lastCalculatedAt);
     } catch(e) { console.error('calculateLoan error:', e); alert('計算過程發生錯誤，請檢查輸入資料。\n' + e.message); }
+    finally { setCalcLoading(false); }
 }
 
 // ============================================================
@@ -617,6 +771,9 @@ function saveFormDraft() {
             const el = $(id);
             if (el) data[id] = el.value;
         });
+        // 整併模式 checkbox（value 無法反映 checked 狀態，需另存）
+        const cm = $('consolidationMode');
+        if (cm) data._consolidationMode = cm.checked;
         // 保證人動態欄位
         const guarantors = Array.from(document.querySelectorAll('.guarantor-row')).map(row => ({
             name: row.querySelector('.g-name').value,
@@ -640,6 +797,11 @@ function loadFormDraft() {
                 if (el) el.value = data[id];
             }
         });
+        // 還原整併模式 checkbox
+        if (typeof data._consolidationMode === 'boolean') {
+            const cm = $('consolidationMode');
+            if (cm) cm.checked = data._consolidationMode;
+        }
         // 重建保證人 row（會清空再 render 一次）
         const gCount = parseInt($('guarantor_count').value) || 0;
         renderGuarantorRows(gCount);
@@ -657,6 +819,12 @@ function loadFormDraft() {
             bindGuarantorPreviews();
         }
         updateCollateralByYears();
+        // 還原整併模式 toggle 後，第二筆貸款欄位群組也要同步顯示
+        if ($('consolidationMode').checked) {
+            ['internal2Group','internalBalance2Group','internalYears2Group','internalRate2Group'].forEach(id => {
+                const g = $(id); if (g) g.style.display = 'block';
+            });
+        }
         return true;
     } catch (e) {
         return false;
@@ -720,6 +888,16 @@ document.addEventListener('DOMContentLoaded', () => {
         guarantorList.addEventListener('change', saveFormDraft);
     }
 
+    // 過期標記：所有欄位 change 事件（user 完成輸入才觸發，非 input）
+    FORM_DRAFT_FIELDS.forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('change', markResultStale);
+    });
+    if (guarantorList) {
+        guarantorList.addEventListener('change', markResultStale);
+    }
+
     // 頁面載入時還原草稿（若存在）
     loadFormDraft();
 
@@ -761,82 +939,81 @@ document.addEventListener('DOMContentLoaded', () => {
     const debtEstimatorBtn = $('btnDebtEstimator');
     if (debtEstimatorBtn) {
         debtEstimatorBtn.addEventListener('click', () => {
-            const modal = $('debtEstimatorModal');
-            if (modal) modal.style.display = 'flex';
+            openModal($('debtEstimatorModal'));
         });
     }
 
     const closeDebtEstimator = $('closeDebtEstimator');
     if (closeDebtEstimator) {
         closeDebtEstimator.addEventListener('click', () => {
-            const modal = $('debtEstimatorModal');
-            if (modal) modal.style.display = 'none';
+            closeModal($('debtEstimatorModal'));
         });
     }
 
     const cancelDebtEstimator = $('cancelDebtEstimator');
     if (cancelDebtEstimator) {
         cancelDebtEstimator.addEventListener('click', () => {
-            const modal = $('debtEstimatorModal');
-            if (modal) modal.style.display = 'none';
+            closeModal($('debtEstimatorModal'));
         });
+    }
+
+    // 點背景關閉
+    $('debtEstimatorModal').addEventListener('click', (e) => {
+        if (e.target === $('debtEstimatorModal')) closeModal($('debtEstimatorModal'));
+    });
+
+    // 全域快捷鍵：Ctrl+Enter 觸發計算
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            const btn = $('btnCalc');
+            if (btn && !btn.disabled) calculateLoan();
+        }
+    });
+
+    // 依債務類型套用預設利率／年限（輸入框留空時才用）
+    const DEBT_TYPE_DEFAULTS = {
+        mortgage: { rate: 2.5, years: 20 },
+        car:      { rate: 3.5, years: 5 },
+        credit:   { rate: 15,  years: 0.5 },
+        personal: { rate: 5,   years: 3 },
+    };
+    function getDebtEstimatorParams() {
+        const debtType = document.querySelector('input[name="debtType"]:checked').value;
+        const defaults = DEBT_TYPE_DEFAULTS[debtType] || DEBT_TYPE_DEFAULTS.personal;
+        const principal = parseFloat($('debtPrincipal').value) || 0;
+        const rate      = parseFloat($('debtRate').value)      || defaults.rate;
+        const years     = parseFloat($('debtYears').value)     || defaults.years;
+        return { principal, rate, years };
+    }
+    function updateDebtEstimatorPreview() {
+        const { principal, rate, years } = getDebtEstimatorParams();
+        const monthly = pmt(principal, rate, years);
+        const el = $('debtEstimatedMonthly');
+        if (el) el.innerText = (principal > 0 ? formatAmount(Math.round(monthly)) : '0 元');
     }
 
     const applyDebtEstimator = $('applyDebtEstimator');
     if (applyDebtEstimator) {
         applyDebtEstimator.addEventListener('click', () => {
-            const debtType = document.querySelector('input[name="debtType"]:checked').value;
-            let principal = 0, rate = 0, years = 0;
-            if (debtType === 'mortgage') {
-                principal = parseFloat($('debtPrincipal').value) || 0;
-                rate = parseFloat($('debtRate').value) || 2.5;
-                years = parseFloat($('debtYears').value) || 20;
-            } else if (debtType === 'car') {
-                principal = parseFloat($('debtPrincipal').value) || 0;
-                rate = parseFloat($('debtRate').value) || 3.5;
-                years = parseFloat($('debtYears').value) || 5;
-            } else if (debtType === 'credit') {
-                principal = parseFloat($('debtPrincipal').value) || 0;
-                rate = parseFloat($('debtRate').value) || 15;
-                years = parseFloat($('debtYears').value) || 0.5;
-            } else {
-                principal = parseFloat($('debtPrincipal').value) || 0;
-                rate = parseFloat($('debtRate').value) || 5;
-                years = parseFloat($('debtYears').value) || 3;
-            }
+            const { principal, rate, years } = getDebtEstimatorParams();
             const monthly = pmt(principal, rate, years);
             $('existing_debt').value = Math.round(monthly);
             saveFormDraft();
-            const modal = $('debtEstimatorModal');
-            if (modal) modal.style.display = 'none';
+            markResultStale();
+            closeModal($('debtEstimatorModal'));
         });
     }
 
-    // 區塊折疊（滑鼠 + 鍵盤無障礙）
-    document.querySelectorAll('.card.collapsible .section-title').forEach(title => {
-        const card = title.closest('.card.collapsible');
-        const panel = title.nextElementSibling;
-
-        title.setAttribute('role', 'button');
-        title.setAttribute('tabindex', '0');
-        title.setAttribute('aria-expanded', String(!card.classList.contains('collapsed')));
-        if (!panel.id) panel.id = 'panel-' + Math.random().toString(36).slice(2);
-        title.setAttribute('aria-controls', panel.id);
-
-        const toggle = () => {
-            const isCollapsed = card.classList.toggle('collapsed');
-            title.setAttribute('aria-expanded', String(!isCollapsed));
-        };
-
-        title.addEventListener('click', toggle);
-        title.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggle();
-            }
-        });
+    // 即時預覽：輸入本金 / 利率 / 年限 或 切換債務類型 時更新月付
+    ['debtPrincipal', 'debtRate', 'debtYears'].forEach(id => {
+        const el = $(id);
+        if (el) el.addEventListener('input', updateDebtEstimatorPreview);
     });
-}
+    document.querySelectorAll('input[name="debtType"]').forEach(r => {
+        r.addEventListener('change', updateDebtEstimatorPreview);
+    });
+    updateDebtEstimatorPreview();
 
     // 區塊折疊（滑鼠 + 鍵盤無障礙）
     document.querySelectorAll('.card.collapsible .section-title').forEach(title => {

@@ -1,0 +1,15 @@
+{
+  "name": "credit-score-system",
+  "version": "2.0.0",
+  "private": true,
+  "description": "信用評分與核貸試算系統 — 儲蓄互助社授信試算工具",
+  "scripts": {
+    "test": "node test.js",
+    "test:e2e": "playwright test",
+    "test:all": "node test.js && playwright test",
+    "serve": "node serve.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

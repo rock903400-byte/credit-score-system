@@ -86,6 +86,75 @@ button:active {
     padding-left: 15px;
 }
 
+/* 計算時間戳（嵌在 section-title 內） */
+.calc-timestamp {
+    margin-left: auto;
+    font-size: 0.7em;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-left: none;
+    padding-left: 0;
+    border: 1px solid var(--border-color, #e0e6ed);
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--bg-color);
+}
+.calc-timestamp.stale {
+    color: #c62828;
+    border-color: #ef9a9a;
+    background: #ffebee;
+}
+@keyframes staleBlink {
+    0%, 100% { background-color: #ffebee; }
+    50%      { background-color: #fff3e0; }
+}
+.calc-timestamp.stale {
+    animation: staleBlink 1.6s ease-in-out infinite;
+}
+
+/* Stale banner（橘色全寬警告） */
+.stale-banner {
+    margin: 0 0 16px 0;
+    padding: 12px 16px;
+    background: #fff3e0;
+    color: #c62828;
+    border: 2px solid #ffb300;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0.3px;
+    animation: staleBlink 1.6s ease-in-out infinite;
+}
+
+/* 計算按鈕 stale 狀態 — 橘色邊框閃爍 */
+@keyframes btnStaleBlink {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(255, 179, 0, 0.6); }
+    50%      { box-shadow: 0 0 0 3px rgba(255, 179, 0, 0.15); }
+}
+.btn-calc.btn-stale {
+    animation: btnStaleBlink 1.6s ease-in-out infinite;
+    border: 2px solid #ffb300;
+}
+
+/* 計算按鈕 loading spinner */
+.btn-calc.loading {
+    cursor: wait;
+    opacity: 0.85;
+}
+.btn-calc .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* 可折疊區塊 */
 .card.collapsible .section-title {
     cursor: pointer;
@@ -683,6 +752,9 @@ button {
     .notice-warn-strong { border-color: #b45309; }
     .overflow-badge { background-color: #3f1d1d; color: #f87171; border-color: #7f1d1d; }
     .tip-box { background-color: #1e293b; border-color: #334155; }
+    .stale-banner { background-color: #3a2a12; color: #fbbf24; border-color: #b45309; }
+    .calc-timestamp { background-color: #1e293b; border-color: #334155; }
+    .calc-timestamp.stale { background-color: #3f1d1d; color: #f87171; border-color: #7f1d1d; }
 }
 
 /* 折疊面板焦點樣式 (鍵盤無障礙) */
@@ -809,57 +881,4 @@ button {
 }
 #debtEstimatedMonthly { font-weight: 800; }
 
-/* Modal 樣式 */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-.modal-content {
-    background: var(--card-bg);
-    border-radius: var(--border-radius);
-    padding: 0;
-    max-width: 480px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-    animation: modalFadeIn 0.2s ease;
-}
-@keyframes modalFadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-}
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #edf2f7;
-}
-.modal-header h3 {
-    margin: 0;
-    font-size: 1.1em;
-    color: var(--primary-dark);
-}
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5em;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 0 8px;
-    line-height: 1;
-}
-.modal-close:hover { color: var(--text-main); }
-.modal-body {
-    padding: 20px;
-}
-#debtEstimatedMonthly { font-weight: 800; }
+

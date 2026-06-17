@@ -295,7 +295,12 @@
         </div>
 
         <div id="resultCard" class="result-card">
-            <div class="section-title">📊 試算分析結果</div>
+            <div id="staleBanner" class="stale-banner" role="status" aria-live="polite" style="display:none;">
+                ⚠️ 資料已變更，計算結果可能已過期，請重新計算
+            </div>
+            <div class="section-title">📊 試算分析結果
+                <span id="calcTimestamp" class="calc-timestamp"></span>
+            </div>
             
             <div class="result-dashboard">
                 <div class="score-gauge">
@@ -527,11 +532,11 @@
 </div>
 
 <!-- 社外債務估算 Modal -->
-<div id="debtEstimatorModal" class="modal" style="display:none;">
+<div id="debtEstimatorModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="debtEstimatorTitle" style="display:none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>社外債務月付估算</h3>
-            <button type="button" class="modal-close" id="closeDebtEstimator">&times;</button>
+            <h3 id="debtEstimatorTitle">社外債務月付估算</h3>
+            <button type="button" class="modal-close" id="closeDebtEstimator" aria-label="關閉估算視窗">&times;</button>
         </div>
         <div class="modal-body">
             <div class="form-group">
