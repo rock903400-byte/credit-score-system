@@ -322,6 +322,39 @@ function renderGuarantorRows(count) {
     container.appendChild(r);
   }
   bindGuarantorPreviews();
+  updateGuarantorWeightHint();
+}
+
+// 加權保證人數即時回饋（與 core.js GUARANTOR_TYPE_WEIGHT + GUARANTOR_SCORE_TABLE 同邏輯）
+const G_WEIGHT = { member: 1.0, non_member: 0.7 };
+const G_SCORE_TABLE = { 0: 0, 1: 4, 2: 6, 3: 7, 4: 8, 5: 9 };
+function updateGuarantorWeightHint() {
+  const el = $('guarantorWeightHint');
+  if (!el) return;
+  const rows = document.querySelectorAll('.guarantor-row');
+  if (rows.length === 0) {
+    el.innerText = '';
+    return;
+  }
+  let weighted = 0;
+  let m = 0;
+  let nm = 0;
+  rows.forEach((row) => {
+    const t = row.querySelector('.g-type')?.value || 'non_member';
+    if (t === 'member') {
+      weighted += G_WEIGHT.member;
+      m++;
+    } else {
+      weighted += G_WEIGHT.non_member;
+      nm++;
+    }
+  });
+  const effective = Math.round(weighted);
+  const score = G_SCORE_TABLE[effective] || 0;
+  const parts = [];
+  if (m > 0) parts.push(`${m} 社員`);
+  if (nm > 0) parts.push(`${nm} 非社員`);
+  el.innerText = `${parts.join(' + ')} → 加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分`;
 }
 
 function bindGuarantorPreviews() {
@@ -353,7 +386,10 @@ function bindGuarantorPreviews() {
     incomeInput.addEventListener('input', updateIncome);
     debtInput.addEventListener('input', updateDebt);
     if (typeSelect) {
-      typeSelect.addEventListener('change', updateType);
+      typeSelect.addEventListener('change', () => {
+        updateType();
+        updateGuarantorWeightHint();
+      });
     }
     updateIncome();
     updateDebt();
@@ -1111,6 +1147,7 @@ function loadFormDraft() {
       });
       bindGuarantorPreviews();
     }
+    updateGuarantorWeightHint();
     updateCollateralByYears();
     // C1：草稿還原後套用千分位（程式設值不觸發 input 事件）
     [
