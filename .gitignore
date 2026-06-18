@@ -1,3 +1,6 @@
 e2e-result.png
 # 內部法規參考文件，勿公開上傳
+Rule-*.docx
 node_modules/
+# 雜湊命名的 session DB（疑似其他專案殘留）
+_db_*.py
