@@ -10,7 +10,7 @@
 | Command                | Purpose                                                                      |
 | ---------------------- | ---------------------------------------------------------------------------- |
 | `npm run format`       | Prettier, rewrites all files                                                 |
-| `npm run lint`         | ESLint (3 rules off: `no-console`, `no-unused-vars`, `no-undef`)             |
+| `npm run lint`         | ESLint                                                                       |
 | `npm run type-check`   | `tsc --noEmit` — only checks `**/*.ts`; only `dummy.ts` exists (placeholder) |
 | `npm test`             | Unit tests; runs `core.js` in a VM sandbox, no DOM                           |
 | `npm run test:e2e`     | Playwright (auto-starts `serve.js` on port 8765)                             |
@@ -26,16 +26,17 @@
 - `ui.js` — DOM, drafts (localStorage), validation, report rendering.
 - `serve.js` — minimal static file server used by Playwright and manual testing.
 - `index.html` + `style.css` — no bundler, no framework.
-- **All functions are globals** (no module exports). The names `pmt`, `stripEmoji`, `computeScore`, `applyRegulatoryVetoes`, `determineGrade`, `validateInputs`, `renderDashboard`, `calculateLoan` are all top-level. `pmt()` in particular is used by `ui.js`, `core.js`, and `simulate_*.js` — do not shadow it.
+- **All functions are globals** (no module exports). `pmt`, `stripEmoji`, `computeScore`, `applyRegulatoryVetoes`, `determineGrade`, `validateInputs`, `validateInputsByField`, `renderDashboard`, `renderPrintReport`, `calculateLoan`, `renderGuarantorRows`, `bindGuarantorPreviews`, `updateGuarantorWeightHint` are all top-level. **`pmt()` is shared by `core.js` + `ui.js` + `simulate_*.js` — do not shadow it.**
 - `simulation.js` is a legacy 1000-case runner (no package.json script); use `simulate:1k` instead.
 
 ## Gotchas
 
 - `core.js` has no input validation. UI `<select>`s bound to numeric scores must keep values within option ranges — out-of-range inputs can still produce out-of-range sub-scores (the `total` is clamped 0–100, sub-scores are NOT).
-- `renderGuarantorRows(count)` wipes `#guarantorList.innerHTML`. Snapshot row data first, then call, then re-bind previews.
+- `renderGuarantorRows(count)` wipes `#guarantorList.innerHTML`. Snapshot row data first, then call, then re-bind previews. The template includes `.g-unknown` checkbox (債務不詳) — snapshot/restore must include the `unknown` flag, and the rendered `.g-debt` carries `disabled` when `d.unknown` is true.
+- **`bindGuarantorPreviews()` calls `updateType()` at the end of each row, which controls `.g-debt` disabled state.** `updateType()` must respect `.g-unknown` checked state — never force `debtInput.disabled = false` unconditionally (regression:草稿重整後勾選的「不詳」會被覆蓋成 enabled,測試 ⑳ 守護此行為)。
 - `calculateLoan()` already has a `try/catch`; adding another masks real bugs.
 - SVG `<tspan>` text must be set via `.textContent`; `innerText` silently fails in Chromium.
-- `#shareHint` has inline `style="display:none"` in `index.html` — toggling the class is not enough; set `style.display = 'block' | 'none'` directly.
+- `#shareHint` and `#unknownGuarantorWarn` have inline `style="display:none"` in `index.html` — toggling the class is not enough; set `style.display = 'block' | 'none'` directly.
 - `core.js` exports are **not** type-checked (`tsconfig.json` includes only `**/*.ts`). The only `.ts` file is `dummy.ts`; keep it that way or update the include pattern.
 
 ## Business rules
@@ -45,19 +46,24 @@
   - `maturity > 75` → hard veto (in `applyRegulatoryVetoes`).
   - `maturity > 70` → –10.
   - `maturity > 65` → –5.
-- Credit ceiling:
-  - `collateral='10'` (足額不動產抵押) → min(10 M, appraisal × LTV).
+- Credit ceiling (`applyLegalCeiling`):
+  - `collateral='10'` (足額不動產抵押) → `min(10 M, appraisal × LTV)`.
   - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
   - otherwise → `shares + 1 M`.
 - Default `<option>` for `#collateral` is `'12'`. If `proposedLoan > shares`, set to `'5'` or `'10'` to avoid silent veto.
 - Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 would otherwise exceed 100).
-- `pmt()` is a simplified first-period formula: `principal / months + principal × rate / 2`. Not the standard amortizing PMT — `computeMaxLoan` does the real math separately.
+- `pmt()` is the simplified **first-period** formula: `principal/months + principal × (rate/100/12)`. Not the standard amortizing PMT — `computeMaxLoan` does the real math separately.
 - Credit scores are written to `localStorage` as a debounced draft under `cu_form_draft`; Report ID sequence uses `cu_seq_YYYYMMDD` keys.
+- **保證人「債務不詳」** (`g.unknown=true`):
+  - 勾選後 `.g-debt` disabled 且清空;**排除**自 `guarantorDsrScore` 計算(只看已揭露者的最壞 DSR;全勾則 +0 中性)。
+  - 加權人數**仍計算**(保護評分結構不變),僅 DSR 子項排除。
+  - 結果區 `#unknownGuarantorWarn` 只在有勾選時顯示;列印報表該列加紅字「債務未查證」+ 表尾註記「請另覓佐證」。
 
 ## E2E quirks
 
 - `playwright.config.js` starts `serve.js` on port 8765 via `webServer`; locally `reuseExistingServer` is on (CI off). Don't run your own `serve.js` in parallel.
-- After filling inputs, `await page.waitForTimeout(100)` so the debounced localStorage draft saves before reload.
+- Reuse the `fillForm(page, data)` helper in `e2e/scenarios.spec.js:6` instead of writing boilerplate per test.
+- After filling inputs, `await page.waitForTimeout(100)` so the debounced localStorage draft saves before reload. For 草稿持久化測試(checkbox/debt 連動),用 `150+` 以涵蓋 `applyUnknown` 的額外 `saveFormDraft`。
 - `#gaugeScoreVal` is a `<tspan>`; use `.textContent()` not `.innerText()`.
 - When a `<select>` is disabled (e.g. `collateral` after `years > 7`), `selectOption()` may timeout; set value via `page.evaluate(() => el.value = '5')`.
 - On failure: screenshot, trace (`.zip`), and video are saved to `test-results/`. View a trace with `npx playwright show-trace <path>`.
