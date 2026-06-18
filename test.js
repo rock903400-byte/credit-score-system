@@ -398,6 +398,58 @@ test('年齡罰分 75 到期 = -10 (否決在 ARV 是 >75)', () => {
   };
   assert(CS(inp).ageScore === -10, 'got:' + CS(inp).ageScore);
 });
+test('總分上限 100：超量輸入 clamp 為 100', () => {
+  const inp = {
+    income: 200000,
+    age: 30,
+    years: 3,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 100000,
+    incomeStability: 100,
+    tenure: 100,
+    interaction: 100,
+    jcic: '100',
+    membership: 100,
+    collateral: '12',
+    guarantorCount: 5,
+    guarantors: [],
+    purpose: '100',
+    career: 100,
+    participation: 100,
+    internalBalance: 0,
+    shares: 1000000,
+  };
+  const r = CS(inp);
+  assert(r.total === 100, 'got:' + r.total);
+});
+test('總分下限 0：負分輸入 clamp 為 0', () => {
+  const inp = {
+    income: 50000,
+    age: 60,
+    years: 20,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 100000,
+    incomeStability: 0,
+    tenure: 0,
+    interaction: -100,
+    jcic: '1',
+    membership: 0,
+    collateral: '0',
+    guarantorCount: 0,
+    guarantors: [],
+    purpose: '1',
+    career: 0,
+    participation: 0,
+    internalBalance: 0,
+    shares: 100000,
+  };
+  const r = CS(inp);
+  assert(r.total === 0, 'got:' + r.total);
+});
 test('年齡罰分 76 到期 = -10 (否決在 ARV)', () => {
   const inp = {
     income: 50000,
