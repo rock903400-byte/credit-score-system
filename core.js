@@ -42,15 +42,13 @@ const COLLATERAL_REAPPRAISAL_YEARS = 10; // 鑑價報告逾 10 年須重鑑（�
 function pmt(principal, annualRatePercent, years) {
   const n = years * 12;
   const r = annualRatePercent / 100 / 12;
-  // 均分本金（每月還固定本金），利息依餘額遞減
-  // 為了在 UI 只呈現一個「月付約」數值，我們回傳**平均**月付：
+  // 本金平均攤還法（首期月付）：每月本金 = P / n，利息依當期餘額遞減。
+  // UI 單一數字以**首期**呈現（DTI / 否決線採最保守值）。
   //   每月本金 = principal / n
-  //   每月平均利息 = (principal * r) / 2   // 平均餘額為本金的一半
-  //   平均月付 = 每月本金 + 每月平均利息
+  //   首期利息 = principal * r         （首期餘額 = principal）
+  //   首期月付 = 每月本金 + 首期利息
   if (r === 0) return principal / n;
-  const avgPrincipal = principal / n;
-  const avgInterest = (principal * r) / 2;
-  return avgPrincipal + avgInterest;
+  return principal / n + principal * r;
 }
 
 function stripEmoji(str) {

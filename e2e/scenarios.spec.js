@@ -507,7 +507,7 @@ test.describe('場景 13-18：實務進階', () => {
     expect(text).toContain('矛盾');
   });
 
-  test('⑱ 估算小幫手：房貸 500 萬/2.5%/20 年 → 月付約 2.65 萬', async ({
+  test('⑱ 估算小幫手：房貸 500 萬/2.5%/20 年 → 月付約 3.1 萬', async ({
     page,
   }) => {
     await page.goto('/');
@@ -518,18 +518,19 @@ test.describe('場景 13-18：實務進階', () => {
     await page.locator('#debtEstimatedMonthly').waitFor();
     const monthlyTxt = await page.locator('#debtEstimatedMonthly').innerText();
     console.log(`  → 估算月付：${monthlyTxt}`);
-    // 「2.6 萬元」→ 26,497 元；parse 含單位的數字（顯示精度 1 位）
-    // PMT(5000000, 2.5, 20) ≈ 26497，顯示為 2.6 萬元（截斷）
+    // 「3.1 萬元」→ 31,250 元；parse 含單位的數字（顯示精度 1 位）
+    // PMT(5000000, 2.5, 20) ≈ 31250（首期本金 20833 + 首期利息 10417），
+    // 顯示為 3.1 萬元（截斷）
     const m = monthlyTxt.match(/([\d.]+)\s*萬/);
     let num = m ? parseFloat(m[1]) * 10000 : 0;
-    expect(num).toBeGreaterThanOrEqual(26000);
-    expect(num).toBeLessThanOrEqual(27000);
+    expect(num).toBeGreaterThanOrEqual(31000);
+    expect(num).toBeLessThanOrEqual(32000);
 
     // 套用 → 自動填入實際 PMT 精準值（不受顯示截斷影響）
     await page.locator('#applyDebtEstimator').click();
     const debtVal = parseInt(await page.locator('#existing_debt').inputValue());
-    console.log(`  → 套用後 existing_debt = ${debtVal}（實際 PMT ≈ 26495）`);
-    expect(debtVal).toBeGreaterThanOrEqual(26000);
-    expect(debtVal).toBeLessThanOrEqual(27000);
+    console.log(`  → 套用後 existing_debt = ${debtVal}（實際 PMT ≈ 31250）`);
+    expect(debtVal).toBeGreaterThanOrEqual(31000);
+    expect(debtVal).toBeLessThanOrEqual(32000);
   });
 });
