@@ -26,7 +26,7 @@
 - `ui.js` — DOM, drafts (localStorage), validation, report rendering.
 - `serve.js` — minimal static file server used by Playwright and manual testing.
 - `index.html` + `style.css` — no bundler, no framework.
-- **All functions are globals** (no module exports). `pmt`, `stripEmoji`, `computeScore`, `applyRegulatoryVetoes`, `determineGrade`, `validateInputs`, `validateInputsByField`, `renderDashboard`, `renderPrintReport`, `calculateLoan`, `renderGuarantorRows`, `bindGuarantorPreviews`, `updateGuarantorWeightHint` are all top-level. **`pmt()` is shared by `core.js` + `ui.js` + `simulate_*.js` — do not shadow it.**
+- **All functions are globals** (no module exports). **`pmt()` is shared by `core.js` + `ui.js` + `simulate_*.js` — do not shadow it.**
 - `simulation.js` is a legacy 1000-case runner (no package.json script); use `simulate:1k` instead.
 
 ## Gotchas
