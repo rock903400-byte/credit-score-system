@@ -62,11 +62,13 @@ function randomInput() {
 
   const guarantors = [];
   for (let i = 0; i < guarantorCount; i++) {
+    const gUnknown = Math.random() < 0.1;
     guarantors.push({
       name: 'G' + i,
       income: randInt(10000, 120000),
-      debt: randInt(0, 50000),
+      debt: gUnknown ? 0 : randInt(0, 50000),
       type: randChoice(['member', 'non_member']),
+      unknown: gUnknown,
     });
   }
 

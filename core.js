@@ -216,7 +216,7 @@ function computeScore(input) {
     input.guarantors.length > 0
   ) {
     const validDsrs = input.guarantors
-      .filter((g) => g.income > 0)
+      .filter((g) => g.income > 0 && !g.unknown)
       .map((g) => g.debt / g.income);
     if (validDsrs.length > 0) {
       const maxDsr = Math.max(...validDsrs);

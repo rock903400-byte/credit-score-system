@@ -138,6 +138,7 @@ function parseInputs() {
             String(row.querySelector('.g-debt').value).replace(/,/g, '')
           ) || 0,
         type: row.querySelector('.g-type').value,
+        unknown: row.querySelector('.g-unknown')?.checked || false,
       })
     ),
     purpose: $('purpose').value,
@@ -272,6 +273,9 @@ function renderGuarantorRows(count) {
     type: row.querySelector('.g-type')
       ? row.querySelector('.g-type').value
       : 'non_member',
+    unknown: row.querySelector('.g-unknown')
+      ? row.querySelector('.g-unknown').checked
+      : false,
   }));
   container.innerHTML = '';
   for (let i = 0; i < count; i++) {
@@ -280,6 +284,7 @@ function renderGuarantorRows(count) {
       income: '',
       debt: '',
       type: 'non_member',
+      unknown: false,
     };
     const r = document.createElement('div');
     r.className = 'guarantor-row';
@@ -312,10 +317,23 @@ function renderGuarantorRows(count) {
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
+      '<label>' +
+      '<input type="checkbox" class="g-unknown" ' +
+      (d.unknown ? 'checked' : '') +
+      '> 債務不詳（未查證）' +
+      '</label>' +
+      '<small style="color: var(--text-muted); display:block; margin-top:4px;">' +
+      '勾選後該保證人不會納入保證人 DSR 評分，' +
+      '並於報表註記「債務未查證」。' +
+      '</small>' +
+      '</div>' +
+      '<div class="form-group">' +
       '<label>既有債務月付 (元)</label>' +
       '<input type="number" class="g-debt" placeholder="0" min="0" value="' +
-      d.debt +
-      '">' +
+      (d.unknown ? '' : d.debt) +
+      '"' +
+      (d.unknown ? ' disabled' : '') +
+      '>' +
       '<span class="input-preview g-debt-preview"></span>' +
       '<span class="error-msg"></span>' +
       '</div>';
@@ -354,7 +372,16 @@ function updateGuarantorWeightHint() {
   const parts = [];
   if (m > 0) parts.push(`${m} 社員`);
   if (nm > 0) parts.push(`${nm} 非社員`);
-  el.innerText = `${parts.join(' + ')} → 加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分`;
+  let unknownCount = 0;
+  rows.forEach((row) => {
+    const cb = row.querySelector('.g-unknown');
+    if (cb && cb.checked) unknownCount++;
+  });
+  let suffix = '';
+  if (unknownCount > 0) {
+    suffix = `（${unknownCount} 位不詳，不納入保證人 DSR）`;
+  }
+  el.innerText = `${parts.join(' + ')} → 加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分${suffix}`;
 }
 
 function bindGuarantorPreviews() {
@@ -376,8 +403,10 @@ function bindGuarantorPreviews() {
       const isMember = typeSelect.value === 'member';
       const debtInput = row.querySelector('.g-debt');
       const debtPreview = row.querySelector('.g-debt-preview');
+      const unknownCb = row.querySelector('.g-unknown');
       // 社員／非社員皆可手填債務月付；社員可填其在本社既有債務，非社員可填其社外債務
-      debtInput.disabled = false;
+      // 債務不詳時維持 disabled（草稿還原後 bindGuarantorPreviews 呼叫此函式會被覆蓋）
+      debtInput.disabled = !!(unknownCb && unknownCb.checked);
       debtInput.placeholder = isMember
         ? '該社員在本社的既有債務月付'
         : '該保證人之社外債務月付';
@@ -390,6 +419,28 @@ function bindGuarantorPreviews() {
         updateType();
         updateGuarantorWeightHint();
       });
+    }
+    // 債務不詳 checkbox：勾選時清空並 disable 債務欄；取消時還原
+    const unknownCheckbox = row.querySelector('.g-unknown');
+    if (unknownCheckbox) {
+      const applyUnknown = () => {
+        if (unknownCheckbox.checked) {
+          debtInput.value = '';
+          debtInput.disabled = true;
+          debtPreview.innerText = '';
+        } else {
+          debtInput.disabled = false;
+          if (typeSelect) {
+            const isMember = typeSelect.value === 'member';
+            debtInput.placeholder = isMember
+              ? '該社員在本社的既有債務月付'
+              : '該保證人之社外債務月付';
+          }
+        }
+        updateGuarantorWeightHint();
+        saveFormDraft();
+      };
+      unknownCheckbox.addEventListener('change', applyUnknown);
     }
     updateIncome();
     updateDebt();
@@ -678,6 +729,20 @@ function renderDashboard(result) {
   );
   sealEl.classList.add(`system-seal-${result.sealType}`);
 
+  // 保證人「債務不詳」警示
+  const unknownWarn = $('unknownGuarantorWarn');
+  if (unknownWarn) {
+    const unknownCount = (input.guarantors || []).filter(
+      (g) => g.unknown
+    ).length;
+    if (unknownCount > 0) {
+      $('unknownGuarantorCount').innerText = String(unknownCount);
+      unknownWarn.style.display = 'block';
+    } else {
+      unknownWarn.style.display = 'none';
+    }
+  }
+
   // 顯示建議增貸額度
   if (result.suggestedLoan) {
     const suggested = result.suggestedLoan;
@@ -806,21 +871,40 @@ function renderPrintReport(result) {
   if (input.guarantors && input.guarantors.length > 0) {
     let html =
       '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>月收入</th><th>既有債務月付</th><th>DSR</th></tr>';
+    let unknownCount = 0;
     input.guarantors.forEach((g) => {
-      const dsr =
-        g.income > 0 ? ((g.debt / g.income) * 100).toFixed(1) + '%' : '—';
+      const isUnknown = !!g.unknown;
+      if (isUnknown) unknownCount++;
+      const dsrCell = isUnknown
+        ? '— <span style="color:#d32f2f;">(債務未查證)</span>'
+        : g.income > 0
+          ? ((g.debt / g.income) * 100).toFixed(1) + '%'
+          : '—';
+      const debtCell = isUnknown
+        ? '<span style="color:#d32f2f;">未查證</span>'
+        : g.debt.toLocaleString('zh-TW') + ' 元';
       html +=
         '<tr><td>' +
         (escapeHtml(g.name) || '—') +
+        (isUnknown ? ' <span style="color:#d32f2f;">(債務未查證)</span>' : '') +
         '</td><td>' +
         g.income.toLocaleString('zh-TW') +
         ' 元</td><td>' +
-        g.debt.toLocaleString('zh-TW') +
-        ' 元</td><td>' +
-        dsr +
+        debtCell +
+        '</td><td>' +
+        dsrCell +
         '</td></tr>';
     });
     html += '</table>';
+    if (unknownCount > 0) {
+      html +=
+        '<div style="margin-top:6px; padding:6px; background:#fff3e0; border-left:3px solid #ff9800; font-size:12px;">' +
+        '註：共 ' +
+        unknownCount +
+        ' 位保證人未揭露既有債務，已自保證人 DSR 計算排除；' +
+        '實際核貸時請另覓佐證或要求保證人提供債務證明。' +
+        '</div>';
+    }
     $('p_guarantor_print').innerHTML = html;
   } else {
     $('p_guarantor_print').innerText = '無';
@@ -1105,6 +1189,9 @@ function saveFormDraft() {
       type: row.querySelector('.g-type')
         ? row.querySelector('.g-type').value
         : 'non_member',
+      unknown: row.querySelector('.g-unknown')
+        ? row.querySelector('.g-unknown').checked
+        : false,
     }));
     data._guarantors = guarantors;
     localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
@@ -1144,8 +1231,20 @@ function loadFormDraft() {
         if (g.debt !== undefined) r.querySelector('.g-debt').value = g.debt;
         if (g.type !== undefined && r.querySelector('.g-type'))
           r.querySelector('.g-type').value = g.type;
+        if (g.unknown !== undefined) {
+          const cb = r.querySelector('.g-unknown');
+          if (cb) {
+            cb.checked = !!g.unknown;
+            const debtEl = r.querySelector('.g-debt');
+            if (debtEl) {
+              debtEl.disabled = !!g.unknown;
+              if (g.unknown) debtEl.value = '';
+            }
+          }
+        }
       });
       bindGuarantorPreviews();
+      updateGuarantorWeightHint();
     }
     updateGuarantorWeightHint();
     updateCollateralByYears();

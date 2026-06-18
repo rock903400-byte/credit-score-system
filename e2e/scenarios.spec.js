@@ -574,4 +574,65 @@ test.describe('場景 13-18：實務進階', () => {
     // collateral=0 + loan=5 萬 < shares=10 萬 → 提示「可能符合足額股金內借款」
     expect(text).toContain('可能符合');
   });
+
+  test('⑳ 保證人「債務不詳」：checkbox + 警示 + 列印標註 + 草稿持久化', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1 位保證人，勾不詳
+    await page.locator('#guarantor_count').selectOption('1');
+    const row = page.locator('.guarantor-row').first();
+    await row.locator('.g-name').fill('王大成');
+    await row.locator('.g-income').fill('50000');
+    // 確認 checkbox 存在
+    const checkbox = row.locator('.g-unknown');
+    await expect(checkbox).toBeVisible();
+    await checkbox.check();
+
+    // 勾選後 debt 欄應 disabled 且清空
+    const debtInput = row.locator('.g-debt');
+    await expect(debtInput).toBeDisabled();
+    await expect(debtInput).toHaveValue('');
+
+    // 填其餘必填欄位並計算
+    await fillForm(page, {
+      income: 60000,
+      age: 40,
+      existing_debt: 0,
+      loan: 300000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#btnCalc').click();
+
+    // 警示盒可見 + 數量為 1
+    const warn = page.locator('#unknownGuarantorWarn');
+    await expect(warn).toBeVisible();
+    const count = await page.locator('#unknownGuarantorCount').innerText();
+    expect(count).toBe('1');
+    console.log(`  → 警示盒顯示：${count} 位不詳`);
+
+    // 列印報表:保證人姓名旁應有「債務未查證」+ 表尾備註
+    const guarantorPrint = page.locator('#p_guarantor_print');
+    const printText = await guarantorPrint.innerText();
+    expect(printText).toContain('債務未查證');
+    expect(printText).toContain('另覓佐證');
+    console.log(`  → 列印報表含「債務未查證」與「另覓佐證」`);
+
+    // 草稿持久化:重整後 checkbox 仍勾選
+    await page.waitForTimeout(150); // 等待 debounced saveFormDraft
+    await page.reload();
+    const checkboxAfter = page
+      .locator('.guarantor-row')
+      .first()
+      .locator('.g-unknown');
+    await expect(checkboxAfter).toBeChecked();
+    const debtAfter = page.locator('.guarantor-row').first().locator('.g-debt');
+    await expect(debtAfter).toBeDisabled();
+    console.log(`  → 重整後 checkbox 仍勾選，debt 欄仍 disabled`);
+  });
 });

@@ -273,6 +273,79 @@ test('不良借款人 < 60', () => {
   };
   assert(CS(inp).total < 60, 'got:' + CS(inp).total);
 });
+test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 300000,
+    incomeStability: 6,
+    tenure: 4,
+    interaction: 7,
+    jcic: '10',
+    membership: 3,
+    collateral: '10',
+    guarantorCount: 3,
+    purpose: '10',
+    career: 4,
+    participation: 3,
+    internalBalance: 0,
+    shares: 100000,
+    guarantors: [
+      { name: 'A', income: 50000, debt: 0, type: 'member', unknown: true },
+      { name: 'B', income: 40000, debt: 0, type: 'non_member', unknown: true },
+      { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
+    ],
+  };
+  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +7
+  // guarantorDsrScore: 0 (全部不詳,validDsrs 空)
+  // protectionScore = min(20, 10 + 7 + 0) = 17
+  assert(CS(inp).protectionScore === 17, 'got:' + CS(inp).protectionScore);
+});
+test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () => {
+  // 三位非社員保證人，加權 0.7×3=2.1→round 2 → +6 保障基礎
+  // 揭露者 debt=40000, income=40000 → DSR=1.0 → +1（最壞情況）
+  // 不詳 2 位被排除
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 300000,
+    incomeStability: 6,
+    tenure: 4,
+    interaction: 7,
+    jcic: '10',
+    membership: 3,
+    collateral: '10',
+    guarantorCount: 3,
+    purpose: '10',
+    career: 4,
+    participation: 3,
+    internalBalance: 0,
+    shares: 100000,
+    guarantors: [
+      { name: 'A', income: 50000, debt: 0, type: 'member', unknown: true },
+      {
+        name: 'B',
+        income: 40000,
+        debt: 40000,
+        type: 'non_member',
+        unknown: false,
+      },
+      { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
+    ],
+  };
+  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +7
+  // DSR: 只看 B, max = 40000/40000 = 1.0 → +1
+  // 保障 = min(20, 10 + 7 + 1) = 18
+  assert(CS(inp).protectionScore === 18, 'got:' + CS(inp).protectionScore);
+});
 test('年齡罰分 65-70 到期 = -5', () => {
   const inp = {
     income: 50000,

@@ -87,7 +87,14 @@ for (let i = 0; i < 10000; i++) {
     const gIncome = randInt(20000, 100000);
     const gDebt = randInt(0, Math.floor(gIncome * 0.5));
     const gType = randChoice(['member', 'non_member']);
-    guarantors.push({ name: gName, income: gIncome, debt: gDebt, type: gType });
+    const gUnknown = Math.random() < 0.1;
+    guarantors.push({
+      name: gName,
+      income: gIncome,
+      debt: gUnknown ? 0 : gDebt,
+      type: gType,
+      unknown: gUnknown,
+    });
   }
   const purpose = randChoice([
     '10',
