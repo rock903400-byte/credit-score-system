@@ -3,6 +3,23 @@
 // ============================================================
 const $ = (id) => document.getElementById(id);
 
+// C1：金額欄位千分位處理（[FIX 7.x] type=text 後需自帶格式）
+// 讀取時去逗號；寫入時加逗號
+const parseAmount = (id) =>
+  parseFloat(String($(id).value).replace(/,/g, '')) || 0;
+function formatAmountInput(el) {
+  if (!el) return;
+  const cleaned = el.value.replace(/[^\d]/g, '');
+  if (!cleaned) {
+    el.value = '';
+    return;
+  }
+  const num = parseInt(cleaned, 10) || 0;
+  const formatted = num.toLocaleString('en-US');
+  el.value = formatted;
+  el.setSelectionRange(formatted.length, formatted.length);
+}
+
 // ============================================================
 // Modal 無障礙：focus trap + Esc 關閉 + scroll lock + focus 還原
 // ============================================================
@@ -85,34 +102,26 @@ function parseInputs() {
   return {
     memberId: $('memberId').value.trim(),
     appDate: $('appDate').value,
-    income: parseFloat($('income').value) || 0,
+    income: parseAmount('income'),
     age: parseInt($('age').value) || 0,
-    existingDebt: parseFloat($('existing_debt').value) || 0,
-    internalMonthly: parseFloat($('internal_monthly').value) || 0,
-    internalBalance: parseFloat($('internal_balance').value) || 0,
-    internalMonthly2: consolidationMode
-      ? parseFloat($('internal_monthly2').value) || 0
-      : 0,
-    internalBalance2: consolidationMode
-      ? parseFloat($('internal_balance2').value) || 0
-      : 0,
-    internalYears2: consolidationMode
-      ? parseFloat($('internal_years2').value) || 0
-      : 0,
-    internalRate2: consolidationMode
-      ? parseFloat($('internal_rate2').value) || 0
-      : 0,
-    proposedLoan: parseFloat($('loan').value) || 0,
+    existingDebt: parseAmount('existing_debt'),
+    internalMonthly: parseAmount('internal_monthly'),
+    internalBalance: parseAmount('internal_balance'),
+    internalMonthly2: consolidationMode ? parseAmount('internal_monthly2') : 0,
+    internalBalance2: consolidationMode ? parseAmount('internal_balance2') : 0,
+    internalYears2: consolidationMode ? parseAmount('internal_years2') : 0,
+    internalRate2: consolidationMode ? parseAmount('internal_rate2') : 0,
+    proposedLoan: parseAmount('loan'),
     years: parseInt($('years').value) || 0,
     ratePercent: parseFloat($('rate').value) || 0,
-    shares: parseFloat($('shares').value) || 0,
+    shares: parseAmount('shares'),
     incomeStability: parseInt($('incomeStability').value) || 0,
     tenure: parseInt($('tenure').value) || 0,
     interaction: parseInt($('interaction').value) || 0,
     jcic: $('jcic').value,
     membership: parseInt($('membership').value) || 0,
     collateral: $('collateral').value,
-    appraisalValue: parseFloat($('appraisalValue').value) || 0,
+    appraisalValue: parseAmount('appraisalValue'),
     collateralZone: $('collateralZone').value,
     houseAge: parseInt($('houseAge').value) || 0,
     appraisalAge: parseInt($('appraisalAge').value) || 0,
@@ -120,8 +129,14 @@ function parseInputs() {
     guarantors: Array.from(document.querySelectorAll('.guarantor-row')).map(
       (row) => ({
         name: row.querySelector('.g-name').value.trim(),
-        income: parseFloat(row.querySelector('.g-income').value) || 0,
-        debt: parseFloat(row.querySelector('.g-debt').value) || 0,
+        income:
+          parseFloat(
+            String(row.querySelector('.g-income').value).replace(/,/g, '')
+          ) || 0,
+        debt:
+          parseFloat(
+            String(row.querySelector('.g-debt').value).replace(/,/g, '')
+          ) || 0,
         type: row.querySelector('.g-type').value,
       })
     ),
@@ -344,6 +359,64 @@ function bindGuarantorPreviews() {
     updateDebt();
     if (typeSelect) updateType();
   });
+}
+
+// ============================================================
+// 即時股金 / 擔保品提示（B1：輸入時即時檢查，不需按計算才看）
+// 從 DOM 直接取值；複用 renderDashboard 中的 hint 邏輯
+// ============================================================
+function updateShareHintLive() {
+  const shareHint = $('shareHint');
+  if (!shareHint) return;
+  const shares = parseAmount('shares');
+  if (shares <= 0) {
+    shareHint.style.display = 'none';
+    return;
+  }
+  const proposedLoan = parseAmount('loan');
+  const collateral = $('collateral').value;
+  const years = parseFloat($('years').value) || 0;
+  const shareMult = shares > 0 ? proposedLoan / shares : null;
+
+  let hintMsg = '';
+  let hintType = '';
+  let conflict = '';
+  if (collateral === '12' && proposedLoan > shares) {
+    conflict =
+      '申請金額超過股金餘額，不符合「足額股金內借款」條件，請重新確認擔保品欄位。';
+  } else if (collateral === '5' && proposedLoan > shares * 2) {
+    conflict =
+      '申請金額超過股金 2 倍，不符合「股金 2 倍內」條件，請重新確認擔保品欄位。';
+  } else if (collateral === '0' && proposedLoan > 0 && proposedLoan <= shares) {
+    conflict =
+      '申請金額未超過股金，可能符合「足額股金內借款」，請確認擔保品欄位設定。';
+  }
+  if (conflict) {
+    hintType = 'error';
+    hintMsg = `擔保品設定矛盾：${conflict}`;
+  } else if (collateral === '10') {
+    hintType = 'info';
+    hintMsg = `股金參考：申請額為股金的 ${shareMult !== null ? shareMult.toFixed(1) : '—'} 倍，擔保品為足額不動產，不受股金倍數限制。`;
+  } else if (proposedLoan > 0 && proposedLoan <= shares) {
+    hintType = 'success';
+    hintMsg = '股金確認：申請金額未超過股金餘額，符合「足額股金內借款」條件。';
+  } else if (proposedLoan > 0 && proposedLoan <= shares * 2) {
+    hintType = 'warn';
+    hintMsg = `股金確認：申請金額為股金的 ${shareMult.toFixed(1)} 倍，屬「股金 2 倍內」範圍。`;
+  } else if (proposedLoan > 0) {
+    hintType = 'error';
+    hintMsg = `股金確認：申請金額已超過股金的 2 倍（目前 ${shareMult.toFixed(1)} 倍），屬純信用借款，請確認擔保品設定。`;
+  } else {
+    hintType = 'info';
+    hintMsg = '股金參考：請填入申請金額以檢查股金倍數。';
+  }
+  if (years > LONG_TERM_YEARS && collateral !== '10') {
+    hintType = 'error';
+    hintMsg = `貸款年限 ${years} 年超過 ${LONG_TERM_YEARS} 年，不得僅以股金或信用方式辦理，須改為足額不動產抵押。`;
+  }
+  shareHint.className = `hint hint-${hintType}`;
+  shareHint.innerText = hintMsg;
+  shareHint.style.display = 'block';
 }
 
 function updateCollateralByYears() {
@@ -817,7 +890,6 @@ function setCalcLoading(loading) {
     btn.classList.add('loading');
     btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>計算中…';
   } else {
-
     btn.disabled = false;
     btn.classList.remove('loading');
     btn.innerHTML = '開始授信評分';
@@ -1040,6 +1112,18 @@ function loadFormDraft() {
       bindGuarantorPreviews();
     }
     updateCollateralByYears();
+    // C1：草稿還原後套用千分位（程式設值不觸發 input 事件）
+    [
+      'income',
+      'existing_debt',
+      'internal_monthly',
+      'internal_balance',
+      'internal_monthly2',
+      'internal_balance2',
+      'loan',
+      'shares',
+      'appraisalValue',
+    ].forEach((id) => formatAmountInput($(id)));
     // 還原整併模式 toggle 後，第二筆貸款欄位群組也要同步顯示
     if ($('consolidationMode').checked) {
       [
@@ -1078,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     appDate.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
   }
 
-  // 金額欄位即時預覽
+  // 金額欄位即時預覽 + C1 千分位格式化
   const moneyFields = [
     'income',
     'existing_debt',
@@ -1092,14 +1176,22 @@ document.addEventListener('DOMContentLoaded', () => {
   moneyFields.forEach((id) => {
     const input = $(id);
     const preview = $('preview_' + id);
-    if (!input || !preview) return;
+    if (!input) return;
     const update = () => {
-      const val = parseFloat(input.value) || 0;
-      preview.innerText = formatAmount(val);
+      const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
+      if (preview) preview.innerText = formatAmount(val);
     };
     input.addEventListener('input', update);
+    input.addEventListener('input', () => formatAmountInput(input));
+    input.addEventListener('blur', () => formatAmountInput(input));
     update();
   });
+  // 鑑估價值（沒有 preview 也要千分位）
+  const appraisal = $('appraisalValue');
+  if (appraisal) {
+    appraisal.addEventListener('input', () => formatAmountInput(appraisal));
+    appraisal.addEventListener('blur', () => formatAmountInput(appraisal));
+  }
 
   // 動態保證人列初始化
   const guarantorCountEl = $('guarantor_count');
@@ -1137,6 +1229,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (guarantorList) {
     guarantorList.addEventListener('change', markResultStale);
   }
+
+  // B1：股金 / 擔保品提示即時檢查（輸入時就提示，不必按計算才看到）
+  ['loan', 'shares', 'collateral', 'years'].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', updateShareHintLive);
+    el.addEventListener('change', updateShareHintLive);
+  });
 
   // 頁面載入時還原草稿（若存在）
   loadFormDraft();
@@ -1259,6 +1359,9 @@ document.addEventListener('DOMContentLoaded', () => {
     r.addEventListener('change', updateDebtEstimatorPreview);
   });
   updateDebtEstimatorPreview();
+
+  // B1 初始化：頁面載入時跑一次即時提示（草稿還原後的狀態）
+  updateShareHintLive();
 
   // 區塊折疊（滑鼠 + 鍵盤無障礙）
   document

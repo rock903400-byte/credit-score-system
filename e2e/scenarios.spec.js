@@ -533,4 +533,45 @@ test.describe('場景 13-18：實務進階', () => {
     expect(debtVal).toBeGreaterThanOrEqual(31000);
     expect(debtVal).toBeLessThanOrEqual(32000);
   });
+
+  test('⑲ B1：股金矛盾提示在輸入時即時顯示，不必按計算', async ({ page }) => {
+    await page.goto('/');
+    // 清空草稿（避免上次測試的殘留）
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 還沒填任何東西，shareHint 應為隱藏
+    await expect(page.locator('#shareHint')).toBeHidden();
+
+    // 填 loan=50 萬、shares=10 萬、預設 collateral=12 → 應該立即出現矛盾提示
+    await page.locator('#loan').fill('500000');
+    await page.locator('#shares').fill('100000');
+    // 等 input 事件生效
+    await page.waitForTimeout(100);
+
+    const hint = page.locator('#shareHint');
+    await expect(hint).toBeVisible();
+    const text = await hint.innerText();
+    console.log(`  → 即時提示：${text.slice(0, 80)}`);
+    expect(text).toContain('矛盾');
+    // 不需要按 btnCalc 就有提示
+  });
+
+  test('⑲b B1：變更 collateral 為 0 後提示即時切換', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await page.locator('#loan').fill('50000');
+    await page.locator('#shares').fill('100000');
+    await page.locator('#collateral').selectOption('0');
+    await page.waitForTimeout(50);
+
+    const hint = page.locator('#shareHint');
+    await expect(hint).toBeVisible();
+    const text = await hint.innerText();
+    console.log(`  → 即時提示：${text.slice(0, 80)}`);
+    // collateral=0 + loan=5 萬 < shares=10 萬 → 提示「可能符合足額股金內借款」
+    expect(text).toContain('可能符合');
+  });
 });

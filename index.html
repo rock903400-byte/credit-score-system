@@ -47,9 +47,10 @@
               <div class="form-group">
                 <label>借款人月平均收入 (元)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="income"
-                  placeholder="例如：45000"
+                  placeholder="例如：45,000"
                   min="1"
                 />
                 <span class="input-preview" id="preview_income"></span>
@@ -75,7 +76,8 @@
                 </label>
                 <div style="display: flex; gap: 8px; align-items: flex-end">
                   <input
-                    type="number"
+                    type="text"
+                    inputmode="numeric"
                     id="existing_debt"
                     class="highlight-input"
                     placeholder="0"
@@ -102,7 +104,8 @@
                   >
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="internal_monthly"
                   class="highlight-input"
                   placeholder="0"
@@ -122,7 +125,8 @@
                   >
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="internal_balance"
                   placeholder="0"
                   min="0"
@@ -142,7 +146,8 @@
               <div class="form-group" id="internal2Group" style="display: none">
                 <label>第二筆既有貸款每月應繳額 (元)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="internal_monthly2"
                   placeholder="0"
                   min="0"
@@ -160,7 +165,8 @@
               >
                 <label>第二筆既有貸款餘額 (元)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="internal_balance2"
                   placeholder="0"
                   min="0"
@@ -222,9 +228,10 @@
               <div class="form-group">
                 <label>預計借款金額 (元)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="loan"
-                  placeholder="例如：300000"
+                  placeholder="例如：300,000"
                   min="0"
                 />
                 <span class="input-preview" id="preview_loan"></span>
@@ -295,9 +302,10 @@
               <div class="form-group">
                 <label>社內股金餘額 (元)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="shares"
-                  placeholder="例如：50000"
+                  placeholder="例如：50,000"
                   min="0"
                 />
                 <span class="input-preview" id="preview_shares"></span>
@@ -328,9 +336,10 @@
                   ></label
                 >
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
                   id="appraisalValue"
-                  placeholder="例如：10000000"
+                  placeholder="例如：10,000,000"
                   min="0"
                 />
                 <span class="input-preview" id="preview_appraisalValue"></span>
@@ -405,6 +414,8 @@
             <div id="guarantorContainer">
               <div id="guarantorList"></div>
             </div>
+            <!-- B1：股金 / 擔保品提示放表單區（始終可見，不需按計算才看） -->
+            <div id="shareHint" class="hint" style="display: none"></div>
           </div>
         </div>
 
@@ -641,8 +652,6 @@
           <div id="minorWarn" class="notice-warn notice-warn-strong">
             注意：借款人為未成年（未滿18歲），依規須取得法定代理人書面同意，請附上同意書後再送件。
           </div>
-
-          <div id="shareHint" class="hint" style="display: none"></div>
 
           <div
             id="suggestedLoanBox"
@@ -966,9 +975,10 @@
             <div class="form-group">
               <label>貸款/分期本金 (元)</label>
               <input
-                type="number"
+                type="text"
+                inputmode="numeric"
                 id="debtPrincipal"
-                placeholder="例如：5000000"
+                placeholder="例如：5,000,000"
                 min="0"
               />
             </div>

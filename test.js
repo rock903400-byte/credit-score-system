@@ -865,6 +865,290 @@ test('擔保12+5保人 protection=20、總分≤100', () => {
 });
 
 // ============================================================
+// 100-人分布迴歸測試：coherent 輸入快照
+// 偵測日後微調公式時分布劇烈漂移（A 級從 30% 掉到 5% 等）
+// 範圍為「常態合理區間」：小幅漂移通過，劇烈漂移才失敗
+// ============================================================
+console.log('\n── 100-人分布迴歸測試 (1) ──');
+
+test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () => {
+  // 簡單 LCG PRNG（保證可重現）
+  let _s = 0x12345;
+  const rng = () => {
+    _s = (_s * 1103515245 + 12345) & 0x7fffffff;
+    return _s / 0x7fffffff;
+  };
+  const ri = (a, b) => Math.floor(a + rng() * (b - a + 1));
+  const rc = (arr) => arr[Math.floor(rng() * arr.length)];
+
+  // 與 simulate_100_coherent.js 對齊的 8 種 persona
+  const PERSONAS = {
+    elite() {
+      return {
+        age: ri(25, 45),
+        income: ri(60000, 120000),
+        years: rc([3, 5, 7, 10]),
+        ratePercent: rc([2.0, 2.5, 3.0]),
+        proposedLoan: ri(100000, 1000000),
+        existingDebt: 0,
+        internalMonthly: 0,
+        internalBalance: 0,
+        shares: ri(50000, 200000),
+        incomeStability: 9,
+        tenure: rc([4, 6]),
+        interaction: 10,
+        jcic: '10',
+        membership: rc([3, 5]),
+        collateral: rc(['12', '10']),
+        purpose: '10',
+        career: 6,
+        participation: rc([3, 4]),
+      };
+    },
+    normal() {
+      return {
+        age: ri(28, 55),
+        income: ri(35000, 70000),
+        years: rc([3, 5, 7]),
+        ratePercent: rc([2.5, 3.0, 3.5]),
+        proposedLoan: ri(100000, 800000),
+        existingDebt: ri(0, 5000),
+        internalMonthly: ri(0, 3000),
+        internalBalance: ri(0, 50000),
+        shares: ri(30000, 100000),
+        incomeStability: rc([6, 9]),
+        tenure: rc([2, 4, 6]),
+        interaction: rc([7, 10]),
+        jcic: rc(['10', '5']),
+        membership: rc([3, 5]),
+        collateral: rc(['5', '12', '10']),
+        purpose: '10',
+        career: rc([3, 4, 6]),
+        participation: rc([2, 3, 4]),
+      };
+    },
+    selfEmployed() {
+      return {
+        age: ri(30, 60),
+        income: ri(40000, 100000),
+        years: rc([3, 5, 7]),
+        ratePercent: rc([3.0, 3.5, 4.0]),
+        proposedLoan: ri(200000, 1500000),
+        existingDebt: ri(0, 10000),
+        internalMonthly: ri(0, 5000),
+        internalBalance: ri(0, 100000),
+        shares: ri(20000, 80000),
+        incomeStability: rc([1, 3]),
+        tenure: rc([1, 2, 4]),
+        interaction: rc([3, 7]),
+        jcic: rc(['10', '5', '2']),
+        membership: rc([1, 3, 5]),
+        collateral: rc(['5', '10', '0']),
+        purpose: rc(['7', '10']),
+        career: rc([2, 3]),
+        participation: rc([1, 2, 3]),
+      };
+    },
+    borderline() {
+      return {
+        age: ri(35, 60),
+        income: ri(30000, 50000),
+        years: rc([3, 5, 7]),
+        ratePercent: rc([3.0, 4.0, 5.0]),
+        proposedLoan: ri(300000, 2000000),
+        existingDebt: ri(10000, 25000),
+        internalMonthly: ri(3000, 8000),
+        internalBalance: ri(0, 200000),
+        shares: ri(10000, 50000),
+        incomeStability: rc([3, 6]),
+        tenure: rc([2, 4]),
+        interaction: rc([3, 7]),
+        jcic: rc(['5', '2']),
+        membership: rc([1, 3]),
+        collateral: rc(['0', '5']),
+        purpose: rc(['7', '10']),
+        career: rc([2, 3, 4]),
+        participation: rc([1, 2]),
+      };
+    },
+    senior() {
+      const age = ri(55, 72);
+      return {
+        age,
+        income: ri(30000, 70000),
+        years: ri(1, Math.max(1, 75 - age)),
+        ratePercent: rc([2.5, 3.0]),
+        proposedLoan: ri(100000, 500000),
+        existingDebt: ri(0, 5000),
+        internalMonthly: ri(0, 3000),
+        internalBalance: 0,
+        shares: ri(50000, 200000),
+        incomeStability: rc([6, 9]),
+        tenure: rc([4, 6]),
+        interaction: 10,
+        jcic: '10',
+        membership: 5,
+        collateral: '12',
+        purpose: '10',
+        career: rc([4, 6]),
+        participation: rc([3, 4]),
+      };
+    },
+    jcicWarn() {
+      return {
+        age: ri(30, 50),
+        income: ri(35000, 60000),
+        years: rc([3, 5]),
+        ratePercent: rc([3.0, 4.0]),
+        proposedLoan: ri(200000, 800000),
+        existingDebt: ri(5000, 15000),
+        internalMonthly: 0,
+        internalBalance: 0,
+        shares: ri(20000, 80000),
+        incomeStability: rc([3, 6]),
+        tenure: rc([2, 4]),
+        interaction: rc([3, 7]),
+        jcic: rc(['2', '5']),
+        membership: rc([1, 3]),
+        collateral: rc(['5', '10']),
+        purpose: '10',
+        career: rc([3, 4]),
+        participation: rc([2, 3]),
+      };
+    },
+    hardVeto() {
+      const isJcic = rng() < 0.5;
+      return {
+        age: ri(25, 60),
+        income: ri(30000, 80000),
+        years: rc([3, 5]),
+        ratePercent: rc([3.0, 4.0]),
+        proposedLoan: ri(200000, 800000),
+        existingDebt: 0,
+        internalMonthly: 0,
+        internalBalance: 0,
+        shares: ri(20000, 100000),
+        incomeStability: 6,
+        tenure: 4,
+        interaction: 7,
+        jcic: isJcic ? 'veto' : '10',
+        purpose: isJcic ? '10' : 'veto',
+        membership: 3,
+        collateral: '5',
+        career: 3,
+        participation: 2,
+      };
+    },
+    consolidation() {
+      return {
+        age: ri(35, 60),
+        income: ri(40000, 80000),
+        years: rc([5, 7]),
+        ratePercent: rc([2.5, 3.0]),
+        proposedLoan: ri(500000, 2000000),
+        existingDebt: ri(0, 10000),
+        internalMonthly: ri(5000, 15000),
+        internalBalance: ri(100000, 500000),
+        shares: ri(50000, 200000),
+        incomeStability: rc([6, 9]),
+        tenure: rc([2, 4, 6]),
+        interaction: 10,
+        jcic: '10',
+        membership: rc([3, 5]),
+        collateral: rc(['5', '10', '12']),
+        purpose: '10',
+        career: rc([4, 6]),
+        participation: rc([2, 3]),
+      };
+    },
+  };
+
+  // 對齊 distribute：collateral=10 需補 appraisal 欄位
+  const coherent = (p) => {
+    if (
+      p.collateral === '10' &&
+      (!p.appraisalValue || p.appraisalValue === 0)
+    ) {
+      p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+      p.collateralZone = 'residential_commercial_educational';
+      p.houseAge = ri(0, 25);
+      p.appraisalAge = ri(0, 8);
+    }
+    // collateral=12 但 loan > shares → 降級
+    if (p.collateral === '12' && p.proposedLoan > p.shares) {
+      if (p.proposedLoan <= p.shares * 2) p.collateral = '5';
+      else {
+        p.collateral = '10';
+        p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+        p.collateralZone = 'residential_commercial_educational';
+        p.houseAge = ri(0, 20);
+        p.appraisalAge = ri(0, 8);
+      }
+    }
+    return p;
+  };
+
+  const MIX = [
+    ['elite', 30],
+    ['normal', 25],
+    ['selfEmployed', 15],
+    ['borderline', 10],
+    ['senior', 8],
+    ['jcicWarn', 5],
+    ['hardVeto', 4],
+    ['consolidation', 3],
+  ];
+
+  const results = [];
+  for (let i = 0; i < 100; i++) {
+    const total = MIX.reduce((s, [, w]) => s + w, 0);
+    let r = rng() * total;
+    let name = MIX[0][0];
+    for (const [n, w] of MIX) {
+      r -= w;
+      if (r <= 0) {
+        name = n;
+        break;
+      }
+    }
+    const c = coherent(PERSONAS[name]());
+    const s = CS(c);
+    const v = ARV(c);
+    const g = DG(s.total, v.vetoes.length > 0);
+    results.push({ grade: g.grade, veto: v.vetoes.length });
+  }
+
+  const cnt = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  let vetoCount = 0;
+  results.forEach((r) => {
+    cnt[r.grade] = (cnt[r.grade] || 0) + 1;
+    if (r.veto > 0) vetoCount++;
+  });
+  const passed = results.filter((r) => r.grade !== 'E' && r.veto === 0).length;
+
+  // 合理區間（小幅漂移通過，劇烈漂移才失敗）
+  // 對齊 simulate_100_coherent.js 實測分布（允許 ±10 隨機漂移）
+  const RANGE = {
+    A: [0, 10], // 0–10%
+    B: [20, 40], // 20–40%
+    C: [15, 30], // 15–30%
+    D: [5, 20], // 5–20%
+    E: [20, 40], // 20–40%
+    veto: [10, 25], // 10–25%
+    passed: [55, 80], // 55–80%
+  };
+  const inRange = (n, [lo, hi]) => n >= lo && n <= hi;
+  const summary = `A=${cnt.A} B=${cnt.B} C=${cnt.C} D=${cnt.D} E=${cnt.E} 否決=${vetoCount} 通過=${passed}`;
+  assert(inRange(cnt.A, RANGE.A), 'A 級超出範圍 ' + RANGE.A + '%: ' + summary);
+  assert(inRange(cnt.B, RANGE.B), 'B 級超出範圍 ' + RANGE.B + '%: ' + summary);
+  assert(inRange(cnt.C, RANGE.C), 'C 級超出範圍 ' + RANGE.C + '%: ' + summary);
+  assert(inRange(cnt.D, RANGE.D), 'D 級超出範圍 ' + RANGE.D + '%: ' + summary);
+  assert(inRange(cnt.E, RANGE.E), 'E 級超出範圍 ' + RANGE.E + '%: ' + summary);
+  assert(inRange(vetoCount, RANGE.veto), '否決超出範圍: ' + summary);
+  assert(inRange(passed, RANGE.passed), '通過率超出範圍: ' + summary);
+});
+
+// ============================================================
 console.log('\n' + '='.repeat(44));
 console.log(
   '  PASS: ' +

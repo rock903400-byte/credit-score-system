@@ -11,7 +11,8 @@ test.describe('Draft — 草稿存讀', () => {
     await page.waitForTimeout(100);
     await page.reload();
     await expect(page.locator('#memberId')).toHaveValue('A00777 測試員');
-    await expect(page.locator('#income')).toHaveValue('77777');
+    // C1：金額欄位有千分位
+    await expect(page.locator('#income')).toHaveValue('77,777');
     await expect(page.locator('#age')).toHaveValue('35');
   });
 
@@ -33,6 +34,24 @@ test.describe('Draft — 草稿存讀', () => {
     await page.reload();
     await expect(page.locator('#consolidationMode')).toBeChecked();
     await expect(page.locator('#internal2Group')).toBeVisible();
-    await expect(page.locator('#internal_monthly2')).toHaveValue('5000');
+    // C1：金額欄位有千分位
+    await expect(page.locator('#internal_monthly2')).toHaveValue('5,000');
+  });
+
+  test('C1：金額欄位輸入時即時加千分位', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.locator('#loan').fill('5000000');
+    await page.waitForTimeout(50);
+    await expect(page.locator('#loan')).toHaveValue('5,000,000');
+    // 計算結果應正確（千分位不影響數值）
+    await page.locator('#income').fill('60000');
+    await page.locator('#age').fill('40');
+    await page.locator('#shares').fill('100000');
+    await page.locator('#years').fill('5');
+    await page.locator('#rate').fill('3');
+    await page.locator('#btnCalc').click();
+    await expect(page.locator('#resLimit')).toBeVisible();
   });
 });
