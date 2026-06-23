@@ -24,7 +24,8 @@ test.describe('Smoke — 頁面載入', () => {
 
   test('申請日期預設為今天', async ({ page }) => {
     await page.goto('/');
-    const today = new Date().toISOString().slice(0, 10);
+    const t = new Date();
+    const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
     await expect(page.locator('#appDate')).toHaveValue(today);
   });
 });

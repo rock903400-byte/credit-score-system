@@ -100,6 +100,7 @@ function closeModal(modalEl) {
 function parseInputs() {
   const consolidationMode = $('consolidationMode').checked;
   return {
+    consolidationMode,
     memberId: $('memberId').value.trim(),
     appDate: $('appDate').value,
     income: parseAmount('income'),
@@ -201,11 +202,18 @@ function applyFieldErrors(fieldErrors) {
     existing_debt: 'existing_debt',
     internal_monthly: 'internal_monthly',
     internal_balance: 'internal_balance',
+    internal_monthly_2: 'internal_monthly2',
+    internal_balance_2: 'internal_balance2',
+    internal_years_2: 'internal_years2',
+    internal_rate_2: 'internal_rate2',
     loan: 'loan',
     shares: 'shares',
     years: 'years',
     rate: 'rate',
     age: 'age',
+    appraisalValue: 'appraisalValue',
+    houseAge: 'houseAge',
+    appraisalAge: 'appraisalAge',
   };
   Object.keys(idMap).forEach((key) => {
     const el = $(idMap[key]);
@@ -750,25 +758,36 @@ function renderDashboard(result) {
     if (suggested.general > 0) {
       html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
-    if (suggested.consolidation > 0) {
+    if (suggested.consolidation > 0 && input.consolidationMode) {
       html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (html) {
       $('suggestedLoanText').innerHTML = html;
       $('suggestedLoanBox').style.display = 'block';
+    } else {
+      $('suggestedLoanBox').style.display = 'none';
     }
+  } else {
+    $('suggestedLoanBox').style.display = 'none';
   }
 
   // 顯示整併貸款試算
-  if (result.consolidationScenario) {
+  if (result.consolidationScenario && input.consolidationMode) {
     const cs = result.consolidationScenario;
     let html = `現狀月付：${formatAmount(cs.currentTotalMonthly)}<br>`;
     html += `整併後月付：${formatAmount(cs.consolidationMonthly)}<br>`;
-    html += `月省/增：${cs.monthlySavings >= 0 ? '+' : ''}${formatAmount(cs.monthlySavings)}<br>`;
+    let savingsText =
+      cs.monthlySavings === 0
+        ? '0 元'
+        : (cs.monthlySavings > 0 ? '+ ' : '- ') +
+          formatAmount(Math.abs(cs.monthlySavings));
+    html += `月省/增：<span class="${cs.monthlySavings >= 0 ? 'status-pass' : 'status-warn'}">${savingsText}</span><br>`;
     html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
     html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}`;
     $('consolidationText').innerHTML = html;
     $('consolidationBox').style.display = 'block';
+  } else {
+    $('consolidationBox').style.display = 'none';
   }
 
   $('resultCard').style.display = 'block';
@@ -842,12 +861,16 @@ function renderPrintReport(result) {
   if (consolidationRow) {
     if (
       result.consolidationScenario &&
+      input.consolidationMode &&
       (input.internalMonthly2 > 0 || input.internalBalance2 > 0)
     ) {
       const cs = result.consolidationScenario;
+      const savingsVal = cs.monthlySavings;
+      const savingsStr =
+        savingsVal === 0 ? '0 元' : formatAmount(Math.abs(savingsVal));
       $('p_consolidation_info').innerText =
         `現狀月付 ${formatAmount(cs.currentTotalMonthly)} / 整併後月付 ${formatAmount(cs.consolidationMonthly)} / ` +
-        `月${cs.monthlySavings >= 0 ? '省' : '增'} ${formatAmount(Math.abs(cs.monthlySavings))}`;
+        `月${savingsVal >= 0 ? '省' : '增'} ${savingsStr}`;
       consolidationRow.style.display = '';
     } else {
       consolidationRow.style.display = 'none';
@@ -943,25 +966,36 @@ function renderPrintReport(result) {
     if (suggested.general > 0) {
       html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
-    if (suggested.consolidation > 0) {
+    if (suggested.consolidation > 0 && input.consolidationMode) {
       html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (html) {
       $('p_suggested_loan').innerHTML = html;
       $('p_suggested_loan').style.display = 'block';
+    } else {
+      $('p_suggested_loan').style.display = 'none';
     }
+  } else {
+    $('p_suggested_loan').style.display = 'none';
   }
 
   // 列印整併貸款試算
-  if (result.consolidationScenario) {
+  if (result.consolidationScenario && input.consolidationMode) {
     const cs = result.consolidationScenario;
     let html = `現狀月付：${formatAmount(cs.currentTotalMonthly)}<br>`;
     html += `整併後月付：${formatAmount(cs.consolidationMonthly)}<br>`;
-    html += `月省/增：${cs.monthlySavings >= 0 ? '+' : ''}${formatAmount(cs.monthlySavings)}<br>`;
+    let savingsText =
+      cs.monthlySavings === 0
+        ? '0 元'
+        : (cs.monthlySavings > 0 ? '+ ' : '- ') +
+          formatAmount(Math.abs(cs.monthlySavings));
+    html += `月省/增：${savingsText}<br>`;
     html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
     html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}`;
     $('p_consolidation_print').innerHTML = html;
     $('p_consolidation_print').style.display = 'block';
+  } else {
+    $('p_consolidation_print').style.display = 'none';
   }
 }
 

@@ -742,6 +742,23 @@ test('聯徵veto → veto', () => {
   };
   assert(ARV(i).vetoes.some((v) => v.includes('聯徵')));
 });
+test('DTI > 70% → veto', () => {
+  const i = {
+    income: 80000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 60000,
+    internalMonthly: 0,
+    proposedLoan: 500000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    shares: 200000,
+    internalBalance: 0,
+  };
+  assert(ARV(i).vetoes.some((v) => v.includes('70.0%')));
+});
 test('用途veto → veto', () => {
   const i = {
     income: 80000,
@@ -909,7 +926,7 @@ test('否決→E+DTI=0', () => {
 });
 
 console.log('\n── computeMaxLoan (2) ──');
-test('5萬/50%/5Y/3% → ≈139萬', () => {
+test('5萬/50%/5Y/3% → ≈130萬', () => {
   const i = {
     income: 50000,
     existingDebt: 0,
@@ -917,7 +934,7 @@ test('5萬/50%/5Y/3% → ≈139萬', () => {
     ratePercent: 3,
     years: 5,
   };
-  approx(CML(i, 0.5), 1393545, 3000);
+  approx(CML(i, 0.5), 1304348, 3000);
 });
 test('DTI=0→0', () =>
   assert(

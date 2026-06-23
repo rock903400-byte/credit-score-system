@@ -114,6 +114,13 @@ function validateInputs(input) {
     'years',
     'ratePercent',
     'shares',
+    'appraisalValue',
+    'houseAge',
+    'appraisalAge',
+    'internalMonthly2',
+    'internalBalance2',
+    'internalYears2',
+    'internalRate2',
   ];
   for (const f of numericFields) {
     if (input[f] < 0) errors.push(`「${f}」不可為負值`);
@@ -156,6 +163,16 @@ function validateInputsByField(input) {
     setErr('internal_balance', '本社餘額不可為負值');
   if (input.shares < 0) setErr('shares', '股金不可為負值');
   if (input.ratePercent < 0) setErr('rate', '年利率不可為負值');
+  if (input.appraisalValue < 0) setErr('appraisalValue', '鑑估價值不可為負值');
+  if (input.houseAge < 0) setErr('houseAge', '屋齡不可為負值');
+  if (input.appraisalAge < 0) setErr('appraisalAge', '鑑價屋齡/年分不可為負值');
+  if (input.internalMonthly2 < 0)
+    setErr('internal_monthly_2', '本社月付2不可為負值');
+  if (input.internalBalance2 < 0)
+    setErr('internal_balance_2', '本社餘額2不可為負值');
+  if (input.internalYears2 < 0)
+    setErr('internal_years_2', '本社年限2不可為負值');
+  if (input.internalRate2 < 0) setErr('internal_rate_2', '本社利率2不可為負值');
   if (input.ratePercent > 20) setErr('rate', '年利率 > 20% 異常，請確認');
   if (input.years > 50) setErr('years', '貸款年限過長（> 50 年），請確認');
   if (input.age <= 0) setErr('age', '年齡為必填欄位且須大於 0');
@@ -303,6 +320,13 @@ function applyRegulatoryVetoes(input) {
         input.income
       : Infinity;
 
+  // [FIX] 70% DTI 否決紅線
+  if (postLoanDti > DSR_VETO_THRESHOLD) {
+    vetoes.push(
+      `核貸後總負債比 ${(postLoanDti * 100).toFixed(1)}% 超過法規上限 ${(DSR_VETO_THRESHOLD * 100).toFixed(1)}%，不予核貸`
+    );
+  }
+
   // ① 未成年社員借款總額 ≤ 股金
   if (
     input.age < 18 &&
@@ -385,11 +409,7 @@ function applyRegulatoryVetoes(input) {
     }
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
     const requiredMortgage = input.proposedLoan * MORTGAGE_REGISTRATION_RATIO;
-    if (requiredMortgage > ltvCeiling) {
-      vetoes.push(
-        `抵押權設定金額（放款 × 120% = ${Math.ceil(requiredMortgage).toLocaleString('zh-TW')} 元）超過鑑估價值 LTV 上限（${ltvCeiling.toLocaleString('zh-TW')} 元），請確認鑑估價值或降低放款金額`
-      );
-    }
+
     // ⑩-2 屋齡與年限檢核（辦法第 3 條之 1）
     const houseAge = input.houseAge || 0;
     if (houseAge <= 20 && input.years > MAX_SECURED_YEARS) {
@@ -435,8 +455,7 @@ function computeMaxLoan(input, maxDti) {
   if (maxAvailablePmt <= 0) return 0;
   const r = input.ratePercent / 100 / 12;
   const n = input.years * 12;
-  const factor =
-    r === 0 ? 1 / n : (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  const factor = r === 0 ? 1 / n : 1 / n + r;
   return maxAvailablePmt / factor;
 }
 
@@ -454,8 +473,7 @@ function computeSuggestedAdditionalLoan(
   if (maxAvailablePmt <= 0) return { general: 0, consolidation: 0 };
   const r = input.ratePercent / 100 / 12;
   const n = input.years * 12;
-  const factor =
-    r === 0 ? 1 / n : (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  const factor = r === 0 ? 1 / n : 1 / n + r;
   const generalAmount = maxAvailablePmt / factor;
   const consolidationAmount =
     generalAmount + input.internalBalance + internalBalance2;
@@ -466,9 +484,7 @@ function computeSuggestedAdditionalLoan(
 function computeConsolidationScenario(
   input,
   internalMonthly2 = 0,
-  internalBalance2 = 0,
-  internalYears2 = 0,
-  internalRate2 = 0
+  internalBalance2 = 0
 ) {
   const newLoanMonthlyPmt = pmt(
     input.proposedLoan,
@@ -488,7 +504,10 @@ function computeConsolidationScenario(
     input.years
   );
   const monthlySavings =
-    input.internalMonthly + internalMonthly2 - consolidationMonthly;
+    input.internalMonthly +
+    internalMonthly2 +
+    newLoanMonthlyPmt -
+    consolidationMonthly;
   return {
     currentTotalMonthly: input.internalMonthly + internalMonthly2,
     newLoanMonthlyPmt,

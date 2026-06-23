@@ -301,15 +301,15 @@ test.describe('場景 7-12：法規紅線', () => {
     expect(status).toMatch(/20 年/); // 屋齡 >20 借 25 → 觸及 20 上限
   });
 
-  test('⑫ 抵押權設定 120% 不足：放款接近鑑價上限時', async ({ page }) => {
+  test('⑫ 擔保放款超過 LTV 上限', async ({ page }) => {
     await page.goto('/');
     // 鑑價 1000 萬，其他區 LTV 70% = 700 萬上限
-    // 借 600 萬 → 抵押權須設 720 萬 → 720 > 700 → 否決
+    // 借 750 萬 → 750 > 700 → 否決
     await fillForm(page, {
       income: 80000,
       age: 35,
       existing_debt: 0,
-      loan: 6000000,
+      loan: 7500000,
       years: 20,
       rate: 3,
       shares: 100000,
@@ -324,7 +324,7 @@ test.describe('場景 7-12：法規紅線', () => {
     const status = await page.locator('#resStatus').innerText();
     console.log(`  → 狀態：${status.replace(/\s+/g, ' ').slice(0, 100)}`);
     expect(status).toContain('不予核貸');
-    expect(status).toMatch(/抵押權設定|120%/);
+    expect(status).toMatch(/LTV|超過鑑估價值/);
   });
 });
 
