@@ -298,14 +298,14 @@ function renderGuarantorRows(count) {
     r.className = 'guarantor-row';
     r.innerHTML =
       '<div class="form-group">' +
-      '<label>保證人類型</label>' +
+      '<label>保證人類型 <span style="font-size: 11px; font-weight: normal; color: #666; margin-left: 5px;">(社員全重/非社員 0.7 倍)</span></label>' +
       '<select class="g-type">' +
       '<option value="member" ' +
       (d.type === 'member' ? 'selected' : '') +
-      '>社員保證人</option>' +
+      '>社員保證人 (加權 1.0)</option>' +
       '<option value="non_member" ' +
       (d.type === 'non_member' ? 'selected' : '') +
-      '>非社員保證人</option>' +
+      '>非社員保證人 (加權 0.7)</option>' +
       '</select>' +
       '<span class="error-msg"></span>' +
       '</div>' +
@@ -765,7 +765,17 @@ function renderDashboard(result) {
       $('suggestedLoanText').innerHTML = html;
       $('suggestedLoanBox').style.display = 'block';
     } else {
-      $('suggestedLoanBox').style.display = 'none';
+      if (isVetoed) {
+        $('suggestedLoanText').innerHTML =
+          '<span class="status-warn">⚠️ 案件已被否決，無建議額度</span>';
+        $('suggestedLoanBox').style.display = 'block';
+      } else if (grade === 'E') {
+        $('suggestedLoanText').innerHTML =
+          '<span class="status-warn">⚠️ 評分等級 E 無建議額度，請提升評分後重新試算</span>';
+        $('suggestedLoanBox').style.display = 'block';
+      } else {
+        $('suggestedLoanBox').style.display = 'none';
+      }
     }
   } else {
     $('suggestedLoanBox').style.display = 'none';
@@ -783,7 +793,8 @@ function renderDashboard(result) {
           formatAmount(Math.abs(cs.monthlySavings));
     html += `月省/增：<span class="${cs.monthlySavings >= 0 ? 'status-pass' : 'status-warn'}">${savingsText}</span><br>`;
     html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
-    html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}`;
+    html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}<br>`;
+    html += `<span style="font-size: 11px; color: #666; display: inline-block; margin-top: 5px;">* 註：基準 DSR 評分係以整併前現況月付金計算；本試算僅供整併效益評估參考。</span>`;
     $('consolidationText').innerHTML = html;
     $('consolidationBox').style.display = 'block';
   } else {
@@ -973,7 +984,16 @@ function renderPrintReport(result) {
       $('p_suggested_loan').innerHTML = html;
       $('p_suggested_loan').style.display = 'block';
     } else {
-      $('p_suggested_loan').style.display = 'none';
+      if (isVetoed) {
+        $('p_suggested_loan').innerHTML = '案件已被否決，無建議額度';
+        $('p_suggested_loan').style.display = 'block';
+      } else if (grade === 'E') {
+        $('p_suggested_loan').innerHTML =
+          '評分等級 E 無建議額度，請提升評分後重新試算';
+        $('p_suggested_loan').style.display = 'block';
+      } else {
+        $('p_suggested_loan').style.display = 'none';
+      }
     }
   } else {
     $('p_suggested_loan').style.display = 'none';
@@ -1092,7 +1112,8 @@ function calculateLoan() {
 
     // 衍生變數
     const ageAtMaturity = input.age + input.years;
-    const totalExposure = input.internalBalance + input.proposedLoan;
+    const totalExposure =
+      input.internalBalance + input.internalBalance2 + input.proposedLoan;
     const shareMult =
       input.shares > 0 ? input.proposedLoan / input.shares : null;
 
@@ -1406,6 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     el.addEventListener('input', updateShareHintLive);
     el.addEventListener('change', updateShareHintLive);
+    el.addEventListener('blur', updateShareHintLive);
   });
 
   // 頁面載入時還原草稿（若存在）
@@ -1513,7 +1535,11 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDebtEstimator.addEventListener('click', () => {
       const { principal, rate, years } = getDebtEstimatorParams();
       const monthly = pmt(principal, rate, years);
-      $('existing_debt').value = Math.round(monthly);
+      const field = $('existing_debt');
+      field.value = Math.round(monthly);
+      formatAmountInput(field);
+      field.dispatchEvent(new Event('input'));
+      field.dispatchEvent(new Event('change'));
       saveFormDraft();
       markResultStale();
       closeModal($('debtEstimatorModal'));

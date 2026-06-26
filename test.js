@@ -102,9 +102,13 @@ test('100萬/7年/2.5% 在合理範圍', () => {
 test('n=1 邊界：1000/12%/1月 = 1010（精確首期）', () =>
   assert(PMT(1000, 12, 1 / 12) === 1010, 'got:' + PMT(1000, 12, 1 / 12)));
 
-console.log('\n── formatAmount / escapeHtml (4) ──');
+console.log('\n── formatAmount / escapeHtml (6) ──');
 test('45000 → 4.5 萬元', () => assert(FA(45000) === '4.5 萬元'));
 test('10000000 → 1000 萬元', () => assert(FA(10_000_000) === '1000 萬元'));
+test('99999500 → 1.0 億元 (邊界進位)', () =>
+  assert(FA(99_999_500) === '1.0 億元'));
+test('99999499 → 9999.9 萬元 (邊界不進位)', () =>
+  assert(FA(99_999_499) === '9999.9 萬元'));
 test('0 → 空字串', () => assert(FA(0) === ''));
 test('<script> → escaped', () => assert(EH('<script>') === '&lt;script&gt;'));
 

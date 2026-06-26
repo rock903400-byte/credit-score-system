@@ -528,7 +528,9 @@ test.describe('場景 13-18：實務進階', () => {
 
     // 套用 → 自動填入實際 PMT 精準值（不受顯示截斷影響）
     await page.locator('#applyDebtEstimator').click();
-    const debtVal = parseInt(await page.locator('#existing_debt').inputValue());
+    const debtVal = parseInt(
+      (await page.locator('#existing_debt').inputValue()).replace(/,/g, '')
+    );
     console.log(`  → 套用後 existing_debt = ${debtVal}（實際 PMT ≈ 31250）`);
     expect(debtVal).toBeGreaterThanOrEqual(31000);
     expect(debtVal).toBeLessThanOrEqual(32000);

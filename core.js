@@ -72,6 +72,8 @@ function formatAmount(val) {
   if (val >= 100000000) return (val / 100000000).toFixed(1) + ' 億元';
   if (val >= 10000) {
     const wan = val / 10000;
+    const rounded = parseFloat(wan.toFixed(1));
+    if (rounded >= 10000) return (val / 100000000).toFixed(1) + ' 億元';
     return (wan % 1 === 0 ? wan : wan.toFixed(1)) + ' 萬元';
   }
   return val.toLocaleString('zh-TW') + ' 元';
@@ -403,8 +405,9 @@ function applyRegulatoryVetoes(input) {
     const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
     const ltvCeiling = Math.floor(appraisal * ltv);
     if (input.proposedLoan > ltvCeiling) {
+      const extraHint = appraisal === 0 ? '（請確認是否未填寫鑑估價值）' : '';
       vetoes.push(
-        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × LTV ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元`
+        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × LTV ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元${extraHint}`
       );
     }
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
