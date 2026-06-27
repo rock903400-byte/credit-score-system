@@ -12,6 +12,12 @@
   --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   font-family:
     'Segoe UI', 'Roboto', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
@@ -207,7 +213,8 @@ button:active {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
+  column-gap: 32px;
+  row-gap: 24px;
 }
 
 .form-group {
@@ -224,6 +231,7 @@ label {
 
 input:not([type='checkbox']),
 select {
+  width: 100%;
   padding: 14px 18px;
   border: 2px solid #e0e6ed;
   border-radius: var(--border-radius);
