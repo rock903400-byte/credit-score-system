@@ -100,7 +100,7 @@
                 <label
                   >本社現有貸款每月應繳額 (元)<br />
                   <small style="color: var(--text-muted); font-weight: normal"
-                    >(若無則填 0；同時會納入 DSR 評分)</small
+                    >(若無則填 0；同時會納入 債務比率(DSR)評分)</small
                   >
                 </label>
                 <input
@@ -331,7 +331,7 @@
                 <label
                   >擔保品鑑估價值 (元)<br /><small
                     style="color: var(--text-muted); font-weight: normal"
-                    >(依擔保放款辦法第 10 條，放款上限為鑑估價值 × LTV
+                    >(依擔保放款辦法第 10 條，放款上限為鑑估價值 × 貸款成數(LTV)
                     比率)</small
                   ></label
                 >
@@ -353,14 +353,16 @@
                 <label
                   >都市計畫區分<br /><small
                     style="color: var(--text-muted); font-weight: normal"
-                    >(住宅/商業/文教區 LTV 85%，其他 70%)</small
+                    >(住宅/商業/文教區 貸款成數 85%，其他 70%)</small
                   ></label
                 >
                 <select id="collateralZone">
                   <option value="residential_commercial_educational">
-                    住宅區、商業區、文教區 (LTV 85%)
+                    住宅區、商業區、文教區 (貸款成數 85%)
                   </option>
-                  <option value="other" selected>其他區段 (LTV 70%)</option>
+                  <option value="other" selected>
+                    其他區段 (貸款成數 70%)
+                  </option>
                 </select>
               </div>
               <div class="form-group" id="houseAgeGroup" style="display: none">
@@ -672,7 +674,7 @@
           >
             ⚠️ 共
             <span id="unknownGuarantorCount">0</span>
-            位保證人未揭露既有債務（勾選「債務不詳」）。本評估已將其自保證人 DSR
+            位保證人未揭露既有債務（勾選「債務不詳」）。本評估已將其自保證人債務比率(DSR)
             計算排除；實際核貸建議另覓佐證或要求保證人提供債務證明。
           </div>
 
@@ -764,7 +766,7 @@
             <tr id="p_collateral_detail_row" style="display: none">
               <th>
                 擔保品鑑估資訊<br /><small
-                  >(鑑估價值 / 區分 / LTV / 上限)</small
+                  >(鑑估價值 / 區分 / 貸款成數(LTV)/上限)</small
                 >
               </th>
               <td id="p_collateral_detail"></td>
@@ -875,7 +877,7 @@
               >
                 <div style="font-size: 14px; color: #555">評分可貸額度</div>
                 <div style="font-size: 22px; font-weight: bold; color: #d32f2f">
-                  NT$ <span id="p_limit"></span>
+                  新台幣 <span id="p_limit"></span>
                 </div>
               </td>
             </tr>

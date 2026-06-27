@@ -331,7 +331,7 @@ function renderGuarantorRows(count) {
       '> 債務不詳（未查證）' +
       '</label>' +
       '<small style="color: var(--text-muted); display:block; margin-top:4px;">' +
-      '勾選後該保證人不會納入保證人 DSR 評分，' +
+      '勾選後該保證人不會納入保證人 債務比率(DSR)評分，' +
       '並於報表註記「債務未查證」。' +
       '</small>' +
       '</div>' +
@@ -387,7 +387,7 @@ function updateGuarantorWeightHint() {
   });
   let suffix = '';
   if (unknownCount > 0) {
-    suffix = `（${unknownCount} 位不詳，不納入保證人 DSR）`;
+    suffix = `（${unknownCount} 位不詳，不納入保證人債務比率(DSR)）`;
   }
   el.innerText = `${parts.join(' + ')} → 加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分${suffix}`;
 }
@@ -794,7 +794,7 @@ function renderDashboard(result) {
     html += `月省/增：<span class="${cs.monthlySavings >= 0 ? 'status-pass' : 'status-warn'}">${savingsText}</span><br>`;
     html += `整併後貸款金額：${formatAmount(cs.consolidationLoanAmount)}<br>`;
     html += `整併後總借款餘額：${formatAmount(cs.totalExposure)}<br>`;
-    html += `<span style="font-size: 11px; color: #666; display: inline-block; margin-top: 5px;">* 註：基準 DSR 評分係以整併前現況月付金計算；本試算僅供整併效益評估參考。</span>`;
+    html += `<span style="font-size: 11px; color: #666; display: inline-block; margin-top: 5px;">* 註：基準 債務比率(DSR)評分係以整併前現況月付金計算；本試算僅供整併效益評估參考。</span>`;
     $('consolidationText').innerHTML = html;
     $('consolidationBox').style.display = 'block';
   } else {
@@ -859,7 +859,7 @@ function renderPrintReport(result) {
           ? '住宅/商業/文教區'
           : '其他區段';
       $('p_collateral_detail').innerText =
-        `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / LTV ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
+        `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
         `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
       collateralDetailRow.style.display = '';
     } else {
@@ -904,7 +904,7 @@ function renderPrintReport(result) {
   $('p_collateral').innerText = selText('collateral');
   if (input.guarantors && input.guarantors.length > 0) {
     let html =
-      '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>月收入</th><th>既有債務月付</th><th>DSR</th></tr>';
+      '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>月收入</th><th>既有債務月付</th><th>債務比率(DSR)</th></tr>';
     let unknownCount = 0;
     input.guarantors.forEach((g) => {
       const isUnknown = !!g.unknown;
@@ -935,7 +935,7 @@ function renderPrintReport(result) {
         '<div style="margin-top:6px; padding:6px; background:#fff3e0; border-left:3px solid #ff9800; font-size:12px;">' +
         '註：共 ' +
         unknownCount +
-        ' 位保證人未揭露既有債務，已自保證人 DSR 計算排除；' +
+        ' 位保證人未揭露既有債務，已自保證人債務比率(DSR)計算排除；' +
         '實際核貸時請另覓佐證或要求保證人提供債務證明。' +
         '</div>';
     }

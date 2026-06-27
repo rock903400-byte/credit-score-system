@@ -404,7 +404,7 @@ function applyRegulatoryVetoes(input) {
     vetoes.push(`還款到期年齡 ${ageAtMaturity} 歲超過 ${AGE_HARD_VETO} 歲上限`);
   }
 
-  // ⑩ 擔保放款：貸款金額不得超過鑑估價值 × LTV 上限（辦法第 10、10-1 條）
+  // ⑩ 擔保放款：貸款金額不得超過鑑估價值 × 貸款成數(LTV)上限（辦法第 10、10-1 條）
   if (input.collateral === '10') {
     const appraisal = input.appraisalValue || 0;
     const zone = input.collateralZone || 'other';
@@ -413,7 +413,7 @@ function applyRegulatoryVetoes(input) {
     if (input.proposedLoan > ltvCeiling) {
       const extraHint = appraisal === 0 ? '（請確認是否未填寫鑑估價值）' : '';
       vetoes.push(
-        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × LTV ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元${extraHint}`
+        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × 貸款成數(LTV) ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元${extraHint}`
       );
     }
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
