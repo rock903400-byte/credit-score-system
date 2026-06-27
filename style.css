@@ -379,6 +379,33 @@ button {
   transform: translateY(-2px);
 }
 
+/* 按鈕變體 */
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+  padding: 10px 20px;
+  font-size: 0.95em;
+  flex: initial;
+}
+.btn-primary:hover {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: var(--text-main);
+  border: 1px solid #cbd5e1;
+  padding: 10px 20px;
+  font-size: 0.95em;
+  flex: initial;
+  box-shadow: none;
+}
+.btn-secondary:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
 /* 結果卡片優化 */
 .result-card {
   margin-top: 35px;
@@ -1184,6 +1211,21 @@ button {
     background-color: #3f1d1d;
     color: #f87171;
     border-color: #7f1d1d;
+  }
+  .btn-primary {
+    background: var(--primary-color);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--primary-light);
+  }
+  .btn-secondary {
+    background: #334155;
+    color: var(--text-main);
+    border-color: #475569;
+  }
+  .btn-secondary:hover {
+    background: #475569;
   }
 }
 
