@@ -304,10 +304,10 @@ test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () =>
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +7
+  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
   // guarantorDsrScore: 0 (全部不詳,validDsrs 空)
-  // protectionScore = min(20, 10 + 7 + 0) = 17
-  assert(CS(inp).protectionScore === 17, 'got:' + CS(inp).protectionScore);
+  // rawProtectionScore = 10 + 6 + 0 = 16 → ×0.8 = 12.8 → round → 13
+  assert(CS(inp).protectionScore === 13, 'got:' + CS(inp).protectionScore);
 });
 test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () => {
   // 三位非社員保證人，加權 0.7×3=2.1→round 2 → +6 保障基礎
@@ -345,10 +345,10 @@ test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () 
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +7
+  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
   // DSR: 只看 B, max = 40000/40000 = 1.0 → +1
-  // 保障 = min(20, 10 + 7 + 1) = 18
-  assert(CS(inp).protectionScore === 18, 'got:' + CS(inp).protectionScore);
+  // rawProtectionScore = 10 + 6 + 1 = 17 → ×0.8 = 13.6 → round → 14
+  assert(CS(inp).protectionScore === 14, 'got:' + CS(inp).protectionScore);
 });
 test('年齡罰分 65-70 到期 = -5', () => {
   const inp = {
@@ -978,7 +978,7 @@ test('股金內借款上限=股金（與規則⑤一致）', () => {
 });
 
 console.log('\n── 債權保障封頂 (1) ──');
-test('擔保12+5保人 protection=20、總分≤100', () => {
+test('擔保12+5保人 protection=20 (raw 12+8+5=25→×0.8→20)、總分≤100', () => {
   const inp = {
     income: 80000,
     age: 35,
@@ -1003,6 +1003,7 @@ test('擔保12+5保人 protection=20、總分≤100', () => {
       name: 'g' + n,
       income: 60000,
       debt: 0,
+      type: 'member',
     })),
   };
   const r = CS(inp);

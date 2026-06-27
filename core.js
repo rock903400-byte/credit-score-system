@@ -22,7 +22,7 @@ const LONG_TERM_YEARS = 7;
 const SECURED_YEARS_STANDARD = 20;
 const MAX_SECURED_YEARS = 30;
 const MAX_GUARANTORS = 5;
-const GUARANTOR_SCORE_TABLE = { 0: 0, 1: 4, 2: 6, 3: 7, 4: 8, 5: 9 };
+const GUARANTOR_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 const GUARANTOR_TYPE_WEIGHT = { member: 1.0, non_member: 0.7 };
 const GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS = { A: 0.6, B: 0.5, C: 0.4, D: 0.3 };
@@ -34,6 +34,13 @@ const LTV_RATIOS = {
 };
 const MORTGAGE_REGISTRATION_RATIO = 1.2; // 抵押權設定 ≥ 放款金額 × 120%（第 11 條）
 const COLLATERAL_REAPPRAISAL_YEARS = 10; // 鑑價報告逾 10 年須重鑑（第 12 條）
+
+// 擔保品類型分數對照（依《擔保放款辦法》第 3 條分類）
+// 12 = 足額股金內借款（無 LTV 限制，額度受股金管制，流動性最佳）
+// 10 = 足額不動產抵押（LTV 85%/70%，額度受鑑估×LTV 管制）
+//  5 = 不足額擔保／純信用（股金 2 倍內）
+//  0 = 純信用借款（超過股金 2 倍）
+const COLLATERAL_SCORE = { 12: 12, 10: 10, 5: 5, 0: 0 };
 
 // ============================================================
 // 工具函式
@@ -245,7 +252,7 @@ function computeScore(input) {
     }
   }
 
-  // Protection (20%) — 擔保 12 + 保證人(加權) 9 + 保證人DSR 5 理論值 26，封頂 20 維持 5P 權重
+  // Protection (20%) — 擔保 12 + 保證人(加權) 8 + 保證人DSR 5 = 25 理論值 → ×0.8 正規化到 20 滿分
   let effectiveGuarantorCount = 0;
   if (input.guarantors && input.guarantors.length > 0) {
     input.guarantors.forEach((g) => {
@@ -254,12 +261,11 @@ function computeScore(input) {
     });
   }
   effectiveGuarantorCount = Math.round(effectiveGuarantorCount);
-  const protectionScore = Math.min(
-    20,
-    parseInt(input.collateral) +
-      (GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0) +
-      guarantorDsrScore
-  );
+  const rawProtectionScore =
+    (COLLATERAL_SCORE[input.collateral] || 0) +
+    (GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0) +
+    guarantorDsrScore;
+  const protectionScore = Math.min(20, Math.round(rawProtectionScore * 0.8));
 
   // Purpose (10%)
   const purposeScore =

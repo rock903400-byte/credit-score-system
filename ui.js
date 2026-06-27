@@ -353,7 +353,7 @@ function renderGuarantorRows(count) {
 
 // 加權保證人數即時回饋（與 core.js GUARANTOR_TYPE_WEIGHT + GUARANTOR_SCORE_TABLE 同邏輯）
 const G_WEIGHT = { member: 1.0, non_member: 0.7 };
-const G_SCORE_TABLE = { 0: 0, 1: 4, 2: 6, 3: 7, 4: 8, 5: 9 };
+const G_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 function updateGuarantorWeightHint() {
   const el = $('guarantorWeightHint');
   if (!el) return;
