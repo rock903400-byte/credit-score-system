@@ -9,7 +9,16 @@ const parseAmount = (id) =>
   parseFloat(String($(id).value).replace(/,/g, '')) || 0;
 function formatAmountInput(el) {
   if (!el) return;
-  const cleaned = el.value.replace(/[^\d]/g, '');
+  const originalValue = el.value;
+  const originalPos = el.selectionStart;
+
+  // 計算游標前非數字字元的個數（例如逗號）
+  const beforeCommas = (
+    originalValue.substring(0, originalPos).match(/,/g) || []
+  ).length;
+  const digitsBefore = originalPos - beforeCommas;
+
+  const cleaned = originalValue.replace(/[^\d]/g, '');
   if (!cleaned) {
     el.value = '';
     return;
@@ -17,7 +26,20 @@ function formatAmountInput(el) {
   const num = parseInt(cleaned, 10) || 0;
   const formatted = num.toLocaleString('en-US');
   el.value = formatted;
-  el.setSelectionRange(formatted.length, formatted.length);
+
+  // 計算新游標位置，使其對應相同的數字字元數
+  let newPos = 0;
+  let digitCount = 0;
+  for (let i = 0; i < formatted.length; i++) {
+    if (formatted[i] >= '0' && formatted[i] <= '9') {
+      digitCount++;
+    }
+    newPos++;
+    if (digitCount === digitsBefore) {
+      break;
+    }
+  }
+  el.setSelectionRange(newPos, newPos);
 }
 
 // ============================================================
