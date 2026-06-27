@@ -346,8 +346,9 @@ function renderGuarantorRows(count) {
       '<span class="input-preview g-income-preview"></span>' +
       '<span class="error-msg"></span>' +
       '</div>' +
-      '<div class="form-group">' +
-      '<label>' +
+      '<div class="form-group form-group-checkbox-guarantor">' +
+      '<label class="g-unknown-placeholder" style="margin-bottom: 10px; visibility: hidden; height: 1.55em; display: block;">&nbsp;</label>' +
+      '<label class="g-unknown-label">' +
       '<input type="checkbox" class="g-unknown" ' +
       (d.unknown ? 'checked' : '') +
       '> 債務不詳（未查證）' +
