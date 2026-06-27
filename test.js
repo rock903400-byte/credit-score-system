@@ -306,8 +306,8 @@ test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () =>
   };
   // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
   // guarantorDsrScore: 0 (全部不詳,validDsrs 空)
-  // rawProtectionScore = 10 + 6 + 0 = 16 → ×0.8 = 12.8 → round → 13
-  assert(CS(inp).protectionScore === 13, 'got:' + CS(inp).protectionScore);
+  // rawProtectionScore = 12 + 6 + 0 = 18 → ×0.8 = 14.4 → round → 14
+  assert(CS(inp).protectionScore === 14, 'got:' + CS(inp).protectionScore);
 });
 test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () => {
   // 三位非社員保證人，加權 0.7×3=2.1→round 2 → +6 保障基礎
@@ -347,8 +347,8 @@ test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () 
   };
   // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
   // DSR: 只看 B, max = 40000/40000 = 1.0 → +1
-  // rawProtectionScore = 10 + 6 + 1 = 17 → ×0.8 = 13.6 → round → 14
-  assert(CS(inp).protectionScore === 14, 'got:' + CS(inp).protectionScore);
+  // rawProtectionScore = 12 + 6 + 1 = 19 → ×0.8 = 15.2 → round → 15
+  assert(CS(inp).protectionScore === 15, 'got:' + CS(inp).protectionScore);
 });
 test('年齡罰分 65-70 到期 = -5', () => {
   const inp = {
