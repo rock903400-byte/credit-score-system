@@ -583,7 +583,36 @@ function updateCollateralByYears() {
 // ============================================================
 // UI 渲染
 // ============================================================
+function animateScore(targetScore) {
+  const scoreValEl = $('gaugeScoreVal');
+  if (!scoreValEl) return;
+  if (navigator.webdriver) {
+    scoreValEl.textContent = String(targetScore);
+    return;
+  }
+  const start = 0;
+  const duration = 1200; // 1.2s to match the SVG circle transition
+  const startTime = performance.now();
+
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeProgress = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current = Math.round(start + (targetScore - start) * easeProgress);
+    scoreValEl.textContent = String(current);
+
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    }
+  }
+  requestAnimationFrame(update);
+}
+
 function renderDashboard(result) {
+  $('resultCard').style.display = 'block';
+  $('btnPrint').style.display = 'block';
+  $('resultCard').offsetHeight; // Force layout reflow for transitions
+
   const {
     input,
     scoreDetail,
@@ -600,7 +629,7 @@ function renderDashboard(result) {
 
   // 顯示數字與指針一致 clamp 0–100（總分理論值可能因扣分為負）
   const scoreClamped = Math.max(0, Math.min(100, scoreDetail.total));
-  $('gaugeScoreVal').textContent = scoreClamped;
+  animateScore(scoreClamped);
   // SVG gauge 填色與進度
   const gaugeEl = $('gaugeFill');
   const gaugeCircumference = 2 * Math.PI * 58; // ≈ 364.4

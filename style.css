@@ -827,6 +827,70 @@ button {
   font-size: 0.85em;
   color: var(--text-muted);
 }
+.tip-box-suggested {
+  border: 1px solid var(--primary-color);
+  background: linear-gradient(135deg, #e8eaf6, #c5cae9);
+  color: var(--primary-dark);
+}
+.tip-box-consolidation {
+  border: 1px solid #ff9800;
+  background: linear-gradient(135deg, #fff8e1, #fff3e0);
+  color: #e65100;
+}
+
+/* Tooltip 提示氣泡 */
+.tooltip-icon {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--text-muted);
+  cursor: help;
+  font-style: normal;
+  font-weight: normal;
+  font-size: 0.95em;
+  user-select: none;
+}
+.tooltip-text {
+  visibility: hidden;
+  width: 240px;
+  background-color: #334155;
+  color: #fff;
+  text-align: left;
+  border-radius: 8px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 100;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  font-size: 0.8em;
+  line-height: 1.45;
+  font-weight: normal;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  white-space: normal;
+}
+/* Tooltip 箭頭 */
+.tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #334155 transparent transparent transparent;
+}
+.tooltip-icon:hover .tooltip-text,
+.tooltip-icon:focus .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
 
 /* 列印專屬樣式 */
 .print-area {
@@ -1088,6 +1152,16 @@ button {
   .tip-box {
     background-color: #1e293b;
     border-color: #334155;
+  }
+  .tip-box-suggested {
+    border-color: #3f51b5;
+    background: linear-gradient(135deg, #1e293b, #1a237e);
+    color: #c7d2fe;
+  }
+  .tip-box-consolidation {
+    border-color: #ff9800;
+    background: linear-gradient(135deg, #2a1f10, #3e2723);
+    color: #ffe0b2;
   }
   .stale-banner {
     background-color: #3a2a12;
