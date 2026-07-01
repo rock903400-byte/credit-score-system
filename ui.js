@@ -853,9 +853,510 @@ function renderDashboard(result) {
     $('consolidationBox').style.display = 'none';
   }
 
+  // === 決策說明強化（獨立 try/catch，不影響既有功能）===
+  try {
+    renderRadarChart(scoreDetail, grade);
+  } catch (e) {
+    console.warn('雷達圖跳過', e);
+  }
+
+  try {
+    renderStrengthsWeaknesses(scoreDetail);
+  } catch (e) {
+    console.warn('強弱項跳過', e);
+  }
+
+  try {
+    renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes);
+  } catch (e) {
+    console.warn('改善建議跳過', e);
+  }
+
+  // 顯示 insightCard（至少一個 sub-section 有內容才顯示）
+  const insightCard = document.getElementById('insightCard');
+  if (insightCard) {
+    const hasContent =
+      (
+        (document.getElementById('strengthWeaknessArea') &&
+          document.getElementById('strengthWeaknessArea').innerHTML) ||
+        ''
+      ).trim() ||
+      (
+        (document.getElementById('suggestionArea') &&
+          document.getElementById('suggestionArea').innerHTML) ||
+        ''
+      ).trim();
+    insightCard.style.display = hasContent ? 'block' : 'none';
+  }
+
   $('resultCard').style.display = 'block';
   $('btnPrint').style.display = 'block';
   $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 決策說明強化輔助函式
+function renderRadarChart(scoreDetail, grade) {
+  try {
+    const container = document.getElementById('radarChartContainer');
+    if (!container) return;
+    const svg = document.getElementById('radarSvg');
+    if (!svg) return;
+
+    // Clear svg
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
+    }
+
+    const cx = 120;
+    const cy = 120;
+    const R_MAX = 80;
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const createSvgElement = (tag, attrs = {}) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const [key, val] of Object.entries(attrs)) {
+        el.setAttribute(key, val);
+      }
+      return el;
+    };
+
+    const getCoords = (index, radius) => {
+      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / 5;
+      return {
+        x: cx + radius * Math.cos(angle),
+        y: cy + radius * Math.sin(angle),
+        angle: angle,
+      };
+    };
+
+    const dimensions = [
+      {
+        label: '還款能力',
+        score: scoreDetail.dsrScore + scoreDetail.stability,
+        max: 35,
+      },
+      { label: '借款人信用', score: scoreDetail.peopleScore, max: 25 },
+      { label: '債權保障', score: scoreDetail.protectionScore, max: 20 },
+      { label: '資金用途', score: scoreDetail.purposeScore, max: 10 },
+      { label: '未來展望', score: scoreDetail.perspectiveScore, max: 10 },
+    ];
+
+    // Draw background grid pentagons (25%, 50%, 75%, 100%)
+    const gridLevels = [20, 40, 60, 80];
+    gridLevels.forEach((rLevel) => {
+      const points = Array.from({ length: 5 }, (_, idx) => {
+        const c = getCoords(idx, rLevel);
+        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
+      }).join(' ');
+
+      const isOuter = rLevel === 80;
+      const poly = createSvgElement('polygon', {
+        points: points,
+        fill: 'none',
+        stroke: isOuter ? '#cbd5e1' : '#e2e8f0',
+        'stroke-width': '1',
+        'stroke-dasharray': isOuter ? 'none' : '3,3',
+      });
+      svg.appendChild(poly);
+    });
+
+    // Draw 5 axes lines
+    for (let i = 0; i < 5; i++) {
+      const c = getCoords(i, R_MAX);
+      const line = createSvgElement('line', {
+        x1: cx,
+        y1: cy,
+        x2: c.x.toFixed(1),
+        y2: c.y.toFixed(1),
+        stroke: '#cbd5e1',
+        'stroke-width': '1',
+      });
+      svg.appendChild(line);
+    }
+
+    // Draw labels & scores
+    dimensions.forEach((dim, idx) => {
+      const labelRadius = 96;
+      const coords = getCoords(idx, labelRadius);
+      const angle = coords.angle;
+
+      let anchor = 'middle';
+      let dy1 = '0.35em';
+      const cosVal = Math.cos(angle);
+      const sinVal = Math.sin(angle);
+
+      if (Math.abs(cosVal) < 0.1) {
+        anchor = 'middle';
+        dy1 = sinVal < 0 ? '-0.5em' : '1.1em';
+      } else if (cosVal > 0) {
+        anchor = 'start';
+        dy1 = sinVal < 0 ? '-0.1em' : '0.7em';
+      } else {
+        anchor = 'end';
+        dy1 = sinVal < 0 ? '-0.1em' : '0.7em';
+      }
+
+      const textNode = createSvgElement('text', {
+        x: coords.x.toFixed(1),
+        y: coords.y.toFixed(1),
+        'text-anchor': anchor,
+        'font-size': '10.5',
+        'font-weight': '600',
+        fill: '#334155',
+        style: 'font-family: inherit;',
+      });
+
+      const tspanLabel = createSvgElement('tspan', {
+        x: coords.x.toFixed(1),
+        dy: dy1,
+      });
+      tspanLabel.textContent = dim.label;
+
+      const tspanScore = createSvgElement('tspan', {
+        x: coords.x.toFixed(1),
+        dy: '1.2em',
+        'font-size': '9.5',
+        'font-weight': 'normal',
+        fill: '#64748b',
+      });
+      tspanScore.textContent = `${dim.score}/${dim.max}`;
+
+      textNode.appendChild(tspanLabel);
+      textNode.appendChild(tspanScore);
+      svg.appendChild(textNode);
+    });
+
+    // Draw value polygon
+    const GRADE_COLORS = {
+      A: '#2e7d32',
+      B: '#00695c',
+      C: '#e65100',
+      D: '#bf360c',
+      E: '#c62828',
+    };
+    const color = GRADE_COLORS[grade] || '#2e7d32';
+
+    const valPoints = dimensions
+      .map((dim, idx) => {
+        const pct = Math.min(100, Math.max(0, (dim.score / dim.max) * 100));
+        const rVal = (pct / 100) * R_MAX;
+        const c = getCoords(idx, rVal);
+        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
+      })
+      .join(' ');
+
+    const valPoly = createSvgElement('polygon', {
+      points: valPoints,
+      fill: color + '22', // transparent fill (approx 13% opacity)
+      stroke: color,
+      'stroke-width': '2',
+    });
+    svg.appendChild(valPoly);
+
+    // Draw small circles at value vertices
+    dimensions.forEach((dim, idx) => {
+      const pct = Math.min(100, Math.max(0, (dim.score / dim.max) * 100));
+      const rVal = (pct / 100) * R_MAX;
+      const c = getCoords(idx, rVal);
+      const circle = createSvgElement('circle', {
+        cx: c.x.toFixed(1),
+        cy: c.y.toFixed(1),
+        r: '3.5',
+        fill: color,
+        stroke: '#ffffff',
+        'stroke-width': '1',
+      });
+      svg.appendChild(circle);
+    });
+
+    // Set legend text
+    const legend = document.getElementById('radarLegend');
+    if (legend) {
+      legend.textContent = `5P 面向達成率示意圖（等級 ${grade || '-'}）`;
+    }
+
+    container.style.display = 'block';
+  } catch (e) {
+    console.warn('雷達圖渲染失敗', e);
+  }
+}
+
+function renderStrengthsWeaknesses(scoreDetail) {
+  try {
+    const area = document.getElementById('strengthWeaknessArea');
+    if (!area) return;
+
+    const dimensions = [
+      {
+        key: '還款能力',
+        score: scoreDetail.dsrScore + scoreDetail.stability,
+        max: 35,
+      },
+      { key: '借款人信用', score: scoreDetail.peopleScore, max: 25 },
+      { key: '債權保障', score: scoreDetail.protectionScore, max: 20 },
+      { key: '資金用途', score: scoreDetail.purposeScore, max: 10 },
+      { key: '未來展望', score: scoreDetail.perspectiveScore, max: 10 },
+    ];
+
+    const list = dimensions.map((d) => ({
+      ...d,
+      pct: d.score / d.max,
+    }));
+
+    // Sort to find highest and lowest
+    list.sort((a, b) => b.pct - a.pct);
+
+    const highest = list[0];
+    const lowest = list[list.length - 1];
+
+    let html = '';
+
+    // Strong point
+    html += `
+      <div class="sw-row sw-strength">
+        <span class="sw-badge">↑ 強項</span>
+        <span>${highest.key}：${highest.score}/${highest.max}（${Math.round(highest.pct * 100)}%）</span>
+      </div>
+    `;
+
+    // Weak point
+    html += `
+      <div class="sw-row sw-weakness">
+        <span class="sw-badge">↓ 待加強</span>
+        <span>${lowest.key}：${lowest.score}/${lowest.max}（${Math.round(lowest.pct * 100)}%）</span>
+      </div>
+    `;
+
+    // Age adjustment
+    if (scoreDetail.ageScore !== 0) {
+      const ageVal = parseInt(document.getElementById('age').value) || 0;
+      const yearsVal = parseInt(document.getElementById('years').value) || 0;
+      const ageAtMaturity = ageVal + yearsVal;
+      html += `
+        <div class="sw-row sw-weakness">
+          <span class="sw-badge">↓ 待加強</span>
+          <span>年齡調整：${scoreDetail.ageScore} 分（還款到期 ${ageAtMaturity} 歲）</span>
+        </div>
+      `;
+    }
+
+    area.innerHTML = html;
+  } catch (e) {
+    console.warn('強弱項渲染失敗', e);
+  }
+}
+
+function renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes) {
+  try {
+    const area = document.getElementById('suggestionArea');
+    if (!area) return;
+
+    let list = [];
+
+    if (isVetoed) {
+      const rawVetoes = vetoes || [];
+      rawVetoes.forEach((veto) => {
+        let text = '';
+        if (veto.includes('負債比') || veto.includes('DTI')) {
+          text =
+            '若要過件，須降低申貸金額或增加借款人月收入，以降低核貸後總負債比至 70% 以下';
+        } else if (veto.includes('未成年')) {
+          text = '若要過件，未成年借款額度須調降至股金餘額以內';
+        } else if (
+          veto.includes('信用借款總額') ||
+          veto.includes('信用借款法定上限')
+        ) {
+          text =
+            '若要過件，信用借款額度須調降至股金 + 100 萬以下，或提供足額不動產擔保';
+        } else if (veto.includes('自然人放款')) {
+          text = '若要過件，申請金額須調降至自然人放款上限（1,000 萬元）以內';
+        } else if (veto.includes('不動產抵押為擔保')) {
+          text =
+            '若要過件，年限超過 7 年須提供足額不動產擔保，或將年限縮減至 7 年以下';
+        } else if (
+          veto.includes('最長期限 30 年') ||
+          veto.includes('超過最長期限')
+        ) {
+          text = '若要過件，貸款年限不得超過 30 年，須縮減年限';
+        } else if (
+          veto.includes('足額股金內借款') &&
+          veto.includes('不得超過股金餘額')
+        ) {
+          text =
+            '若要過件，足額股金內借款之申請金額不得超過股金餘額，或將擔保品改為信用或不動產';
+        } else if (veto.includes('聯徵')) {
+          text = '若要過件，須釐清並排除聯徵紀錄之嚴重瑕疵（拒絕往來或強執）';
+        } else if (veto.includes('資金用途')) {
+          text = '若要過件，資金用途須具正當性，避免高風險或投機用途';
+        } else if (veto.includes('到期年齡') && veto.includes('超過 75')) {
+          text = '若要過件，還款到期年齡不得超過 75 歲，須縮短年限或更換借款人';
+        } else if (veto.includes('成數(LTV)')) {
+          text =
+            '若要過件，擔保放款金額不得超過鑑估價值之法定成數上限，須調降申貸金額或提高鑑估值';
+        } else if (veto.includes('屋齡') && veto.includes('年限上限')) {
+          text =
+            '若要過件，屋齡超過 20 年之擔保放款年限上限為 20 年，須縮短貸款年限';
+        } else if (veto.includes('鑑價報告已逾')) {
+          text = '若要過件，擔保品鑑價報告已逾 10 年，須重新辦理鑑價';
+        } else {
+          text = `若要過件，須改善此法規限制：${veto}`;
+        }
+        list.push({ text, gain: null });
+      });
+    } else {
+      if (grade === 'E') {
+        list.push({
+          text: '總分低於 60，最快提升方式為降低負債比或增加保障',
+          gain: null,
+        });
+      }
+
+      const baselineDsr = scoreDetail.dsr;
+      const dsrScore = scoreDetail.dsrScore;
+      const stability = scoreDetail.stability;
+      const guarantorCount = input.guarantorCount;
+      const collateral = input.collateral;
+      const membership = input.membership;
+      const interaction = input.interaction;
+      const perspectiveScore = scoreDetail.perspectiveScore;
+      const ageAtMaturity = input.age + input.years;
+      const incomeStability = input.incomeStability;
+      const purposeScore = scoreDetail.purposeScore;
+
+      let candidates = [];
+
+      // 3. baselineDsr >= 0.5 (dsrScore <= 10)
+      if (baselineDsr >= 0.5) {
+        candidates.push({
+          text: `降低負債比（目前 ${(baselineDsr * 100).toFixed(1)}%），若能降至 50% 以下可 +13 分`,
+          gain: 13,
+        });
+      }
+      // 4. baselineDsr >= 0.4 (dsrScore <= 16)
+      if (baselineDsr >= 0.4) {
+        candidates.push({
+          text: `降低負債比（目前 ${(baselineDsr * 100).toFixed(1)}%），若能降至 40% 以下可 +20 分`,
+          gain: 20,
+        });
+      }
+      // 5. (dsrScore + stability) < 25
+      if (dsrScore + stability < 25) {
+        candidates.push({
+          text: '提升收入穩定性或降低既有債務可提高還款能力',
+          gain: 10,
+        });
+      }
+      // 6. guarantorCount === 0
+      if (guarantorCount === 0) {
+        candidates.push({
+          text: '增加一位保證人可獲得 +3 分保障加分',
+          gain: 3,
+        });
+      }
+      // 7. guarantorCount > 0 && guarantorCount < 5
+      if (guarantorCount > 0 && guarantorCount < 5) {
+        const potentialProtectionGain = Math.max(
+          1,
+          20 - scoreDetail.protectionScore
+        );
+        candidates.push({
+          text: `增加保證人數或改為社員保證人可提高保障分數（最高 +${potentialProtectionGain} 分）`,
+          gain: potentialProtectionGain,
+        });
+      }
+      // 8. collateral === '0'
+      if (collateral === '0') {
+        candidates.push({
+          text: '提供擔保品（不動產抵押或股金內借款）最高可獲 +12 分',
+          gain: 12,
+        });
+      }
+      // 9. collateral === '5'
+      if (collateral === '5') {
+        candidates.push({
+          text: '以股金或足額不動產設定最高可獲 +12 分（目前 +5）',
+          gain: 7,
+        });
+      }
+      // 10. membership < 5
+      if (membership < 5) {
+        candidates.push({
+          text: '長期穩定儲蓄（5 年以上）可提升社員往來評分',
+          gain: 3,
+        });
+      }
+      // 11. interaction < 10
+      if (interaction < 10) {
+        candidates.push({
+          text: '增加與社內互動往來（如經常性儲蓄）可提升信用評分',
+          gain: 5,
+        });
+      }
+      // 12. perspectiveScore < 8
+      if (perspectiveScore < 8) {
+        candidates.push({
+          text: '穩定職業發展與社內參與有助提升未來展望評分',
+          gain: 4,
+        });
+      }
+      // 13. ageAtMaturity > 65
+      if (ageAtMaturity > 65) {
+        const agePenaltyAbs = Math.abs(scoreDetail.ageScore);
+        if (agePenaltyAbs > 0) {
+          candidates.push({
+            text: `縮短貸款年限（目前到期 ${ageAtMaturity} 歲）可避免年齡扣分`,
+            gain: agePenaltyAbs,
+          });
+        }
+      }
+      // 14. incomeStability < 9
+      if (incomeStability < 9) {
+        candidates.push({
+          text: '提升收入穩定性可提高還款能力評分',
+          gain: 5,
+        });
+      }
+      // 15. purposeScore < 8
+      if (purposeScore < 8) {
+        candidates.push({
+          text: '選擇正當資金用途可獲得更高評分',
+          gain: 4,
+        });
+      }
+
+      // Sort candidates by gain descending
+      candidates.sort((a, b) => b.gain - a.gain);
+
+      if (grade === 'E') {
+        const topCandidates = candidates.slice(0, 2);
+        list = list.concat(topCandidates);
+      } else {
+        list = candidates.slice(0, 3);
+      }
+    }
+
+    // Build HTML
+    let html = '';
+    if (list.length > 0) {
+      list.forEach((s) => {
+        html += `
+          <div class="suggestion-item">
+            <span class="suggestion-icon">💡</span>
+            <span class="suggestion-text">${s.text}</span>
+            ${s.gain !== null && s.gain !== undefined ? `<span class="suggestion-gain">+${s.gain} 分*</span>` : ''}
+          </div>
+        `;
+      });
+      const hasGain = list.some((s) => s.gain !== null && s.gain !== undefined);
+      if (hasGain) {
+        html += `<div class="suggestion-disclaimer">* 實際加分依整體狀況而定</div>`;
+      }
+    }
+
+    area.innerHTML = html;
+  } catch (e) {
+    console.warn('改善建議渲染失敗', e);
+  }
 }
 
 function renderPrintReport(result) {

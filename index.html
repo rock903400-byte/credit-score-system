@@ -628,6 +628,37 @@
             </div>
           </div>
 
+          <!-- 雷達圖（初始隱藏，renderRadarChart 成功才顯示） -->
+          <div
+            id="radarChartContainer"
+            class="radar-chart-container no-print"
+            style="display: none"
+          >
+            <svg
+              id="radarSvg"
+              width="240"
+              height="240"
+              viewBox="0 0 240 240"
+              aria-label="5P 面向雷達圖"
+              role="img"
+            ></svg>
+            <div class="radar-legend" id="radarLegend"></div>
+          </div>
+
+          <!-- 決策分析卡（初始隱藏） -->
+          <div
+            id="insightCard"
+            class="card insight-card no-print"
+            style="display: none"
+          >
+            <div class="insight-header">
+              📋 強弱項與改善建議
+              <span class="insight-subtitle">供授信參考，非評分依據</span>
+            </div>
+            <div id="strengthWeaknessArea" class="insight-section"></div>
+            <div id="suggestionArea" class="insight-section"></div>
+          </div>
+
           <div class="gauge-container">
             <div class="gauge-heading">每月還款總負擔（占月收入比例）</div>
             <div class="gauge-sub">

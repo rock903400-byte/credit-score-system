@@ -1441,3 +1441,162 @@ button {
 #debtEstimatedMonthly {
   font-weight: 800;
 }
+
+/* 雷達圖容器 */
+.radar-chart-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.radar-legend {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 決策分析卡 */
+.insight-card {
+  margin-top: 20px;
+  padding: 20px;
+}
+.insight-header {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.insight-subtitle {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.insight-section {
+  margin-bottom: 16px;
+}
+.insight-section:last-child {
+  margin-bottom: 0;
+}
+
+/* 強弱項 */
+.sw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 0.95em;
+}
+.sw-strength {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.sw-weakness {
+  background: #fff3e0;
+  color: #e65100;
+}
+.sw-badge {
+  font-weight: 700;
+  font-size: 0.85em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-width: 64px;
+  text-align: center;
+}
+.sw-strength .sw-badge {
+  background: #c8e6c9;
+}
+.sw-weakness .sw-badge {
+  background: #ffe0b2;
+}
+
+/* 建議條 */
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 0.93em;
+  line-height: 1.5;
+}
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+.suggestion-icon {
+  flex-shrink: 0;
+  font-size: 1em;
+}
+.suggestion-text {
+  flex: 1;
+  color: var(--text-main);
+}
+.suggestion-gain {
+  flex-shrink: 0;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #d35400;
+  background: #fff3e0;
+  padding: 1px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.suggestion-disclaimer {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* 深色模式 */
+@media (prefers-color-scheme: dark) {
+  .sw-strength {
+    background: #14331f;
+    color: #81c784;
+  }
+  .sw-weakness {
+    background: #3a2a12;
+    color: #ffb74d;
+  }
+  .sw-strength .sw-badge {
+    background: #1b5e20;
+  }
+  .sw-weakness .sw-badge {
+    background: #92600a;
+  }
+  .suggestion-item {
+    border-color: #334155;
+  }
+  .suggestion-gain {
+    background: #3a2a12;
+    color: #ffb74d;
+  }
+}
+
+/* 列印隱藏 */
+@media print {
+  .radar-chart-container,
+  .insight-card {
+    display: none !important;
+  }
+}
+
+/* 響應式 */
+@media (max-width: 768px) {
+  .radar-chart-container {
+    flex-direction: column;
+  }
+  .sw-row {
+    font-size: 0.88em;
+    padding: 6px 10px;
+  }
+  .suggestion-item {
+    font-size: 0.88em;
+  }
+}
