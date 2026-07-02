@@ -6,3 +6,6 @@ Rule-*.docx
 node_modules/
 # 雜湊命名的 session DB（疑似其他專案殘留）
 _db_*.py
+
+# Safety additions (2026-07-02)
+_db_*.py
