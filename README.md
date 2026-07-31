@@ -7,7 +7,6 @@
 - **計算核心引擎**：基於 `core.js` 的 20KB 輕量信用評分與條件規則判定核心。
 - **前端互動 UI**：基於 `ui.js` 的 75KB 用戶表單與分數計算動態呈現。
 - **大數據模擬測試**：提供 1,000 / 10,000 筆授信案件試算的壓力測試指令碼。
-- **法規文字檢索**：內建 438KB `regulation_text.txt` 授信法規條文與推論說明。
 
 ## 技術棧
 
@@ -38,7 +37,6 @@ node simulation.js
 ├── ui.js               # 前端 UI 動態互動邏輯
 ├── rationale.html      # 評分推論與規則說明頁面
 ├── simulation.js       # 授信案件模擬計算腳本
-└── regulation_text.txt # 授信法規文字庫
 ```
 
 ## License
