@@ -17,13 +17,17 @@
 ## 快速開始
 
 ### 1. 前端頁面預覽
+
 本專案為靜態網頁應用，可使用本機伺服器啟動：
+
 ```bash
 node serve.js
 ```
+
 並在瀏覽器中開啟 `http://localhost:3000`。
 
 ### 2. 執行信用評分模擬
+
 ```bash
 node simulation.js
 ```
