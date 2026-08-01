@@ -25,6 +25,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install
+      - name: Format check
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run type-check
       - name: Run unit tests
         run: node test.js
       - name: Setup Pages

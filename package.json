@@ -10,6 +10,7 @@
     "serve": "node serve.js",
     "lint": "eslint . --ext .js",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "simulate:1k": "node simulate_1000.js",
     "simulate:10k": "node simulate_10000.js"
