@@ -9,5 +9,6 @@
     "lib": ["es2020", "dom"],
     "skipLibCheck": true
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.js", "**/*.ts"],
+  "exclude": ["e2e", "test-results", "node_modules"]
 }
