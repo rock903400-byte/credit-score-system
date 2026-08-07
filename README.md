@@ -1,6 +1,12 @@
 # credit-score-system
 
+[![Deploy](https://github.com/rock903400-byte/credit-score-system/actions/workflows/deploy.yml/badge.svg)](https://github.com/rock903400-byte/credit-score-system/actions/workflows/deploy.yml)
+[![E2E](https://github.com/rock903400-byte/credit-score-system/actions/workflows/e2e.yml/badge.svg)](https://github.com/rock903400-byte/credit-score-system/actions/workflows/e2e.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 > 信用評分系統 — 信用評分模擬與規則推論平台
+
+**線上 Demo**: https://rock903400-byte.github.io/credit-score-system/
 
 ## 功能特色
 
