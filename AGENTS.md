@@ -43,6 +43,7 @@
 - **`<details id="resultDetails">` is collapsed by default**, so anything inside it (5P breakdown, DTI ruler, gauge) is _not_ visible to Playwright's `innerText()`. Use `openResultDetails(page)` in `e2e/scenarios.spec.js` before reading `#bd_*` values.
 - **整併模式 (consolidation) 是動態 N 筆列表** `#internalExtList`（每行 `.ext-monthly/.ext-balance/.ext-years/.ext-rate` + 刪除鈕；`#btnAddExtLoan` 加筆）。Core 只吃 `input.additionalLoans = [{monthly,balance,years,rate}]` 陣列；所有額外筆的**月付都會計入** baseline DSR、70% 否決線、`computeMaxLoan` 與建議額度。舊草稿的 `internal_monthly2` 等固定鍵在 `loadFormDraft` 做一次性遷移。
 - **擔保品性質** `#collateralKind`（建物/土地）：`collateral='10'` 時顯示；土地隱藏並清空 `#houseAge`，法規⑩-2 只對建物做屋齡檢核，土地一律一般上限 `SECURED_YEARS_STANDARD`(20) 年（新增第 15 條否決，`test.js` 的規則計數測試為 15）。
+- **⑩-2 自用/非自用規則**：屋齡 ≤20 且 `isSelfOccupied=true` 放寬上限 `MAX_SECURED_YEARS`(30)；否則（屋齡>20 或非自用/未填 `isSelfOccupied`）一律 20 年。UI 有 `#selfOccupied` 勾選欄（僅建物且屋齡 ≤20 顯示），草稿以 `_selfOccupied` 布林保存。**規則計數維持 16**——非自用併入「20 年」分支，不新增 push。
 - **抵押權設定金額** `#mortgageAmount`：`collateral='10'` 時顯示（連動於 `collateralAppraisalGroup` 顯示狀態）。法規⑩-1 要求設定金額 ≥ 放款 × 120%（第 16 條否決；`test.js` 規則計數為 16）。未填視同 0 → 否決，因此**所有 `collateral='10'` 的測試與產生器（test.js `coherent`、simulate\_\*.js）都必須補 `mortgageAmount = max(loan×1.2, 100000)`**，否則判定會忽然被 120% 打回。
 - **「未確認」pill 是可點擊按鈕**（`.untouched-pill`）：維持預設值的使用者點一下即 `markSelectTouched` + `saveFormDraft`，不必改值再改回。E2E：`actionbar.spec.js`「維持預設值：點「未確認」pill 即標記已確認」。
 - `TRIAGE_MAP` (A/B/C 三級分流) is **display only** — it never touches the limit calculation. Keep it in `ui.js`, out of `core.js`.
