@@ -126,10 +126,6 @@ function validateInputs(input) {
     'appraisalValue',
     'houseAge',
     'appraisalAge',
-    'internalMonthly2',
-    'internalBalance2',
-    'internalYears2',
-    'internalRate2',
   ];
   for (const f of numericFields) {
     if (input[f] < 0) errors.push(`「${f}」不可為負值`);
@@ -140,6 +136,14 @@ function validateInputs(input) {
   if (input.age <= 0) errors.push('年齡為必填欄位且須大於 0');
   else if (input.age < 18)
     errors.push('年齡未滿 18 歲，須取得法定代理人書面同意後送件');
+  // Validate each additional loan (整併模式多筆)
+  if (input.additionalLoans && input.additionalLoans.length > 0) {
+    input.additionalLoans.forEach((l, i) => {
+      if (l.monthly < 0 || l.balance < 0 || l.years < 0 || l.rate < 0) {
+        errors.push(`第 ${i + 1} 筆既有貸款數值不可為負值`);
+      }
+    });
+  }
   // Validate each guarantor
   if (input.guarantors && input.guarantors.length > 0) {
     input.guarantors.forEach((g, i) => {
@@ -175,18 +179,24 @@ function validateInputsByField(input) {
   if (input.appraisalValue < 0) setErr('appraisalValue', '鑑估價值不可為負值');
   if (input.houseAge < 0) setErr('houseAge', '屋齡不可為負值');
   if (input.appraisalAge < 0) setErr('appraisalAge', '鑑價屋齡/年分不可為負值');
-  if (input.internalMonthly2 < 0)
-    setErr('internal_monthly_2', '本社月付2不可為負值');
-  if (input.internalBalance2 < 0)
-    setErr('internal_balance_2', '本社餘額2不可為負值');
-  if (input.internalYears2 < 0)
-    setErr('internal_years_2', '本社年限2不可為負值');
-  if (input.internalRate2 < 0) setErr('internal_rate_2', '本社利率2不可為負值');
   if (input.ratePercent > 20) setErr('rate', '年利率 > 20% 異常，請確認');
   if (input.years > 50) setErr('years', '貸款年限過長（> 50 年），請確認');
   if (input.age <= 0) setErr('age', '年齡為必填欄位且須大於 0');
   else if (input.age < 18)
     setErr('age', '年齡未滿 18 歲須取得法定代理人書面同意');
+
+  if (input.additionalLoans && input.additionalLoans.length > 0) {
+    input.additionalLoans.forEach((l, i) => {
+      if (l.monthly < 0)
+        setErr(`internal_ext_${i}_monthly`, '既有貸款月付不可為負值');
+      if (l.balance < 0)
+        setErr(`internal_ext_${i}_balance`, '既有貸款餘額不可為負值');
+      if (l.years < 0)
+        setErr(`internal_ext_${i}_years`, '既有貸款年限不可為負值');
+      if (l.rate < 0)
+        setErr(`internal_ext_${i}_rate`, '既有貸款利率不可為負值');
+    });
+  }
 
   if (input.guarantors && input.guarantors.length > 0) {
     input.guarantors.forEach((g, i) => {
@@ -219,9 +229,13 @@ function computeScore(input) {
       perspectiveScore: 0,
     };
   }
-  // [FIX 1.6] DSR 含社外 + 本社月付
+  // [FIX 1.6] DSR 含社外 + 本社月付（含整併模式下的所有額外既有貸款）
+  const extMonthly = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.monthly || 0),
+    0
+  );
   const baselineDsr =
-    (input.existingDebt + input.internalMonthly) / input.income;
+    (input.existingDebt + input.internalMonthly + extMonthly) / input.income;
   let dsrScore = 0;
   for (const [limit, score] of DSR_SCORE_TIERS) {
     if (baselineDsr < limit) {
@@ -321,10 +335,17 @@ function applyRegulatoryVetoes(input) {
     input.ratePercent,
     input.years
   );
-  // [FIX 1.5] 否決線比對「核貸後總負債比」
+  // [FIX 1.5] 否決線比對「核貸後總負債比」（整併模式含所有額外既有貸款月付）
+  const extMonthlyVeto = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.monthly || 0),
+    0
+  );
   const postLoanDti =
     input.income > 0
-      ? (input.existingDebt + input.internalMonthly + newLoanMonthlyPmt) /
+      ? (input.existingDebt +
+          input.internalMonthly +
+          extMonthlyVeto +
+          newLoanMonthlyPmt) /
         input.income
       : Infinity;
 
@@ -419,9 +440,16 @@ function applyRegulatoryVetoes(input) {
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
     const requiredMortgage = input.proposedLoan * MORTGAGE_REGISTRATION_RATIO;
 
-    // ⑩-2 屋齡與年限檢核（辦法第 3 條之 1）
+    // ⑩-2 屋齡與年限檢核（辦法第 3 條之 1）；土地無建物 → 一律一般上限 20 年
+    const collateralKind = input.collateralKind || 'building';
     const houseAge = input.houseAge || 0;
-    if (houseAge <= 20 && input.years > MAX_SECURED_YEARS) {
+    if (collateralKind === 'land') {
+      if (input.years > SECURED_YEARS_STANDARD) {
+        vetoes.push(
+          `土地擔保品貸款年限上限 ${SECURED_YEARS_STANDARD} 年，目前 ${input.years} 年超過上限`
+        );
+      }
+    } else if (houseAge <= 20 && input.years > MAX_SECURED_YEARS) {
       vetoes.push(
         `屋齡 ${houseAge} 年 ≤ 20 年之自用住宅，貸款年限上限 ${MAX_SECURED_YEARS} 年，目前 ${input.years} 年超過上限`
       );
@@ -459,8 +487,15 @@ function determineGrade(score, isVetoed) {
 
 function computeMaxLoan(input, maxDti) {
   if (maxDti <= 0) return 0;
+  const extMonthly = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.monthly || 0),
+    0
+  );
   const maxAvailablePmt =
-    input.income * maxDti - input.existingDebt - input.internalMonthly;
+    input.income * maxDti -
+    input.existingDebt -
+    input.internalMonthly -
+    extMonthly;
   if (maxAvailablePmt <= 0) return 0;
   const r = input.ratePercent / 100 / 12;
   const n = input.years * 12;
@@ -469,15 +504,14 @@ function computeMaxLoan(input, maxDti) {
 }
 
 // 計算建議增貸額度（一般增貸 + 整併增貸）
-function computeSuggestedAdditionalLoan(
-  input,
-  maxDti,
-  internalMonthly2 = 0,
-  internalBalance2 = 0
-) {
+// 整併模式下所有額外既有貸款（additionalLoans）皆計入既有月付與既有餘額
+function computeSuggestedAdditionalLoan(input, maxDti) {
   if (maxDti <= 0) return { general: 0, consolidation: 0 };
+  const ext = input.additionalLoans || [];
+  const extMonthly = ext.reduce((sum, l) => sum + (l.monthly || 0), 0);
+  const extBalance = ext.reduce((sum, l) => sum + (l.balance || 0), 0);
   const totalExistingMonthly =
-    input.existingDebt + input.internalMonthly + internalMonthly2;
+    input.existingDebt + input.internalMonthly + extMonthly;
   const maxAvailablePmt = input.income * maxDti - totalExistingMonthly;
   if (maxAvailablePmt <= 0) return { general: 0, consolidation: 0 };
   const r = input.ratePercent / 100 / 12;
@@ -485,28 +519,24 @@ function computeSuggestedAdditionalLoan(
   const factor = r === 0 ? 1 / n : 1 / n + r;
   const generalAmount = maxAvailablePmt / factor;
   const consolidationAmount =
-    generalAmount + input.internalBalance + internalBalance2;
+    generalAmount + input.internalBalance + extBalance;
   return { general: generalAmount, consolidation: consolidationAmount };
 }
 
-// 整併貸款試算：將既有貸款併入新貸款
-function computeConsolidationScenario(
-  input,
-  internalMonthly2 = 0,
-  internalBalance2 = 0
-) {
+// 整併貸款試算：將既有貸款（含所有額外筆）併入新貸款
+function computeConsolidationScenario(input) {
+  const ext = input.additionalLoans || [];
+  const extMonthly = ext.reduce((sum, l) => sum + (l.monthly || 0), 0);
+  const extBalance = ext.reduce((sum, l) => sum + (l.balance || 0), 0);
   const newLoanMonthlyPmt = pmt(
     input.proposedLoan,
     input.ratePercent,
     input.years
   );
   const totalMonthly =
-    input.existingDebt +
-    input.internalMonthly +
-    internalMonthly2 +
-    newLoanMonthlyPmt;
+    input.existingDebt + input.internalMonthly + extMonthly + newLoanMonthlyPmt;
   const consolidationLoanAmount =
-    input.proposedLoan + input.internalBalance + internalBalance2;
+    input.proposedLoan + input.internalBalance + extBalance;
   const consolidationMonthly = pmt(
     consolidationLoanAmount,
     input.ratePercent,
@@ -514,19 +544,18 @@ function computeConsolidationScenario(
   );
   const monthlySavings =
     input.internalMonthly +
-    internalMonthly2 +
+    extMonthly +
     newLoanMonthlyPmt -
     consolidationMonthly;
   return {
-    currentTotalMonthly: input.internalMonthly + internalMonthly2,
+    currentTotalMonthly: input.internalMonthly + extMonthly,
     newLoanMonthlyPmt,
     totalMonthlyAfterNew:
-      input.internalMonthly + internalMonthly2 + newLoanMonthlyPmt,
+      input.internalMonthly + extMonthly + newLoanMonthlyPmt,
     consolidationLoanAmount,
     consolidationMonthly,
     monthlySavings,
-    totalExposure:
-      input.internalBalance + internalBalance2 + input.proposedLoan,
+    totalExposure: input.internalBalance + extBalance + input.proposedLoan,
   };
 }
 

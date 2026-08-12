@@ -22,7 +22,7 @@ async function fillForm(page, data) {
   }
 }
 
-// 5P 明細（雷達圖、長條、DTI 尺規）預設收在 <details> 裡，
+// 5P 明細（長條、DTI 尺規）預設收在 <details> 裡，
 // 讀取其中的值前先展開。
 async function openResultDetails(page) {
   await page.locator('#resultDetails').evaluate((el) => {
@@ -311,6 +311,33 @@ test.describe('場景 7-12：法規紅線', () => {
     expect(status).toMatch(/20 年/); // 屋齡 >20 借 25 → 觸及 20 上限
   });
 
+  test('⑫-2 土地擔保品：屋齡欄隱藏、年限超 20 否決', async ({ page }) => {
+    await page.goto('/');
+    await fillForm(page, {
+      income: 80000,
+      age: 35,
+      existing_debt: 0,
+      loan: 1000000,
+      years: 25,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#collateralKind').selectOption('land');
+    await page.locator('#appraisalValue').fill('15000000');
+    await page.locator('#appraisalAge').fill('2');
+    // 土地：屋齡欄隱藏，不可填
+    await expect(page.locator('#houseAgeGroup')).toBeHidden();
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    console.log(`  → 狀態：${status.replace(/\s+/g, ' ').slice(0, 80)}`);
+    expect(status).toContain('不予核貸');
+    // 土地一律一般上限 20 年，25 年直接否決
+    expect(status).toMatch(/土地擔保品/);
+    expect(status).toMatch(/20 年/);
+  });
+
   test('⑫ 擔保放款超過 LTV 上限', async ({ page }) => {
     await page.goto('/');
     // 鑑價 1000 萬，其他區 LTV 70% = 700 萬上限
@@ -404,7 +431,7 @@ test.describe('場景 13-18：實務進階', () => {
     );
   });
 
-  test('⑭ 整併貸款：兩筆既有整合 + 月省金額', async ({ page }) => {
+  test('⑭ 整併貸款：三筆既有整合 + 月省金額', async ({ page }) => {
     await page.goto('/');
     await fillForm(page, {
       income: 60000,
@@ -418,10 +445,21 @@ test.describe('場景 13-18：實務進階', () => {
     await page.locator('#consolidationMode').check();
     await page.locator('#internal_monthly').fill('5000');
     await page.locator('#internal_balance').fill('200000');
-    await page.locator('#internal_monthly2').fill('3000');
-    await page.locator('#internal_balance2').fill('100000');
-    await page.locator('#internal_years2').fill('3');
-    await page.locator('#internal_rate2').fill('4');
+    // 第一筆額外（動態列）
+    await page.locator('.ext-row').nth(0).locator('.ext-monthly').fill('3000');
+    await page
+      .locator('.ext-row')
+      .nth(0)
+      .locator('.ext-balance')
+      .fill('100000');
+    await page.locator('.ext-row').nth(0).locator('.ext-years').fill('3');
+    await page.locator('.ext-row').nth(0).locator('.ext-rate').fill('4');
+    // 再新增兩筆 → 共三筆額外既有貸款
+    await page.locator('#btnAddExtLoan').click();
+    await page.locator('.ext-row').nth(1).locator('.ext-monthly').fill('2000');
+    await page.locator('#btnAddExtLoan').click();
+    await page.locator('.ext-row').nth(2).locator('.ext-monthly').fill('1000');
+    await page.locator('.ext-row').nth(2).locator('.ext-balance').fill('50000');
     await page.locator('#btnCalc').click();
 
     const consBox = page.locator('#consolidationBox');
@@ -430,6 +468,39 @@ test.describe('場景 13-18：實務進階', () => {
     console.log(`  → 整併盒內容：${text.replace(/\n/g, ' | ').slice(0, 80)}`);
     expect(text).toContain('現狀月付');
     expect(text).toContain('整併後月付');
+    // 未整併的既有月付 = 5000 + 3000 + 2000 + 1000 = 11000 → 1.1 萬元
+    expect(text).toContain('1.1 萬元');
+  });
+
+  test('⑭-2 整併模式筆數變更後仍可刪除、計算結果同步', async ({ page }) => {
+    await page.goto('/');
+    await fillForm(page, {
+      income: 60000,
+      age: 35,
+      existing_debt: 0,
+      loan: 800000,
+      years: 7,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#consolidationMode').check();
+    await page.locator('.ext-row').nth(0).locator('.ext-monthly').fill('3000');
+    await page.locator('#btnAddExtLoan').click();
+    await page.locator('.ext-row').nth(1).locator('.ext-monthly').fill('2000');
+    // 刪掉第一筆 → 只剩 2000
+    await page.locator('.ext-row').nth(0).locator('.ext-remove').click();
+    await expect(page.locator('.ext-row')).toHaveCount(1);
+    await expect(
+      page.locator('.ext-row').nth(0).locator('.ext-monthly')
+    ).toHaveValue('2,000');
+    await page.locator('#btnCalc').click();
+    const text = await page.locator('#consolidationBox').innerText();
+    expect(text).toContain('2,000');
+    // 總借款金額不得因殘留的 internalBalance2 舊欄位算成 NaN
+    await openResultDetails(page);
+    const exposure = await page.locator('#resTotalExposure').innerText();
+    expect(exposure).not.toMatch(/NaN/);
+    expect(exposure).toMatch(/[\d,]/);
   });
 
   test('⑮ 建議增貸額度：股金 2 倍內 (collateral=5) 顯示', async ({ page }) => {
@@ -519,33 +590,10 @@ test.describe('場景 13-18：實務進階', () => {
     expect(text).toContain('矛盾');
   });
 
-  test('⑱ 估算小幫手：房貸 500 萬/2.5%/20 年 → 月付約 3.1 萬', async ({
-    page,
-  }) => {
+  test('⑱ 估算小幫手已移除：表單不再有估算按鈕', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#btnDebtEstimator').click();
-    await page.locator('#debtPrincipal').fill('5000000');
-    await page.locator('#debtRate').fill('2.5');
-    await page.locator('#debtYears').fill('20');
-    await page.locator('#debtEstimatedMonthly').waitFor();
-    const monthlyTxt = await page.locator('#debtEstimatedMonthly').innerText();
-    console.log(`  → 估算月付：${monthlyTxt}`);
-    // 「3.1 萬元」→ 31,250 元；parse 含單位的數字（顯示精度 1 位）
-    // PMT(5000000, 2.5, 20) ≈ 31250（首期本金 20833 + 首期利息 10417），
-    // 顯示為 3.1 萬元（截斷）
-    const m = monthlyTxt.match(/([\d.]+)\s*萬/);
-    let num = m ? parseFloat(m[1]) * 10000 : 0;
-    expect(num).toBeGreaterThanOrEqual(31000);
-    expect(num).toBeLessThanOrEqual(32000);
-
-    // 套用 → 自動填入實際 PMT 精準值（不受顯示截斷影響）
-    await page.locator('#applyDebtEstimator').click();
-    const debtVal = parseInt(
-      (await page.locator('#existing_debt').inputValue()).replace(/,/g, '')
-    );
-    console.log(`  → 套用後 existing_debt = ${debtVal}（實際 PMT ≈ 31250）`);
-    expect(debtVal).toBeGreaterThanOrEqual(31000);
-    expect(debtVal).toBeLessThanOrEqual(32000);
+    await expect(page.locator('#btnDebtEstimator')).toHaveCount(0);
+    await expect(page.locator('#debtEstimatorModal')).toHaveCount(0);
   });
 
   test('⑲ B1：股金矛盾提示在輸入時即時顯示，不必按計算', async ({ page }) => {

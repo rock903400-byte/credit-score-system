@@ -99,25 +99,14 @@
                     >(銀行房貸、車貸、信貸、信用卡分期等)</small
                   >
                 </label>
-                <div style="display: flex; gap: 8px; align-items: flex-end">
-                  <input
-                    type="text"
-                    inputmode="numeric"
-                    id="existing_debt"
-                    class="highlight-input"
-                    placeholder="0"
-                    min="0"
-                    style="flex: 1"
-                  />
-                  <button
-                    type="button"
-                    id="btnDebtEstimator"
-                    class="btn-debt-estimator"
-                    title="估算社外債務"
-                  >
-                    🔍 估算
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="existing_debt"
+                  class="highlight-input"
+                  placeholder="0"
+                  min="0"
+                />
                 <span class="input-preview" id="preview_existing_debt"></span>
                 <span class="error-msg"></span>
               </div>
@@ -168,69 +157,27 @@
                   啟用整併模式（有第二筆既有貸款）
                 </label>
               </div>
-              <div class="form-group" id="internal2Group" style="display: none">
-                <label>第二筆既有貸款每月應繳額 (元)</label>
-                <input
-                  type="text"
-                  inputmode="numeric"
-                  id="internal_monthly2"
-                  placeholder="0"
-                  min="0"
-                />
-                <span
-                  class="input-preview"
-                  id="preview_internal_monthly2"
-                ></span>
-                <span class="error-msg"></span>
-              </div>
               <div
                 class="form-group"
-                id="internalBalance2Group"
+                id="internalExtGroup"
                 style="display: none"
               >
-                <label>第二筆既有貸款餘額 (元)</label>
-                <input
-                  type="text"
-                  inputmode="numeric"
-                  id="internal_balance2"
-                  placeholder="0"
-                  min="0"
-                />
-                <span
-                  class="input-preview"
-                  id="preview_internal_balance2"
-                ></span>
-                <span class="error-msg"></span>
-              </div>
-              <div
-                class="form-group"
-                id="internalYears2Group"
-                style="display: none"
-              >
-                <label>第二筆既有貸款剩餘年限 (年)</label>
-                <input
-                  type="number"
-                  id="internal_years2"
-                  placeholder="例如：3"
-                  min="0"
-                  step="0.5"
-                />
-                <span class="error-msg"></span>
-              </div>
-              <div
-                class="form-group"
-                id="internalRate2Group"
-                style="display: none"
-              >
-                <label>第二筆既有貸款利率 (%)</label>
-                <input
-                  type="number"
-                  id="internal_rate2"
-                  placeholder="例如：3"
-                  step="0.01"
-                  min="0"
-                />
-                <span class="error-msg"></span>
+                <label>
+                  既有貸款列表（整併用）
+                  <small
+                    style="
+                      display: block;
+                      color: var(--text-muted);
+                      font-weight: normal;
+                    "
+                    >第二筆（含）以後的既有貸款，可逐筆新增；月付會計入
+                    債務比率(DSR)評分與否決線</small
+                  >
+                </label>
+                <div id="internalExtList"></div>
+                <button type="button" id="btnAddExtLoan" class="btn-ext-add">
+                  ＋ 新增一筆
+                </button>
               </div>
               <div class="form-group">
                 <label>收入穩定性</label>
@@ -392,6 +339,27 @@
                   <option value="other" selected>
                     其他區段 (貸款成數 70%)
                   </option>
+                </select>
+              </div>
+              <div
+                class="form-group"
+                id="collateralKindGroup"
+                style="display: none"
+              >
+                <label>
+                  擔保品性質
+                  <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
+                    >ⓘ<span class="tooltip-text"
+                      >土地（無建物）無屋齡限制，貸款年限上限為 20
+                      年；建物依屋齡適用 20~30 年上限</span
+                    ></span
+                  >
+                </label>
+                <select id="collateralKind">
+                  <option value="building" selected>
+                    建物（適用屋齡檢核）
+                  </option>
+                  <option value="land">土地（無屋齡）</option>
                 </select>
               </div>
               <div class="form-group" id="houseAgeGroup" style="display: none">
@@ -700,23 +668,6 @@
               </div>
             </div>
 
-            <!-- 雷達圖（初始隱藏，renderRadarChart 成功才顯示） -->
-            <div
-              id="radarChartContainer"
-              class="radar-chart-container no-print"
-              style="display: none"
-            >
-              <svg
-                id="radarSvg"
-                width="240"
-                height="240"
-                viewBox="0 0 240 240"
-                aria-label="5P 面向雷達圖"
-                role="img"
-              ></svg>
-              <div class="radar-legend" id="radarLegend"></div>
-            </div>
-
             <!-- 決策分析卡（初始隱藏） -->
             <div
               id="insightCard"
@@ -993,145 +944,6 @@
 
         <div class="disclaimer">
           本報告書由信用評分系統自動生成，僅供內部授信審核參考之用。借款人實際核貸金額、利率及條件，仍須依據本社授信規章辦理，並以「放款委員會」之最終審議決議為準。
-        </div>
-      </div>
-    </div>
-
-    <!-- 社外債務估算 Modal -->
-    <div
-      id="debtEstimatorModal"
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="debtEstimatorTitle"
-      style="display: none"
-    >
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 id="debtEstimatorTitle">社外債務月付估算</h3>
-          <button
-            type="button"
-            class="modal-close"
-            id="closeDebtEstimator"
-            aria-label="關閉估算視窗"
-          >
-            &times;
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>債務類型</label>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap">
-              <label
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  cursor: pointer;
-                "
-                ><input type="radio" name="debtType" value="mortgage" checked />
-                房貸</label
-              >
-              <label
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  cursor: pointer;
-                "
-                ><input type="radio" name="debtType" value="car" /> 車貸</label
-              >
-              <label
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  cursor: pointer;
-                "
-                ><input type="radio" name="debtType" value="credit" />
-                信用卡分期/現金卡</label
-              >
-              <label
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  cursor: pointer;
-                "
-                ><input type="radio" name="debtType" value="personal" />
-                其他信貸</label
-              >
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>貸款/分期本金 (元)</label>
-              <input
-                type="text"
-                inputmode="numeric"
-                id="debtPrincipal"
-                placeholder="例如：5,000,000"
-                min="0"
-              />
-            </div>
-            <div class="form-group">
-              <label>年利率 (%)</label>
-              <input
-                type="number"
-                id="debtRate"
-                placeholder="2.5"
-                step="0.01"
-                min="0"
-                max="20"
-              />
-            </div>
-            <div class="form-group">
-              <label>剩餘年限/期數 (年)</label>
-              <input
-                type="number"
-                id="debtYears"
-                placeholder="20"
-                min="0.5"
-                step="0.5"
-                max="30"
-              />
-            </div>
-          </div>
-          <div
-            class="form-group"
-            style="
-              margin-top: 16px;
-              padding: 12px;
-              background: var(--bg-tertiary);
-              border-radius: 8px;
-            "
-          >
-            <strong>估算月付：</strong>
-            <span
-              id="debtEstimatedMonthly"
-              style="font-size: 1.2em; color: var(--primary); margin-left: 8px"
-              >0 元</span
-            >
-          </div>
-          <div
-            style="
-              display: flex;
-              justify-content: flex-end;
-              gap: 8px;
-              margin-top: 16px;
-            "
-          >
-            <button
-              type="button"
-              class="btn-secondary"
-              id="cancelDebtEstimator"
-            >
-              取消
-            </button>
-            <button type="button" class="btn-primary" id="applyDebtEstimator">
-              填入主表單
-            </button>
-          </div>
         </div>
       </div>
     </div>

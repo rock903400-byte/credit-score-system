@@ -50,6 +50,8 @@ const {
   applyLegalCeiling: ALC,
   validateInputs: VI,
   validateInputsByField: VIBF,
+  computeSuggestedAdditionalLoan: CSAL,
+  computeConsolidationScenario: CCS,
   pmt: PMT,
   formatAmount: FA,
   escapeHtml: EH,
@@ -858,14 +860,14 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：14 條否決規則（含擔保品12、年限30年 + 擔保放款新規則）', () => {
+test('源碼：15 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 14,
+    (vf.match(/vetoes\.push/g) || []).length === 15,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
   );
 });
@@ -953,6 +955,128 @@ test('DTI=0→0', () =>
       0
     ) === 0
   ));
+
+console.log('\n── 整併模式：額外既有貸款納入 DSR / 否決線 (5) ──');
+test('額外貸款月付計入 baseline DSR 評分', () => {
+  const i = {
+    income: 100000,
+    existingDebt: 5000,
+    internalMonthly: 5000,
+    additionalLoans: [{ monthly: 10000, balance: 300000, years: 5, rate: 4 }],
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    proposedLoan: 100000,
+    shares: 50000,
+    collateral: '5',
+    interaction: 7,
+    jcic: '10',
+    membership: 3,
+    purpose: '10',
+    career: 4,
+    participation: 2,
+    incomeStability: 6,
+    tenure: 4,
+  };
+  // (5000+5000+10000)/100000 = 20% → DSR 20 分
+  assert(CS(i).dsrScore === 20, 'got:' + CS(i).dsrScore);
+});
+test('額外貸款月付計入 70% 否決線', () => {
+  const i = {
+    income: 100000,
+    existingDebt: 0,
+    internalMonthly: 0,
+    // 70000 + 新貸月付 383 = 70.4% > 70%
+    additionalLoans: [{ monthly: 70000, balance: 0, years: 3, rate: 3 }],
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    proposedLoan: 20000,
+    shares: 50000,
+    collateral: '5',
+    jcic: '10',
+    purpose: '10',
+    interaction: 7,
+    membership: 3,
+    career: 4,
+    participation: 2,
+    incomeStability: 6,
+    tenure: 4,
+  };
+  const v = ARV(i).vetoes;
+  assert(
+    v.some((x) => x.includes('70.0%')),
+    'got:' + v.join(';')
+  );
+});
+test('額外貸款月付計入 computeMaxLoan 可貸額度', () => {
+  // 無額外貸款：可貸 = (50000*0.5-0)/factor
+  const base = {
+    income: 50000,
+    existingDebt: 0,
+    internalMonthly: 0,
+    ratePercent: 3,
+    years: 5,
+  };
+  const withExt = {
+    ...base,
+    additionalLoans: [{ monthly: 10000, balance: 0, years: 5, rate: 3 }],
+  };
+  const noExt = CML(base, 0.5);
+  const ext = CML(withExt, 0.5);
+  assert(ext < noExt, `ext ${ext} 應小於 noExt ${noExt}`);
+  approx(noExt - ext, 10000 / (1 / 60 + 0.03 / 12), 50);
+});
+test('整併試算：多筆既有合計（月付/餘額/月省）', () => {
+  const i = {
+    existingDebt: 0,
+    internalMonthly: 5000,
+    internalBalance: 200000,
+    additionalLoans: [
+      { monthly: 3000, balance: 100000, years: 3, rate: 4 },
+      { monthly: 2000, balance: 50000, years: 2, rate: 5 },
+    ],
+    proposedLoan: 800000,
+    ratePercent: 3,
+    years: 7,
+  };
+  const cs = CCS(i);
+  assert(cs.currentTotalMonthly === 10000, 'got:' + cs.currentTotalMonthly);
+  assert(
+    cs.consolidationLoanAmount === 1150000,
+    'got:' + cs.consolidationLoanAmount
+  );
+  assert(cs.totalExposure === 1150000, 'got:' + cs.totalExposure);
+});
+test('建議增貸額度：額外貸款併入既有月付與餘額', () => {
+  const i = {
+    income: 100000,
+    existingDebt: 0,
+    internalMonthly: 10000,
+    internalBalance: 300000,
+    additionalLoans: [{ monthly: 5000, balance: 150000, years: 4, rate: 4 }],
+    ratePercent: 3,
+    years: 5,
+  };
+  const s = CSAL(i, 0.6);
+  approx(s.consolidation, s.general + 450000, 1);
+  assert(s.general > 0, 'got:' + s.general);
+});
+test('負值額外既有貸款 → validateInputs 擋下', () => {
+  const i = {
+    income: 100000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    proposedLoan: 100000,
+    shares: 50000,
+    additionalLoans: [{ monthly: -1, balance: 0, years: 3, rate: 3 }],
+  };
+  assert(
+    VI(i).some((e) => e.includes('既有貸款')),
+    'got:' + VI(i).join(';')
+  );
+});
 
 console.log('\n── applyLegalCeiling (3) ──');
 test('信用借款=股金+100萬', () => {

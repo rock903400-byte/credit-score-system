@@ -43,80 +43,6 @@ function formatAmountInput(el) {
 }
 
 // ============================================================
-// Modal 無障礙：focus trap + Esc 關閉 + scroll lock + focus 還原
-// ============================================================
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-let _modalReturnFocus = null;
-let _modalEscHandler = null;
-let _modalTrapHandler = null;
-
-function getFocusable(modalEl) {
-  return Array.from(modalEl.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement
-  );
-}
-
-function openModal(modalEl) {
-  if (!modalEl) return;
-  _modalReturnFocus = document.activeElement;
-  modalEl.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-
-  // focus 第一個可聚焦元素
-  const focusable = getFocusable(modalEl);
-  if (focusable.length > 0) focusable[0].focus();
-
-  // Esc 關閉
-  _modalEscHandler = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      closeModal(modalEl);
-    }
-  };
-  document.addEventListener('keydown', _modalEscHandler);
-
-  // focus trap
-  _modalTrapHandler = (e) => {
-    if (e.key !== 'Tab') return;
-    const items = getFocusable(modalEl);
-    if (items.length === 0) {
-      e.preventDefault();
-      return;
-    }
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || !modalEl.contains(active))) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && (active === last || !modalEl.contains(active))) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-  modalEl.addEventListener('keydown', _modalTrapHandler);
-}
-
-function closeModal(modalEl) {
-  if (!modalEl) return;
-  modalEl.style.display = 'none';
-  document.body.style.overflow = '';
-  if (_modalEscHandler) {
-    document.removeEventListener('keydown', _modalEscHandler);
-    _modalEscHandler = null;
-  }
-  if (_modalTrapHandler) {
-    modalEl.removeEventListener('keydown', _modalTrapHandler);
-    _modalTrapHandler = null;
-  }
-  if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
-    _modalReturnFocus.focus();
-    _modalReturnFocus = null;
-  }
-}
-
-// ============================================================
 // 解析與驗證輸入（DOM 關聯部分）
 // ============================================================
 // ============================================================
@@ -178,7 +104,9 @@ function getUntouchedSelects() {
   );
 }
 
-// 在 label 尾端掛「未確認」pill，並給 select 一條虛線邊
+// 在 label 尾端掛「未確認」pill，並給 select 一條虛線邊。
+// pill 是按鈕：維持預設值的使用者點一下即可標記已確認，
+// 不必為了觸發 change 事件把下拉改來改去。
 function applyUntouchedStyling(el) {
   const untouched =
     el.dataset.untouched === 'true' && el.value === el.dataset.defaultValue;
@@ -189,9 +117,20 @@ function applyUntouchedStyling(el) {
   let pill = label.querySelector('.untouched-pill');
   if (untouched) {
     if (!pill) {
-      pill = document.createElement('span');
+      pill = document.createElement('button');
+      pill.type = 'button';
       pill.className = 'untouched-pill';
       pill.textContent = '未確認';
+      pill.title = '維持此預設值，點我標記為已確認';
+      pill.setAttribute(
+        'aria-label',
+        `標記「${el.dataset.scoreLabel || el.id}」為已確認`
+      );
+      pill.addEventListener('click', () => {
+        markSelectTouched(el);
+        // 比照 change handler：標記後補存草稿，reload 不會又變回未確認
+        saveFormDraft();
+      });
       label.appendChild(pill);
     }
   } else if (pill) {
@@ -338,8 +277,22 @@ function clearPrefHint(el) {
 
 function parseInputs() {
   const consolidationMode = $('consolidationMode').checked;
+  // 整併模式：收集所有額外既有貸款（過濾全空列）
+  const additionalLoans = consolidationMode
+    ? readExtRows()
+        .map((r) => ({
+          monthly: parseFloat(String(r.monthly).replace(/,/g, '')) || 0,
+          balance: parseFloat(String(r.balance).replace(/,/g, '')) || 0,
+          years: parseFloat(r.years) || 0,
+          rate: parseFloat(r.rate) || 0,
+        }))
+        .filter(
+          (l) => l.monthly > 0 || l.balance > 0 || l.years > 0 || l.rate > 0
+        )
+    : [];
   return {
     consolidationMode,
+    additionalLoans,
     memberId: $('memberId').value.trim(),
     appDate: $('appDate').value,
     income: parseAmount('income'),
@@ -347,10 +300,6 @@ function parseInputs() {
     existingDebt: parseAmount('existing_debt'),
     internalMonthly: parseAmount('internal_monthly'),
     internalBalance: parseAmount('internal_balance'),
-    internalMonthly2: consolidationMode ? parseAmount('internal_monthly2') : 0,
-    internalBalance2: consolidationMode ? parseAmount('internal_balance2') : 0,
-    internalYears2: consolidationMode ? parseAmount('internal_years2') : 0,
-    internalRate2: consolidationMode ? parseAmount('internal_rate2') : 0,
     proposedLoan: parseAmount('loan'),
     years: parseInt($('years').value) || 0,
     ratePercent: parseFloat($('rate').value) || 0,
@@ -361,6 +310,7 @@ function parseInputs() {
     jcic: $('jcic').value,
     membership: parseInt($('membership').value) || 0,
     collateral: $('collateral').value,
+    collateralKind: $('collateralKind').value || 'building',
     appraisalValue: parseAmount('appraisalValue'),
     collateralZone: $('collateralZone').value,
     houseAge: parseInt($('houseAge').value) || 0,
@@ -441,10 +391,6 @@ function applyFieldErrors(fieldErrors) {
     existing_debt: 'existing_debt',
     internal_monthly: 'internal_monthly',
     internal_balance: 'internal_balance',
-    internal_monthly_2: 'internal_monthly2',
-    internal_balance_2: 'internal_balance2',
-    internal_years_2: 'internal_years2',
-    internal_rate_2: 'internal_rate2',
     loan: 'loan',
     shares: 'shares',
     years: 'years',
@@ -457,6 +403,25 @@ function applyFieldErrors(fieldErrors) {
   Object.keys(idMap).forEach((key) => {
     const el = $(idMap[key]);
     if (el) setFieldError(el, fieldErrors[key] || '');
+  });
+  // 整併模式：額外既有貸款動態列
+  document.querySelectorAll('.ext-row').forEach((row, i) => {
+    setFieldError(
+      row.querySelector('.ext-monthly'),
+      fieldErrors[`internal_ext_${i}_monthly`] || ''
+    );
+    setFieldError(
+      row.querySelector('.ext-balance'),
+      fieldErrors[`internal_ext_${i}_balance`] || ''
+    );
+    setFieldError(
+      row.querySelector('.ext-years'),
+      fieldErrors[`internal_ext_${i}_years`] || ''
+    );
+    setFieldError(
+      row.querySelector('.ext-rate'),
+      fieldErrors[`internal_ext_${i}_rate`] || ''
+    );
   });
   // 保證人動態欄位
   document.querySelectorAll('.guarantor-row').forEach((row, i) => {
@@ -501,6 +466,18 @@ function getFirstErrorElement(fieldErrors) {
       fieldErrors[`g_debt_${i}`]
     ) {
       return rows[i];
+    }
+  }
+  // 整併模式：額外既有貸款列
+  const extRows = document.querySelectorAll('.ext-row');
+  for (let i = 0; i < extRows.length; i++) {
+    if (
+      fieldErrors[`internal_ext_${i}_monthly`] ||
+      fieldErrors[`internal_ext_${i}_balance`] ||
+      fieldErrors[`internal_ext_${i}_years`] ||
+      fieldErrors[`internal_ext_${i}_rate`]
+    ) {
+      return extRows[i];
     }
   }
   return null;
@@ -697,6 +674,100 @@ function bindGuarantorPreviews() {
 }
 
 // ============================================================
+// 整併模式：額外既有貸款動態列（N 筆）
+// 比照 renderGuarantorRows 的 snapshot → 重建 → 重綁模式
+// ============================================================
+function readExtRows() {
+  return Array.from(document.querySelectorAll('#internalExtList .ext-row')).map(
+    (row) => ({
+      monthly: row.querySelector('.ext-monthly').value,
+      balance: row.querySelector('.ext-balance').value,
+      years: row.querySelector('.ext-years').value,
+      rate: row.querySelector('.ext-rate').value,
+    })
+  );
+}
+
+function renderExtLoanRows(rows) {
+  const container = $('internalExtList');
+  if (!container) return;
+  // 至少保留一列空行，使用者勾選整併模式後立刻看得到填寫區
+  rows = rows && rows.length > 0 ? rows : [{}];
+  container.innerHTML = '';
+  rows.forEach((d, i) => {
+    const r = document.createElement('div');
+    r.className = 'ext-row';
+    r.innerHTML =
+      '<div class="form-group">' +
+      '<label>每月應繳額 (元)</label>' +
+      '<input type="text" inputmode="numeric" class="ext-monthly" placeholder="0" min="0" value="' +
+      escapeHtml(d.monthly || '') +
+      '">' +
+      '<span class="input-preview ext-monthly-preview"></span>' +
+      '<span class="error-msg"></span>' +
+      '</div>' +
+      '<div class="form-group">' +
+      '<label>剩餘餘額 (元)</label>' +
+      '<input type="text" inputmode="numeric" class="ext-balance" placeholder="0" min="0" value="' +
+      escapeHtml(d.balance || '') +
+      '">' +
+      '<span class="input-preview ext-balance-preview"></span>' +
+      '<span class="error-msg"></span>' +
+      '</div>' +
+      '<div class="form-group">' +
+      '<label>剩餘年限 (年)</label>' +
+      '<input type="number" class="ext-years" placeholder="例如：3" min="0" step="0.5" value="' +
+      escapeHtml(d.years || '') +
+      '">' +
+      '<span class="error-msg"></span>' +
+      '</div>' +
+      '<div class="form-group">' +
+      '<label>利率 (%)</label>' +
+      '<input type="number" class="ext-rate" placeholder="例如：3" min="0" step="0.01" value="' +
+      escapeHtml(d.rate || '') +
+      '">' +
+      '<span class="error-msg"></span>' +
+      '</div>' +
+      '<div class="form-group ext-remove-group">' +
+      '<button type="button" class="ext-remove">✕ 刪除此筆</button>' +
+      '</div>';
+    container.appendChild(r);
+    bindExtRowInputs(r);
+    r.querySelector('.ext-remove').addEventListener('click', () => {
+      const data = readExtRows();
+      data.splice(i, 1);
+      renderExtLoanRows(data);
+      saveFormDraft();
+    });
+  });
+}
+
+function bindExtRowInputs(row) {
+  const monthly = row.querySelector('.ext-monthly');
+  const balance = row.querySelector('.ext-balance');
+  const monthlyPreview = row.querySelector('.ext-monthly-preview');
+  const balancePreview = row.querySelector('.ext-balance-preview');
+  const updateMonthly = () => {
+    monthlyPreview.innerText = formatAmount(
+      parseFloat(String(monthly.value).replace(/,/g, '')) || 0
+    );
+  };
+  const updateBalance = () => {
+    balancePreview.innerText = formatAmount(
+      parseFloat(String(balance.value).replace(/,/g, '')) || 0
+    );
+  };
+  monthly.addEventListener('input', updateMonthly);
+  monthly.addEventListener('input', () => formatAmountInput(monthly));
+  monthly.addEventListener('blur', () => formatAmountInput(monthly));
+  balance.addEventListener('input', updateBalance);
+  balance.addEventListener('input', () => formatAmountInput(balance));
+  balance.addEventListener('blur', () => formatAmountInput(balance));
+  updateMonthly();
+  updateBalance();
+}
+
+// ============================================================
 // 即時股金 / 擔保品提示（B1：輸入時即時檢查，不需按計算才看）
 // 從 DOM 直接取值；複用 renderDashboard 中的 hint 邏輯
 // ============================================================
@@ -773,10 +844,15 @@ function updateCollateralByYears() {
     lockMsg.style.display = 'none';
   }
   // 擔保放款一般上限 20 年，屋齡 20 年內自用住宅放寬至 30 年；>30 由法規否決擋下
+  // 土地無屋齡限制，一律 20 年，不提示「屋齡 20 年內」的放寬條件
+  const kindEl = $('collateralKind');
+  const isLand = kindEl && kindEl.value === 'land';
   const yearsHint = $('yearsHint');
   if (yearsHint) {
     yearsHint.style.display =
-      yearsVal > SECURED_YEARS_STANDARD && yearsVal <= MAX_SECURED_YEARS
+      !isLand &&
+      yearsVal > SECURED_YEARS_STANDARD &&
+      yearsVal <= MAX_SECURED_YEARS
         ? 'block'
         : 'none';
   }
@@ -784,18 +860,33 @@ function updateCollateralByYears() {
   const isSecuredLoan = collateralEl.value === '10';
   const appraisalGroup = $('collateralAppraisalGroup');
   const zoneGroup = $('collateralZoneGroup');
+  const kindGroup = $('collateralKindGroup');
   const houseAgeGroup = $('houseAgeGroup');
   const appraisalAgeGroup = $('appraisalAgeGroup');
   if (isSecuredLoan) {
     appraisalGroup.style.display = 'block';
     zoneGroup.style.display = 'block';
-    houseAgeGroup.style.display = 'block';
+    if (kindGroup) kindGroup.style.display = 'block';
+    // 土地無建物：屋齡欄隱藏並清空，避免髒值進入報表或檢核
+    const isLandKind = kindEl && kindEl.value === 'land';
+    if (houseAgeGroup)
+      houseAgeGroup.style.display = isLandKind ? 'none' : 'block';
+    if (isLandKind) {
+      const ha = $('houseAge');
+      if (ha && ha.value !== '') ha.value = '';
+    }
     appraisalAgeGroup.style.display = 'block';
   } else {
     appraisalGroup.style.display = 'none';
     zoneGroup.style.display = 'none';
-    houseAgeGroup.style.display = 'none';
+    if (kindGroup) kindGroup.style.display = 'none';
+    if (houseAgeGroup) houseAgeGroup.style.display = 'none';
     appraisalAgeGroup.style.display = 'none';
+  }
+  // 切換建物/土地時，屋齡欄的顯示狀態跟著變
+  if (kindEl && !kindEl.dataset.bound) {
+    kindEl.dataset.bound = 'true';
+    kindEl.addEventListener('change', updateCollateralByYears);
   }
 }
 
@@ -1121,12 +1212,6 @@ function renderDashboard(result) {
 
   // === 決策說明強化（獨立 try/catch，不影響既有功能）===
   try {
-    renderRadarChart(scoreDetail, grade);
-  } catch (e) {
-    console.warn('雷達圖跳過', e);
-  }
-
-  try {
     renderStrengthsWeaknesses(scoreDetail);
   } catch (e) {
     console.warn('強弱項跳過', e);
@@ -1161,192 +1246,6 @@ function renderDashboard(result) {
 }
 
 // 決策說明強化輔助函式
-function renderRadarChart(scoreDetail, grade) {
-  try {
-    const container = document.getElementById('radarChartContainer');
-    if (!container) return;
-    const svg = document.getElementById('radarSvg');
-    if (!svg) return;
-
-    // Clear svg
-    while (svg.firstChild) {
-      svg.removeChild(svg.firstChild);
-    }
-
-    const cx = 120;
-    const cy = 120;
-    const R_MAX = 80;
-
-    const SVG_NS = 'http://www.w3.org/2000/svg';
-    const createSvgElement = (tag, attrs = {}) => {
-      const el = document.createElementNS(SVG_NS, tag);
-      for (const [key, val] of Object.entries(attrs)) {
-        el.setAttribute(key, val);
-      }
-      return el;
-    };
-
-    const getCoords = (index, radius) => {
-      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / 5;
-      return {
-        x: cx + radius * Math.cos(angle),
-        y: cy + radius * Math.sin(angle),
-        angle: angle,
-      };
-    };
-
-    const dimensions = [
-      {
-        label: '還款能力',
-        score: scoreDetail.dsrScore + scoreDetail.stability,
-        max: 35,
-      },
-      { label: '借款人信用', score: scoreDetail.peopleScore, max: 25 },
-      { label: '債權保障', score: scoreDetail.protectionScore, max: 20 },
-      { label: '資金用途', score: scoreDetail.purposeScore, max: 10 },
-      { label: '未來展望', score: scoreDetail.perspectiveScore, max: 10 },
-    ];
-
-    // Draw background grid pentagons (25%, 50%, 75%, 100%)
-    const gridLevels = [20, 40, 60, 80];
-    gridLevels.forEach((rLevel) => {
-      const points = Array.from({ length: 5 }, (_, idx) => {
-        const c = getCoords(idx, rLevel);
-        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
-      }).join(' ');
-
-      const isOuter = rLevel === 80;
-      const poly = createSvgElement('polygon', {
-        points: points,
-        fill: 'none',
-        stroke: isOuter ? '#cbd5e1' : '#e2e8f0',
-        'stroke-width': '1',
-        'stroke-dasharray': isOuter ? 'none' : '3,3',
-      });
-      svg.appendChild(poly);
-    });
-
-    // Draw 5 axes lines
-    for (let i = 0; i < 5; i++) {
-      const c = getCoords(i, R_MAX);
-      const line = createSvgElement('line', {
-        x1: cx,
-        y1: cy,
-        x2: c.x.toFixed(1),
-        y2: c.y.toFixed(1),
-        stroke: '#cbd5e1',
-        'stroke-width': '1',
-      });
-      svg.appendChild(line);
-    }
-
-    // Draw labels & scores
-    dimensions.forEach((dim, idx) => {
-      const labelRadius = 96;
-      const coords = getCoords(idx, labelRadius);
-      const angle = coords.angle;
-
-      let anchor = 'middle';
-      let dy1 = '0.35em';
-      const cosVal = Math.cos(angle);
-      const sinVal = Math.sin(angle);
-
-      if (Math.abs(cosVal) < 0.1) {
-        anchor = 'middle';
-        dy1 = sinVal < 0 ? '-0.5em' : '1.1em';
-      } else if (cosVal > 0) {
-        anchor = 'start';
-        dy1 = sinVal < 0 ? '-0.1em' : '0.7em';
-      } else {
-        anchor = 'end';
-        dy1 = sinVal < 0 ? '-0.1em' : '0.7em';
-      }
-
-      const textNode = createSvgElement('text', {
-        x: coords.x.toFixed(1),
-        y: coords.y.toFixed(1),
-        'text-anchor': anchor,
-        'font-size': '10.5',
-        'font-weight': '600',
-        fill: '#334155',
-        style: 'font-family: inherit;',
-      });
-
-      const tspanLabel = createSvgElement('tspan', {
-        x: coords.x.toFixed(1),
-        dy: dy1,
-      });
-      tspanLabel.textContent = dim.label;
-
-      const tspanScore = createSvgElement('tspan', {
-        x: coords.x.toFixed(1),
-        dy: '1.2em',
-        'font-size': '9.5',
-        'font-weight': 'normal',
-        fill: '#64748b',
-      });
-      tspanScore.textContent = `${dim.score}/${dim.max}`;
-
-      textNode.appendChild(tspanLabel);
-      textNode.appendChild(tspanScore);
-      svg.appendChild(textNode);
-    });
-
-    // Draw value polygon
-    const GRADE_COLORS = {
-      A: '#2e7d32',
-      B: '#00695c',
-      C: '#e65100',
-      D: '#bf360c',
-      E: '#c62828',
-    };
-    const color = GRADE_COLORS[grade] || '#2e7d32';
-
-    const valPoints = dimensions
-      .map((dim, idx) => {
-        const pct = Math.min(100, Math.max(0, (dim.score / dim.max) * 100));
-        const rVal = (pct / 100) * R_MAX;
-        const c = getCoords(idx, rVal);
-        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
-      })
-      .join(' ');
-
-    const valPoly = createSvgElement('polygon', {
-      points: valPoints,
-      fill: color + '22', // transparent fill (approx 13% opacity)
-      stroke: color,
-      'stroke-width': '2',
-    });
-    svg.appendChild(valPoly);
-
-    // Draw small circles at value vertices
-    dimensions.forEach((dim, idx) => {
-      const pct = Math.min(100, Math.max(0, (dim.score / dim.max) * 100));
-      const rVal = (pct / 100) * R_MAX;
-      const c = getCoords(idx, rVal);
-      const circle = createSvgElement('circle', {
-        cx: c.x.toFixed(1),
-        cy: c.y.toFixed(1),
-        r: '3.5',
-        fill: color,
-        stroke: '#ffffff',
-        'stroke-width': '1',
-      });
-      svg.appendChild(circle);
-    });
-
-    // Set legend text
-    const legend = document.getElementById('radarLegend');
-    if (legend) {
-      legend.textContent = `5P 面向達成率示意圖（等級 ${grade || '-'}）`;
-    }
-
-    container.style.display = 'block';
-  } catch (e) {
-    console.warn('雷達圖渲染失敗', e);
-  }
-}
-
 function renderStrengthsWeaknesses(scoreDetail) {
   try {
     const area = document.getElementById('strengthWeaknessArea');
@@ -1654,8 +1553,15 @@ function renderPrintReport(result) {
   $('p_income').innerText = input.income.toLocaleString('zh-TW') + ' 元';
   $('p_existing').innerText =
     input.existingDebt.toLocaleString('zh-TW') + ' 元';
+  const extLoans = input.additionalLoans || [];
+  const extMonthlySumP = extLoans.reduce((s, l) => s + (l.monthly || 0), 0);
+  const extBalanceSumP = extLoans.reduce((s, l) => s + (l.balance || 0), 0);
+  const extNote =
+    extLoans.length > 0
+      ? `／其餘 ${extLoans.length} 筆既有貸款月付合計 ${extMonthlySumP.toLocaleString('zh-TW')} 元、餘額合計 ${extBalanceSumP.toLocaleString('zh-TW')} 元`
+      : '';
   $('p_internal').innerText =
-    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
+    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${extNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
   $('p_loan_details').innerText =
     `${input.proposedLoan.toLocaleString('zh-TW')} 元 / ${input.years} 年 / ${input.ratePercent}% （借款人現齡 ${input.age} 歲，還款到期年齡 ${ageAtMaturity} 歲）`;
   $('p_shares_info').innerText =
@@ -1677,22 +1583,30 @@ function renderPrintReport(result) {
         zone === 'residential_commercial_educational'
           ? '住宅/商業/文教區'
           : '其他區段';
+      const kind = input.collateralKind || 'building';
+      const ageNote =
+        kind === 'land'
+          ? `（土地擔保品 / 鑑價報告 ${input.appraisalAge || 0} 年）`
+          : `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
       $('p_collateral_detail').innerText =
         `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
-        `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
+        ageNote;
       collateralDetailRow.style.display = '';
     } else {
       collateralDetailRow.style.display = 'none';
     }
   }
 
-  // 整併資訊（僅在整併模式且有第二筆資料時顯示於案件基本資料表）
+  // 整併資訊（僅在整併模式且有額外既有貸款時顯示於案件基本資料表）
   const consolidationRow = $('p_consolidation_row');
+  const extRows = input.additionalLoans || [];
+  const extMonthlySum = extRows.reduce((s, l) => s + (l.monthly || 0), 0);
+  const extBalanceSum = extRows.reduce((s, l) => s + (l.balance || 0), 0);
   if (consolidationRow) {
     if (
       result.consolidationScenario &&
       input.consolidationMode &&
-      (input.internalMonthly2 > 0 || input.internalBalance2 > 0)
+      (extRows.length > 0 || extMonthlySum > 0 || extBalanceSum > 0)
     ) {
       const cs = result.consolidationScenario;
       const savingsVal = cs.monthlySavings;
@@ -1940,8 +1854,12 @@ function calculateLoan() {
 
     // 衍生變數
     const ageAtMaturity = input.age + input.years;
+    const extBalanceSumP = (input.additionalLoans || []).reduce(
+      (s, l) => s + (l.balance || 0),
+      0
+    );
     const totalExposure =
-      input.internalBalance + input.internalBalance2 + input.proposedLoan;
+      input.internalBalance + extBalanceSumP + input.proposedLoan;
     const shareMult =
       input.shares > 0 ? input.proposedLoan / input.shares : null;
 
@@ -1966,21 +1884,10 @@ function calculateLoan() {
     }
 
     // 計算建議增貸額度
-    const suggestedLoan = computeSuggestedAdditionalLoan(
-      input,
-      maxDti,
-      input.internalMonthly2,
-      input.internalBalance2
-    );
+    const suggestedLoan = computeSuggestedAdditionalLoan(input, maxDti);
 
     // 計算整併貸款試算
-    const consolidationScenario = computeConsolidationScenario(
-      input,
-      input.internalMonthly2,
-      input.internalBalance2,
-      input.internalYears2,
-      input.internalRate2
-    );
+    const consolidationScenario = computeConsolidationScenario(input);
 
     const result = {
       input,
@@ -2028,10 +1935,6 @@ const FORM_DRAFT_FIELDS = [
   'existing_debt',
   'internal_monthly',
   'internal_balance',
-  'internal_monthly2',
-  'internal_balance2',
-  'internal_years2',
-  'internal_rate2',
   'loan',
   'years',
   'rate',
@@ -2042,6 +1945,7 @@ const FORM_DRAFT_FIELDS = [
   'jcic',
   'membership',
   'collateral',
+  'collateralKind',
   'appraisalValue',
   'collateralZone',
   'houseAge',
@@ -2062,6 +1966,8 @@ function saveFormDraft() {
     // 整併模式 checkbox（value 無法反映 checked 狀態，需另存）
     const cm = $('consolidationMode');
     if (cm) data._consolidationMode = cm.checked;
+    // 整併模式：額外既有貸款動態列
+    data._internalExt = readExtRows();
     // 保證人動態欄位
     const guarantors = Array.from(
       document.querySelectorAll('.guarantor-row')
@@ -2140,29 +2046,47 @@ function loadFormDraft() {
     }
     updateGuarantorWeightHint();
     updateCollateralByYears();
+    // 整併模式：還原額外既有貸款列（舊草稿的 internal_monthly2 等欄位做一次遷移）
+    let extRows = Array.isArray(data._internalExt) ? data._internalExt : null;
+    if (
+      extRows === null &&
+      (data.internal_monthly2 !== undefined ||
+        data.internal_balance2 !== undefined ||
+        data.internal_years2 !== undefined ||
+        data.internal_rate2 !== undefined)
+    ) {
+      extRows = [
+        {
+          monthly: data.internal_monthly2 || '',
+          balance: data.internal_balance2 || '',
+          years: data.internal_years2 || '',
+          rate: data.internal_rate2 || '',
+        },
+      ];
+    }
+    if (extRows !== null) renderExtLoanRows(extRows);
     // C1：草稿還原後套用千分位（程式設值不觸發 input 事件）
     [
       'income',
       'existing_debt',
       'internal_monthly',
       'internal_balance',
-      'internal_monthly2',
-      'internal_balance2',
       'loan',
       'shares',
       'appraisalValue',
     ].forEach((id) => formatAmountInput($(id)));
-    // 還原整併模式 toggle 後，第二筆貸款欄位群組也要同步顯示
-    if ($('consolidationMode').checked) {
-      [
-        'internal2Group',
-        'internalBalance2Group',
-        'internalYears2Group',
-        'internalRate2Group',
-      ].forEach((id) => {
-        const g = $(id);
-        if (g) g.style.display = 'block';
-      });
+    // 還原整併模式 toggle 後，既有貸款列表也要同步顯示
+    const extGroup = $('internalExtGroup');
+    if (extGroup)
+      extGroup.style.display = $('consolidationMode').checked
+        ? 'block'
+        : 'none';
+    if (
+      extGroup &&
+      $('consolidationMode').checked &&
+      document.querySelectorAll('#internalExtList .ext-row').length === 0
+    ) {
+      renderExtLoanRows([]);
     }
     return true;
   } catch (e) {
@@ -2207,11 +2131,8 @@ const SAMPLE_CASE = {
 // 否則前一位社員的保證人姓名／整併設定會混進「範例」，
 // 保證人又計入 protectionScore，示範案件每次結果都不一樣。
 const SAMPLE_RESET = {
-  internal_monthly2: '',
-  internal_balance2: '',
-  internal_years2: '',
-  internal_rate2: '',
   appraisalValue: '',
+  collateralKind: 'building',
   houseAge: '',
   appraisalAge: '',
   guarantor_count: '0',
@@ -2232,16 +2153,10 @@ function loadSampleCase() {
   const cm = $('consolidationMode');
   if (cm && cm.checked) {
     cm.checked = false;
-    [
-      'internal2Group',
-      'internalBalance2Group',
-      'internalYears2Group',
-      'internalRate2Group',
-    ].forEach((gid) => {
-      const g = $(gid);
-      if (g) g.style.display = 'none';
-    });
+    const extGroup = $('internalExtGroup');
+    if (extGroup) extGroup.style.display = 'none';
   }
+  renderExtLoanRows([]);
   renderGuarantorRows(0);
 
   Object.keys(SAMPLE_CASE).forEach((id) => {
@@ -2293,8 +2208,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'existing_debt',
     'internal_monthly',
     'internal_balance',
-    'internal_monthly2',
-    'internal_balance2',
     'loan',
     'shares',
   ];
@@ -2432,52 +2345,38 @@ document.addEventListener('DOMContentLoaded', () => {
   const consolidationMode = $('consolidationMode');
   if (consolidationMode) {
     consolidationMode.addEventListener('change', () => {
-      const internal2Group = $('internal2Group');
-      const internalBalance2Group = $('internalBalance2Group');
-      const internalYears2Group = $('internalYears2Group');
-      const internalRate2Group = $('internalRate2Group');
+      const extGroup = $('internalExtGroup');
       if (consolidationMode.checked) {
-        internal2Group.style.display = 'block';
-        internalBalance2Group.style.display = 'block';
-        internalYears2Group.style.display = 'block';
-        internalRate2Group.style.display = 'block';
+        if (extGroup) extGroup.style.display = 'block';
+        // 首次啟用時給一列空行
+        if (
+          document.querySelectorAll('#internalExtList .ext-row').length === 0
+        ) {
+          renderExtLoanRows([]);
+        }
       } else {
-        internal2Group.style.display = 'none';
-        internalBalance2Group.style.display = 'none';
-        internalYears2Group.style.display = 'none';
-        internalRate2Group.style.display = 'none';
+        if (extGroup) extGroup.style.display = 'none';
       }
       saveFormDraft();
     });
   }
 
-  // 社外債務估算按鈕
-  const debtEstimatorBtn = $('btnDebtEstimator');
-  if (debtEstimatorBtn) {
-    debtEstimatorBtn.addEventListener('click', () => {
-      openModal($('debtEstimatorModal'));
+  // 整併模式：＋ 新增一筆 / 動態列事件委派
+  const btnAddExtLoan = $('btnAddExtLoan');
+  if (btnAddExtLoan) {
+    btnAddExtLoan.addEventListener('click', () => {
+      const data = readExtRows();
+      data.push({});
+      renderExtLoanRows(data);
+      saveFormDraft();
     });
   }
-
-  const closeDebtEstimator = $('closeDebtEstimator');
-  if (closeDebtEstimator) {
-    closeDebtEstimator.addEventListener('click', () => {
-      closeModal($('debtEstimatorModal'));
-    });
+  const extList = $('internalExtList');
+  if (extList) {
+    extList.addEventListener('input', saveFormDraft);
+    extList.addEventListener('change', saveFormDraft);
+    extList.addEventListener('change', markResultStale);
   }
-
-  const cancelDebtEstimator = $('cancelDebtEstimator');
-  if (cancelDebtEstimator) {
-    cancelDebtEstimator.addEventListener('click', () => {
-      closeModal($('debtEstimatorModal'));
-    });
-  }
-
-  // 點背景關閉
-  $('debtEstimatorModal').addEventListener('click', (e) => {
-    if (e.target === $('debtEstimatorModal'))
-      closeModal($('debtEstimatorModal'));
-  });
 
   // 全域快捷鍵：Ctrl+Enter 觸發計算
   document.addEventListener('keydown', (e) => {
@@ -2487,58 +2386,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btn && !btn.disabled) calculateLoan();
     }
   });
-
-  // 依債務類型套用預設利率／年限（輸入框留空時才用）
-  const DEBT_TYPE_DEFAULTS = {
-    mortgage: { rate: 2.5, years: 20 },
-    car: { rate: 3.5, years: 5 },
-    credit: { rate: 15, years: 0.5 },
-    personal: { rate: 5, years: 3 },
-  };
-  function getDebtEstimatorParams() {
-    const debtType = document.querySelector(
-      'input[name="debtType"]:checked'
-    ).value;
-    const defaults =
-      DEBT_TYPE_DEFAULTS[debtType] || DEBT_TYPE_DEFAULTS.personal;
-    const principal = parseFloat($('debtPrincipal').value) || 0;
-    const rate = parseFloat($('debtRate').value) || defaults.rate;
-    const years = parseFloat($('debtYears').value) || defaults.years;
-    return { principal, rate, years };
-  }
-  function updateDebtEstimatorPreview() {
-    const { principal, rate, years } = getDebtEstimatorParams();
-    const monthly = pmt(principal, rate, years);
-    const el = $('debtEstimatedMonthly');
-    if (el)
-      el.innerText = principal > 0 ? formatAmount(Math.round(monthly)) : '0 元';
-  }
-
-  const applyDebtEstimator = $('applyDebtEstimator');
-  if (applyDebtEstimator) {
-    applyDebtEstimator.addEventListener('click', () => {
-      const { principal, rate, years } = getDebtEstimatorParams();
-      const monthly = pmt(principal, rate, years);
-      const field = $('existing_debt');
-      field.value = Math.round(monthly);
-      formatAmountInput(field);
-      field.dispatchEvent(new Event('input'));
-      field.dispatchEvent(new Event('change'));
-      saveFormDraft();
-      markResultStale();
-      closeModal($('debtEstimatorModal'));
-    });
-  }
-
-  // 即時預覽：輸入本金 / 利率 / 年限 或 切換債務類型 時更新月付
-  ['debtPrincipal', 'debtRate', 'debtYears'].forEach((id) => {
-    const el = $(id);
-    if (el) el.addEventListener('input', updateDebtEstimatorPreview);
-  });
-  document.querySelectorAll('input[name="debtType"]').forEach((r) => {
-    r.addEventListener('change', updateDebtEstimatorPreview);
-  });
-  updateDebtEstimatorPreview();
 
   // B1 初始化：頁面載入時跑一次即時提示（草稿還原後的狀態）
   updateShareHintLive();

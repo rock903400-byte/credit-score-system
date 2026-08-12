@@ -46,6 +46,26 @@ test.describe('操作列 — 必填計數 / 待確認下拉', () => {
     await expect(pills).toHaveCount(8);
   });
 
+  test('維持預設值：點「未確認」pill 即標記已確認', async ({ page }) => {
+    // 收入穩定性維持預設（最優選項），直接點 pill
+    await page
+      .locator('#incomeStability')
+      .locator('xpath=ancestor::*[contains(@class,"form-group")]')
+      .locator('.untouched-pill')
+      .click();
+    await expect(page.locator('#chipUnconfirmedCount')).toHaveText('8');
+    await expect(page.locator('#incomeStability')).not.toHaveClass(
+      /select-untouched/
+    );
+    // 已確認狀態寫入草稿：reload 後不會又變回未確認
+    await page.waitForTimeout(150);
+    await page.reload();
+    await expect(page.locator('#chipUnconfirmedCount')).toHaveText('8');
+    await expect(page.locator('#incomeStability')).not.toHaveClass(
+      /select-untouched/
+    );
+  });
+
   test('已確認狀態寫入草稿：reload 後不會又變回未確認', async ({ page }) => {
     await page.locator('#jcic').selectOption('5');
     await page.locator('#career').selectOption('3');
@@ -248,7 +268,7 @@ test.describe('回歸 — code review 發現', () => {
       .locator('.g-name')
       .fill('前一位保證人');
     await page.locator('#consolidationMode').check();
-    await page.locator('#internal_monthly2').fill('3000');
+    await page.locator('.ext-row').nth(0).locator('.ext-monthly').fill('3000');
 
     page.on('dialog', (d) => d.accept());
     await page.locator('#btnSampleCase').click();
@@ -257,7 +277,9 @@ test.describe('回歸 — code review 發現', () => {
     await expect(page.locator('#guarantor_count')).toHaveValue('0');
     await expect(page.locator('.guarantor-row')).toHaveCount(0);
     await expect(page.locator('#consolidationMode')).not.toBeChecked();
-    await expect(page.locator('#internal_monthly2')).toHaveValue('');
+    await expect(
+      page.locator('.ext-row').nth(0).locator('.ext-monthly')
+    ).toHaveValue('');
     await expect(page.locator('#consolidationBox')).toBeHidden();
   });
 

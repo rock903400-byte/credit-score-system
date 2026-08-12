@@ -26,16 +26,35 @@ test.describe('Draft — 草稿存讀', () => {
     await expect(page.locator('#income')).toHaveValue('');
   });
 
-  test('整併模式勾選 → 草稿還原後第二筆欄位仍顯示', async ({ page }) => {
+  test('整併模式勾選 → 草稿還原後既有貸款列表仍顯示', async ({ page }) => {
     await page.goto('/');
     await page.locator('#consolidationMode').check();
-    await page.locator('#internal_monthly2').fill('5000');
-    await page.waitForTimeout(100);
+    await page.locator('.ext-row').nth(0).locator('.ext-monthly').fill('5000');
+    await page.waitForTimeout(150);
     await page.reload();
     await expect(page.locator('#consolidationMode')).toBeChecked();
-    await expect(page.locator('#internal2Group')).toBeVisible();
+    await expect(page.locator('#internalExtGroup')).toBeVisible();
     // C1：金額欄位有千分位
-    await expect(page.locator('#internal_monthly2')).toHaveValue('5,000');
+    await expect(
+      page.locator('.ext-row').nth(0).locator('.ext-monthly')
+    ).toHaveValue('5,000');
+  });
+
+  test('整併模式：多筆列表與新增筆數寫入草稿', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#consolidationMode').check();
+    await page.locator('.ext-row').nth(0).locator('.ext-monthly').fill('3000');
+    await page.locator('#btnAddExtLoan').click();
+    await page.locator('.ext-row').nth(1).locator('.ext-monthly').fill('2000');
+    await page.waitForTimeout(150);
+    await page.reload();
+    await expect(page.locator('.ext-row')).toHaveCount(2);
+    await expect(
+      page.locator('.ext-row').nth(0).locator('.ext-monthly')
+    ).toHaveValue('3,000');
+    await expect(
+      page.locator('.ext-row').nth(1).locator('.ext-monthly')
+    ).toHaveValue('2,000');
   });
 
   test('C1：金額欄位輸入時即時加千分位', async ({ page }) => {
