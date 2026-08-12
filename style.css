@@ -1600,3 +1600,423 @@ button {
     font-size: 0.88em;
   }
 }
+
+/* ============================================================
+   操作簡化：Sticky 操作列 / 未確認標示 / 結論條 / 明細收合
+   ============================================================ */
+
+/* --- Sticky 操作列 --- */
+.action-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border: 1px solid #d1d9e6;
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.action-bar-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* scrollIntoView 的目標不能被置頂的操作列蓋住 */
+.result-card,
+.card,
+.form-group,
+.guarantor-row {
+  scroll-margin-top: 96px;
+}
+
+.action-bar .btn-calc {
+  flex: initial;
+  min-width: 220px;
+  padding: 14px 22px;
+}
+
+.btn-calc-label {
+  font-weight: 700;
+}
+
+.kbd-hint {
+  font-size: 12px;
+  font-weight: normal;
+  opacity: 0.8;
+  margin-left: 6px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* --- 狀態晶片（必填 / 待確認） --- */
+.chip {
+  flex: initial;
+  padding: 7px 14px;
+  font-size: 0.85em;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip:hover {
+  background: #e2e8f0;
+}
+.chip strong {
+  font-weight: 800;
+}
+.chip.chip-todo {
+  background: #fff3e0;
+  border-color: #ffb300;
+  color: #b26a00;
+}
+.chip.chip-done {
+  background: #e8f5e9;
+  border-color: #66bb6a;
+  color: #2e7d32;
+}
+
+/* --- 未確認的評分下拉 --- */
+select.select-untouched {
+  border-left: 4px dashed #ffb300;
+}
+.untouched-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 0.72em;
+  font-weight: 600;
+  vertical-align: middle;
+  border-radius: 999px;
+  background: #fff3e0;
+  color: #b26a00;
+  border: 1px solid #ffd08a;
+}
+
+/* --- 本社預設值提示 --- */
+.pref-hint {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+/* --- 次要操作列（範例案件 / 本社預設 / 清除草稿） --- */
+.secondary-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+/* --- Stale banner 內的重算鈕 --- */
+.btn-recalc {
+  flex: initial;
+  margin-left: 12px;
+  padding: 6px 14px;
+  font-size: 0.9em;
+  border-radius: 6px;
+  background: #c62828;
+  box-shadow: none;
+  animation: none;
+}
+.btn-recalc:hover {
+  background: #b71c1c;
+}
+
+/* --- 結論條 --- */
+.verdict-bar {
+  margin-bottom: 22px;
+  padding: 22px 24px;
+  border-radius: var(--border-radius);
+  border: 2px solid #cbd5e1;
+  border-left-width: 8px;
+  background: var(--card-bg);
+}
+.verdict-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.verdict-text {
+  font-size: 1.75em;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.verdict-grade {
+  font-size: 1.35em;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.verdict-score {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.verdict-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+}
+.verdict-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.verdict-figure-label {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+.verdict-figure-value {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: var(--text-main);
+}
+.verdict-figure-sub {
+  font-size: 0.62em;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.verdict-triage {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed #cbd5e1;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+.verdict-triage .triage-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  background: var(--primary-color);
+  color: #fff;
+}
+.verdict-unconfirmed {
+  display: none;
+  margin-top: 10px;
+  font-size: 0.85em;
+  color: #b26a00;
+}
+.verdict-unconfirmed.show {
+  display: block;
+}
+
+/* 結論條配色 — 依 sealType */
+.verdict-bar.verdict-pass {
+  border-color: #66bb6a;
+  background: #f1f8f2;
+}
+.verdict-bar.verdict-pass .verdict-text {
+  color: #2e7d32;
+}
+.verdict-bar.verdict-warn {
+  border-color: #ffb300;
+  background: #fffaf0;
+}
+.verdict-bar.verdict-warn .verdict-text {
+  color: #b26a00;
+}
+.verdict-bar.verdict-fail {
+  border-color: #ef5350;
+  background: #fdf3f3;
+}
+.verdict-bar.verdict-fail .verdict-text {
+  color: #c62828;
+}
+
+/* --- 評分明細收合 --- */
+.result-details {
+  margin-top: 8px;
+  border-top: 1px solid #d1d9e6;
+  padding-top: 8px;
+}
+.result-details > summary {
+  cursor: pointer;
+  padding: 12px 4px;
+  font-weight: 700;
+  color: var(--primary-color);
+  user-select: none;
+  list-style: none;
+}
+.result-details > summary::-webkit-details-marker {
+  display: none;
+}
+.result-details > summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.75em;
+  transition: transform 0.2s ease;
+}
+.result-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.result-details > summary:focus-visible {
+  outline: 2px solid var(--secondary-color);
+  outline-offset: 2px;
+}
+/* 移除兩張 stat 卡後，儀表不再跨列 */
+.result-details .score-gauge {
+  grid-row: auto;
+}
+
+/* --- 深色模式 --- */
+@media (prefers-color-scheme: dark) {
+  .action-bar {
+    background: var(--card-bg);
+    border-color: #334155;
+  }
+  .chip {
+    background: #0f172a;
+    border-color: #334155;
+    color: var(--text-muted);
+  }
+  .chip:hover {
+    background: #1e293b;
+  }
+  .chip.chip-todo {
+    background: #3a2a05;
+    border-color: #b26a00;
+    color: #fbbf24;
+  }
+  .chip.chip-done {
+    background: #0f2a17;
+    border-color: #2e7d32;
+    color: #7fd68a;
+  }
+  .untouched-pill {
+    background: #3a2a05;
+    border-color: #b26a00;
+    color: #fbbf24;
+  }
+  .verdict-bar {
+    background: #0f172a;
+    border-color: #334155;
+  }
+  .verdict-bar.verdict-pass {
+    background: #0f2a17;
+    border-color: #2e7d32;
+  }
+  .verdict-bar.verdict-pass .verdict-text {
+    color: #7fd68a;
+  }
+  .verdict-bar.verdict-warn {
+    background: #2b2205;
+    border-color: #b26a00;
+  }
+  .verdict-bar.verdict-warn .verdict-text {
+    color: #fbbf24;
+  }
+  .verdict-bar.verdict-fail {
+    background: #2b1414;
+    border-color: #c62828;
+  }
+  .verdict-bar.verdict-fail .verdict-text {
+    color: #ef9a9a;
+  }
+  .verdict-triage {
+    border-top-color: #334155;
+  }
+  .verdict-unconfirmed {
+    color: #fbbf24;
+  }
+  .result-details {
+    border-top-color: #334155;
+  }
+}
+
+/* --- 平板 / 手機：操作列改為底部固定條 --- */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 96px;
+  }
+  /* 操作列改在底部 → 改留下方空間 */
+  .result-card,
+  .card,
+  .form-group,
+  .guarantor-row {
+    scroll-margin-top: 12px;
+    scroll-margin-bottom: 96px;
+  }
+  .action-bar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    border-radius: 0;
+    border-width: 1px 0 0 0;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .action-bar-chips {
+    gap: 6px;
+  }
+  .chip {
+    padding: 8px 12px;
+    font-size: 0.8em;
+    min-height: 44px;
+  }
+  .action-bar .btn-calc {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+  .kbd-hint {
+    display: none;
+  }
+  .verdict-bar {
+    padding: 18px 16px;
+  }
+  .verdict-text {
+    font-size: 1.4em;
+  }
+  .verdict-figures {
+    gap: 18px;
+  }
+  .verdict-figure-value {
+    font-size: 1.25em;
+  }
+  .result-details .result-dashboard {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .result-details .score-gauge {
+    grid-column: span 2;
+  }
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  .btn-clear-draft {
+    min-height: 44px;
+  }
+}
+
+/* --- 列印：操作列與收合明細不入報表 --- */
+@media print {
+  .action-bar,
+  .secondary-actions,
+  .result-details,
+  .verdict-bar {
+    display: none !important;
+  }
+}

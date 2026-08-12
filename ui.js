@@ -119,6 +119,175 @@ function closeModal(modalEl) {
 // ============================================================
 // 解析與驗證輸入（DOM 關聯部分）
 // ============================================================
+// ============================================================
+// 操作列：必填計數 + 未確認下拉標示
+// ============================================================
+
+// UI 層的「必填」比 core.js 的 validateInputs 嚴一點：後者只擋
+// income/years/proposedLoan，但 age/rate/shares 沒填會讓結果失真。
+// 這裡只做計數與導引，不阻擋計算。
+const REQUIRED_FIELD_IDS = ['income', 'age', 'loan', 'years', 'rate', 'shares'];
+
+// 9 個評分用下拉的預設 <option> 全是最優選項（合計約 40 分）。
+// 沒被確認過就送出，系統會安靜地給出樂觀分數 —— 故標記並計數。
+const SCORING_SELECT_IDS = [
+  'incomeStability',
+  'tenure',
+  'interaction',
+  'jcic',
+  'membership',
+  'collateral',
+  'purpose',
+  'career',
+  'participation',
+];
+const SCORING_SELECT_LABELS = {
+  incomeStability: '收入穩定性',
+  tenure: '現職年資',
+  interaction: '社內往來',
+  jcic: '聯徵紀錄',
+  membership: '入社年資',
+  collateral: '擔保品設定',
+  purpose: '借款用途',
+  career: '職業前景',
+  participation: '社務參與度',
+};
+
+function isFieldFilled(el) {
+  return !!el && String(el.value).trim() !== '';
+}
+
+function getUntouchedSelects() {
+  return SCORING_SELECT_IDS.map((id) => $(id)).filter(
+    (el) => el && el.dataset.untouched === 'true'
+  );
+}
+
+// 在 label 尾端掛「未確認」pill，並給 select 一條虛線邊
+function applyUntouchedStyling(el) {
+  const untouched = el.dataset.untouched === 'true';
+  el.classList.toggle('select-untouched', untouched);
+  const group = el.closest('.form-group');
+  const label = group && group.querySelector('label');
+  if (!label) return;
+  let pill = label.querySelector('.untouched-pill');
+  if (untouched) {
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'untouched-pill';
+      pill.textContent = '未確認';
+      label.appendChild(pill);
+    }
+  } else if (pill) {
+    pill.remove();
+  }
+}
+
+function markSelectTouched(el) {
+  if (!el || el.dataset.untouched !== 'true') return;
+  el.dataset.untouched = 'false';
+  applyUntouchedStyling(el);
+}
+
+function initScoringSelects() {
+  SCORING_SELECT_IDS.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.dataset.untouched = 'true';
+    el.dataset.scoreLabel = SCORING_SELECT_LABELS[id] || id;
+    applyUntouchedStyling(el);
+    el.addEventListener('change', () => {
+      markSelectTouched(el);
+      updateActionBar();
+      // FORM_DRAFT_FIELDS 的 saveFormDraft 在本監聽器之前綁定，那次存檔
+      // 讀到的還是舊的 untouched 狀態 → 必須在標記後再存一次
+      saveFormDraft();
+    });
+  });
+}
+
+function updateActionBar() {
+  const total = REQUIRED_FIELD_IDS.length;
+  const filled = REQUIRED_FIELD_IDS.filter((id) => isFieldFilled($(id))).length;
+  const reqChip = $('chipRequired');
+  const reqCount = $('chipRequiredCount');
+  if (reqCount) reqCount.innerText = `${filled}/${total}`;
+  if (reqChip) {
+    reqChip.classList.toggle('chip-done', filled === total);
+    reqChip.classList.toggle('chip-todo', filled < total);
+  }
+
+  const untouched = getUntouchedSelects().length;
+  const unChip = $('chipUnconfirmed');
+  const unCount = $('chipUnconfirmedCount');
+  if (unCount) unCount.innerText = String(untouched);
+  if (unChip) {
+    unChip.classList.toggle('chip-done', untouched === 0);
+    unChip.classList.toggle('chip-todo', untouched > 0);
+  }
+}
+
+// 點晶片 → 跳到第一個還沒處理的欄位
+function focusFirstPending(kind) {
+  const el =
+    kind === 'required'
+      ? REQUIRED_FIELD_IDS.map((id) => $(id)).find((e) => !isFieldFilled(e))
+      : getUntouchedSelects()[0];
+  if (!el) return;
+  const card = el.closest('.card.collapsible');
+  if (card) card.classList.remove('collapsed');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.focus({ preventScroll: true });
+}
+
+// ============================================================
+// 本社常用參數（年限／利率）— 與草稿分開存，清草稿不會清掉
+// ============================================================
+const PREFS_KEY = 'cu_prefs';
+const PREF_FIELD_IDS = ['years', 'rate'];
+
+function savePrefs() {
+  try {
+    const data = {};
+    PREF_FIELD_IDS.forEach((id) => {
+      const el = $(id);
+      if (el) data[id] = el.value;
+    });
+    localStorage.setItem(PREFS_KEY, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn('本社預設值儲存失敗', e);
+    return false;
+  }
+}
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 只填空欄位 —— 草稿永遠優先於本社預設值
+function applyPrefsToEmptyFields() {
+  const prefs = loadPrefs();
+  if (!prefs) return;
+  PREF_FIELD_IDS.forEach((id) => {
+    const el = $(id);
+    if (!el || isFieldFilled(el) || !prefs[id]) return;
+    el.value = prefs[id];
+    const group = el.closest('.form-group');
+    if (group && !group.querySelector('.pref-hint')) {
+      const hint = document.createElement('div');
+      hint.className = 'pref-hint';
+      hint.textContent = '已帶入本社預設值';
+      group.appendChild(hint);
+    }
+  });
+}
+
 function parseInputs() {
   const consolidationMode = $('consolidationMode').checked;
   return {
@@ -549,6 +718,8 @@ function updateCollateralByYears() {
     if (collateralEl.value !== '10') {
       collateralEl.value = '10';
     }
+    // 系統依法規強制指定，等同已確認，不該再標「未確認」
+    markSelectTouched(collateralEl);
     lockMsg.style.display = 'block';
   } else {
     lockMsg.style.display = 'none';
@@ -608,6 +779,64 @@ function animateScore(targetScore) {
   requestAnimationFrame(update);
 }
 
+// ============================================================
+// 結論條（A/B/C 三級分流純屬顯示，額度一律採系統原始輸出）
+// ============================================================
+
+// 系統 A~E 五級 → 社內作業三級。對應《社員信用評級落地評估》第二節映射表。
+const TRIAGE_MAP = {
+  A: { tag: 'A 級', text: '快速審核核貸流程，額度較具彈性' },
+  B: { tag: 'B 級', text: '標準對保審核流程，定期追蹤還款紀錄' },
+  C: { tag: 'B 級', text: '標準對保審核流程，定期追蹤還款紀錄' },
+  D: {
+    tag: 'C 級',
+    text: '嚴謹對保、補強連帶保證人或實體擔保品，並經第二位審核人覆核簽章',
+  },
+  E: {
+    tag: 'C 級',
+    text: '嚴謹對保、補強連帶保證人或實體擔保品，並經第二位審核人覆核簽章',
+  },
+};
+const TRIAGE_VETOED = {
+  tag: 'C 級',
+  text: '案件已遭否決，一律列入 C 級優先列管；如仍要送件須經第二位審核人覆核簽章',
+};
+
+function renderVerdictBar(result) {
+  const { grade, scoreDetail, maxLoanLimit, postLoanDti, maxDti, isVetoed } =
+    result;
+  const bar = $('verdictBar');
+  if (!bar) return;
+
+  $('verdictText').innerText = result.sealText;
+  $('resGrade').innerText = grade;
+  $('verdictScore').innerText = String(
+    Math.max(0, Math.min(100, scoreDetail.total))
+  );
+  $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
+  $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
+  $('resMaxDtiTxt').innerText = maxDti * 100;
+
+  bar.classList.remove('verdict-pass', 'verdict-warn', 'verdict-fail');
+  bar.classList.add(`verdict-${result.sealType}`);
+
+  const triage = isVetoed ? TRIAGE_VETOED : TRIAGE_MAP[grade] || TRIAGE_VETOED;
+  $('verdictTriage').innerHTML =
+    `建議流程：<span class="triage-tag">${escapeHtml(triage.tag)}</span>${escapeHtml(triage.text)}`;
+
+  // 未確認提醒：9 個評分下拉若還維持系統預設值，分數會偏樂觀
+  const untouched = getUntouchedSelects();
+  const note = $('verdictUnconfirmed');
+  if (untouched.length > 0) {
+    note.innerText = `⚠️ 本次評分有 ${untouched.length} 項評估選項（${untouched
+      .map((el) => el.dataset.scoreLabel || el.id)
+      .join('、')}）維持系統預設值，請確認是否符合實際情況。`;
+    note.classList.add('show');
+  } else {
+    note.classList.remove('show');
+  }
+}
+
 function renderDashboard(result) {
   $('resultCard').style.display = 'block';
   $('btnPrint').style.display = 'block';
@@ -620,7 +849,6 @@ function renderDashboard(result) {
     vetoes,
     grade,
     maxDti,
-    maxLoanLimit,
     postLoanDti,
     totalExposure,
     shareMult,
@@ -636,9 +864,6 @@ function renderDashboard(result) {
   const gaugeOffset = gaugeCircumference * (1 - scoreClamped / 100);
   gaugeEl.setAttribute('stroke-dasharray', String(gaugeCircumference));
   gaugeEl.setAttribute('stroke-dashoffset', String(gaugeOffset));
-  const gradeEl = $('resGrade');
-  gradeEl.innerText = grade;
-  // 卡片底色/邊框/文字色交給 .grade-A~E（含深色模式覆寫）；JS 只留 SVG stroke
   const gradeColors = {
     A: '#2e7d32',
     B: '#00695c',
@@ -646,20 +871,13 @@ function renderDashboard(result) {
     D: '#bf360c',
     E: '#c62828',
   };
-  const gradeCard = gradeEl.closest('.result-stat');
-  gradeCard.classList.remove(
-    'grade-A',
-    'grade-B',
-    'grade-C',
-    'grade-D',
-    'grade-E'
-  );
-  if (gradeColors[grade]) gradeCard.classList.add('grade-' + grade);
   gaugeEl.setAttribute('stroke', gradeColors[grade] || '#1a237e');
 
-  $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
-  $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
-  $('resMaxDtiTxt').innerText = maxDti * 100;
+  // 結論條（#resGrade / #resLimit / #resTotalDti / #resMaxDtiTxt 都住在裡面）
+  renderVerdictBar(result);
+
+  $('resTotalDti2').innerText = (postLoanDti * 100).toFixed(1);
+  $('resMaxDtiTxt3').innerText = maxDti * 100;
   $('resMaxDtiTxt2').innerText = maxDti * 100;
   $('resShareMult').innerText = shareMult !== null ? shareMult.toFixed(1) : '—';
   $('resTotalExposure').innerText = totalExposure.toLocaleString('zh-TW');
@@ -1612,14 +1830,19 @@ function formatTime(d) {
 
 function setCalcLoading(loading) {
   const btn = $('btnCalc');
+  // 只換 label，保留 .kbd-hint（舊版直接覆寫 innerHTML，第一次計算後
+  // Ctrl+Enter 提示就永久消失了）
+  const label = btn.querySelector('.btn-calc-label');
   if (loading) {
     btn.disabled = true;
     btn.classList.add('loading');
-    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>計算中…';
+    if (label)
+      label.innerHTML =
+        '<span class="spinner" aria-hidden="true"></span>計算中…';
   } else {
     btn.disabled = false;
     btn.classList.remove('loading');
-    btn.innerHTML = '開始授信評分';
+    if (label) label.textContent = '開始授信評分';
   }
 }
 
@@ -1802,6 +2025,11 @@ function saveFormDraft() {
         : false,
     }));
     data._guarantors = guarantors;
+    // 已確認過的評分下拉（重整後不該又變回「未確認」）
+    data._touchedSelects = SCORING_SELECT_IDS.filter((id) => {
+      const el = $(id);
+      return el && el.dataset.untouched !== 'true';
+    });
     localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
   } catch (e) {
     /* localStorage 不可用時略過 */
@@ -1823,6 +2051,10 @@ function loadFormDraft() {
     if (typeof data._consolidationMode === 'boolean') {
       const cm = $('consolidationMode');
       if (cm) cm.checked = data._consolidationMode;
+    }
+    // 還原「已確認」的評分下拉
+    if (Array.isArray(data._touchedSelects)) {
+      data._touchedSelects.forEach((id) => markSelectTouched($(id)));
     }
     // 重建保證人 row（會清空再 render 一次）
     const gCount = parseInt($('guarantor_count').value) || 0;
@@ -1892,6 +2124,66 @@ function clearFormDraft() {
   } catch (e) {
     /* noop */
   }
+}
+
+// ============================================================
+// 範例案件：一鍵看完整輸出，降低第一次使用的理解成本
+// ============================================================
+const SAMPLE_CASE = {
+  memberId: 'A00123 王小明（範例）',
+  income: '50000',
+  age: '40',
+  existing_debt: '5000',
+  internal_monthly: '0',
+  internal_balance: '0',
+  loan: '300000',
+  years: '5',
+  rate: '3',
+  shares: '50000',
+  incomeStability: '6',
+  tenure: '4',
+  interaction: '7',
+  jcic: '10',
+  membership: '3',
+  collateral: '5',
+  purpose: '10',
+  career: '4',
+  participation: '2',
+};
+
+function loadSampleCase() {
+  if (
+    !confirm('載入範例案件會覆蓋目前表單內容，確定要繼續嗎？（草稿會被取代）')
+  ) {
+    return;
+  }
+  Object.keys(SAMPLE_CASE).forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.value = SAMPLE_CASE[id];
+    if (el.tagName === 'SELECT') markSelectTouched(el);
+  });
+  [
+    'income',
+    'existing_debt',
+    'internal_monthly',
+    'internal_balance',
+    'loan',
+    'shares',
+  ].forEach((id) => {
+    formatAmountInput($(id));
+    const preview = $('preview_' + id);
+    if (preview) {
+      preview.innerText = formatAmount(
+        parseFloat(String($(id).value).replace(/,/g, '')) || 0
+      );
+    }
+  });
+  updateCollateralByYears();
+  updateShareHintLive();
+  updateActionBar();
+  saveFormDraft();
+  calculateLoan();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1983,8 +2275,33 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('blur', updateShareHintLive);
   });
 
+  // 評分下拉的「未確認」標記必須在草稿還原前建立（草稿會回填已確認清單）
+  initScoringSelects();
+
   // 頁面載入時還原草稿（若存在）
   loadFormDraft();
+
+  // 本社常用參數（只補空欄位，草稿優先）
+  applyPrefsToEmptyFields();
+
+  // 操作列狀態：必填數 + 待確認數
+  REQUIRED_FIELD_IDS.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', updateActionBar);
+    el.addEventListener('change', updateActionBar);
+  });
+  $('chipRequired').addEventListener('click', () =>
+    focusFirstPending('required')
+  );
+  $('chipUnconfirmed').addEventListener('click', () =>
+    focusFirstPending('unconfirmed')
+  );
+  updateActionBar();
+
+  // Stale banner 上的重算鈕（免捲回操作列）
+  const recalcBtn = $('btnRecalc');
+  if (recalcBtn) recalcBtn.addEventListener('click', calculateLoan);
 
   // 清除草稿按鈕
   const clearBtn = $('clearDraftBtn');
@@ -1996,6 +2313,28 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // 設為本社預設（年限／利率）
+  const savePrefsBtn = $('btnSavePrefs');
+  if (savePrefsBtn) {
+    savePrefsBtn.addEventListener('click', () => {
+      const years = $('years').value;
+      const rate = $('rate').value;
+      if (!years && !rate) {
+        alert('請先填入貸款年限或年利率，再設為本社預設值。');
+        return;
+      }
+      if (savePrefs()) {
+        alert(
+          `已設為本社預設值：\n貸款年限 ${years || '（未填）'} 年\n年利率 ${rate || '（未填）'}%\n\n往後開新案件時會自動帶入，清除草稿也不會消失。`
+        );
+      }
+    });
+  }
+
+  // 載入範例案件（新手訓練 / 理監事會展示）
+  const sampleBtn = $('btnSampleCase');
+  if (sampleBtn) sampleBtn.addEventListener('click', loadSampleCase);
 
   // 整併模式切換
   const consolidationMode = $('consolidationMode');
@@ -2141,4 +2480,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+  // 平板 / 手機：第二～五節預設收起，避免一次捲三個螢幕高。
+  // 桌機維持全展開（e2e/collapse.spec.js 在 1280px 下驗證此行為）。
+  if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+    const cards = document.querySelectorAll('.card.collapsible');
+    cards.forEach((card, idx) => {
+      if (idx < 2) return; // 零、案件基本資訊 與 一、還款能力 保持展開
+      card.classList.add('collapsed');
+      const title = card.querySelector('.section-title');
+      if (title) title.setAttribute('aria-expanded', 'false');
+    });
+  }
 });

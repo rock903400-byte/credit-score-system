@@ -31,6 +31,15 @@
 
 ## Gotchas
 
+- **`#actionBar` is sticky at the top (desktop) / fixed at the bottom (≤768px).** `#btnCalc` lives inside it, not in `.btn-group`. `setCalcLoading()` swaps only the `.btn-calc-label` text — do **not** rewrite `#btnCalc.innerHTML` or the `.kbd-hint` badge disappears permanently after the first calculation.
+- **「未確認」下拉機制** (`SCORING_SELECT_IDS`, 9 selects): every scoring `<select>` defaults to its _best_ option (~40 分 combined), so an unreviewed form scores optimistically. `initScoringSelects()` stamps `data-untouched="true"`; `markSelectTouched()` clears it and drops the label pill. Gotchas:
+  - `initScoringSelects()` **must run before `loadFormDraft()`** — the draft restores the confirmed list from `data._touchedSelects`.
+  - The per-select `change` handler calls `saveFormDraft()` **again** after marking. `FORM_DRAFT_FIELDS` binds `saveFormDraft` earlier, so that first save still sees the stale `untouched` flag and the last-changed select would never persist (guarded by `e2e/actionbar.spec.js`「已確認狀態寫入草稿」).
+  - `updateCollateralByYears()` marks `#collateral` touched when it force-sets `'10'` — a system-mandated value counts as confirmed.
+- **`#verdictBar` owns `#resGrade` / `#resLimit` / `#resTotalDti` / `#resMaxDtiTxt`.** The duplicates inside the collapsed details are `resTotalDti2` / `resMaxDtiTxt3` (and `resMaxDtiTxt2` in the tip box). Grade colouring is applied to `#verdictBar` via `verdict-pass|warn|fail`, not to a `.result-stat` card.
+- **`<details id="resultDetails">` is collapsed by default**, so anything inside it (5P breakdown, radar, DTI ruler, gauge) is _not_ visible to Playwright's `innerText()`. Use `openResultDetails(page)` in `e2e/scenarios.spec.js` before reading `#bd_*` values.
+- `TRIAGE_MAP` (A/B/C 三級分流) is **display only** — it never touches the limit calculation. Keep it in `ui.js`, out of `core.js`.
+- `cu_prefs` (年限/利率 本社預設) is deliberately separate from `cu_form_draft`; `clearFormDraft()` must not remove it. `applyPrefsToEmptyFields()` runs after `loadFormDraft()` so a draft always wins.
 - `core.js` has no input validation. UI `<select>`s bound to numeric scores must keep values within option ranges — out-of-range inputs can still produce out-of-range sub-scores (the `total` is clamped 0–100, sub-scores are NOT).
 - `renderGuarantorRows(count)` wipes `#guarantorList.innerHTML`. Snapshot row data first, then call, then re-bind previews. The template includes `.g-unknown` checkbox (債務不詳) — snapshot/restore must include the `unknown` flag, and the rendered `.g-debt` carries `disabled` when `d.unknown` is true.
 - **`bindGuarantorPreviews()` calls `updateType()` at the end of each row, which controls `.g-debt` disabled state.** `updateType()` must respect `.g-unknown` checked state — never force `debtInput.disabled = false` unconditionally (regression:草稿重整後勾選的「不詳」會被覆蓋成 enabled,測試 ⑳ 守護此行為)。
@@ -66,5 +75,6 @@
 - After filling inputs, `await page.waitForTimeout(100)` so the debounced localStorage draft saves before reload. For 草稿持久化測試(checkbox/debt 連動),用 `150+` 以涵蓋 `applyUnknown` 的額外 `saveFormDraft`。
 - `#gaugeScoreVal` is a `<tspan>`; use `.textContent()` not `.innerText()`.
 - When a `<select>` is disabled (e.g. `collateral` after `years > 7`), `selectOption()` may timeout; set value via `page.evaluate(() => el.value = '5')`.
+- **Locally the suite is flaky at the default 2 workers on Windows** — a random single test dies with `Test timeout … Tearing down "context"` while chromium is still launching. `--workers=1` runs 63/63 green. CI is unaffected.
 - On failure: screenshot, trace (`.zip`), and video are saved to `test-results/`. View a trace with `npx playwright show-trace <path>`.
 - CI: `e2e.yml` runs Playwright with chromium only, uploads `test-results/` + `playwright-report/` on failure. `deploy.yml` runs unit tests then deploys `main` to GitHub Pages on every push.

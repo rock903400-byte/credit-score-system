@@ -14,6 +14,31 @@
           <p class="header-sub">金融機構授信試算工具</p>
         </div>
 
+        <div id="actionBar" class="action-bar">
+          <div class="action-bar-chips">
+            <button
+              type="button"
+              id="chipRequired"
+              class="chip"
+              aria-live="polite"
+            >
+              必填 <strong id="chipRequiredCount">0/6</strong>
+            </button>
+            <button
+              type="button"
+              id="chipUnconfirmed"
+              class="chip"
+              aria-live="polite"
+            >
+              待確認 <strong id="chipUnconfirmedCount">9</strong> 項
+            </button>
+          </div>
+          <button id="btnCalc" class="btn-calc">
+            <span class="btn-calc-label">開始授信評分</span>
+            <span class="kbd-hint">Ctrl+Enter</span>
+          </button>
+        </div>
+
         <div class="card collapsible">
           <div class="section-title">零、案件基本資訊</div>
           <div class="card-body">
@@ -474,26 +499,16 @@
         </div>
 
         <div class="btn-group">
-          <button id="btnCalc" class="btn-calc">
-            開始授信評分
-            <span
-              style="
-                font-size: 12px;
-                font-weight: normal;
-                opacity: 0.8;
-                margin-left: 6px;
-                padding: 2px 5px;
-                border: 1px solid rgba(255, 255, 255, 0.4);
-                border-radius: 3px;
-                font-family: monospace;
-              "
-              >Ctrl+Enter</span
-            >
-          </button>
           <button id="btnPrint" class="btn-print">列印正式審查報告</button>
         </div>
 
-        <div style="text-align: center; margin-top: 15px">
+        <div class="secondary-actions">
+          <button id="btnSampleCase" type="button" class="btn-clear-draft">
+            📄 載入範例案件
+          </button>
+          <button id="btnSavePrefs" type="button" class="btn-clear-draft">
+            ⭐ 設為本社預設（年限／利率）
+          </button>
           <button id="clearDraftBtn" type="button" class="btn-clear-draft">
             🗑 清除草稿
           </button>
@@ -508,198 +523,45 @@
             style="display: none"
           >
             ⚠️ 資料已變更，計算結果可能已過期，請重新計算
+            <button type="button" id="btnRecalc" class="btn-recalc">
+              重新計算
+            </button>
           </div>
           <div class="section-title">
             📊 試算分析結果
             <span id="calcTimestamp" class="calc-timestamp"></span>
           </div>
 
-          <div class="result-dashboard">
-            <div class="score-gauge">
-              <svg
-                width="140"
-                height="140"
-                viewBox="0 0 140 140"
-                aria-label="總評分圓形儀表"
-              >
-                <circle class="gauge-track" cx="70" cy="70" r="58"></circle>
-                <circle
-                  id="gaugeFill"
-                  class="gauge-fill"
-                  cx="70"
-                  cy="70"
-                  r="58"
-                  stroke-dasharray="364.4"
-                  stroke-dashoffset="364.4"
-                  stroke="#4caf50"
-                ></circle>
-                <text
-                  class="gauge-score-text"
-                  x="70"
-                  y="76"
-                  text-anchor="middle"
+          <!-- 結論條：經辦當下只需要「能不能貸／可貸多少／走哪種對保」 -->
+          <div id="verdictBar" class="verdict-bar">
+            <div class="verdict-headline">
+              <span id="verdictText" class="verdict-text"></span>
+              <span class="verdict-grade">
+                <span id="resGrade"></span> 級
+                <span class="verdict-score"
+                  >· <span id="verdictScore"></span> 分</span
                 >
-                  <tspan id="gaugeScoreVal">0</tspan>
-                  <tspan class="gauge-score-suffix">分</tspan>
-                </text>
-              </svg>
-              <div class="gauge-label">系統總評分（滿分 100）</div>
-            </div>
-            <div class="result-stat">
-              <span class="result-stat-label">信用等級</span>
-              <span
-                id="resGrade"
-                class="result-stat-value result-value-highlight"
-              ></span>
-              <span class="stat-suffix">級</span>
-            </div>
-            <div class="result-stat">
-              <span class="result-stat-label">評分可貸額度</span>
-              <span id="resLimit" class="result-stat-value"></span>
-              <span class="stat-suffix">元</span>
-            </div>
-            <div class="result-stat">
-              <span class="result-stat-label">申請額 / 股金倍數</span>
-              <span id="resShareMult" class="result-stat-value"></span>
-              <span class="stat-suffix">倍</span>
-            </div>
-            <div class="result-stat">
-              <span class="result-stat-label">在本社借款總金額</span>
-              <span id="resTotalExposure" class="result-stat-value"></span>
-              <span class="stat-suffix">元</span>
-            </div>
-          </div>
-
-          <div class="score-breakdown">
-            <div class="score-breakdown-title">評分組成（5P 面向）</div>
-            <div class="breakdown-row">
-              <span class="breakdown-label">還款能力</span>
-              <div class="breakdown-bar">
-                <div id="bd_ability" class="breakdown-fill"></div>
-              </div>
-              <span class="breakdown-score"
-                ><span id="bd_ability_val"></span> / 35</span
-              >
-            </div>
-            <div class="breakdown-row">
-              <span class="breakdown-label">借款人信用</span>
-              <div class="breakdown-bar">
-                <div id="bd_credit" class="breakdown-fill"></div>
-              </div>
-              <span class="breakdown-score"
-                ><span id="bd_credit_val"></span> / 25</span
-              >
-            </div>
-            <div class="breakdown-row">
-              <span class="breakdown-label">債權保障</span>
-              <div class="breakdown-bar">
-                <div id="bd_protection" class="breakdown-fill"></div>
-              </div>
-              <span class="breakdown-score"
-                ><span id="bd_protection_val"></span> / 20</span
-              >
-            </div>
-            <div class="breakdown-row">
-              <span class="breakdown-label">資金用途</span>
-              <div class="breakdown-bar">
-                <div id="bd_purpose" class="breakdown-fill"></div>
-              </div>
-              <span class="breakdown-score"
-                ><span id="bd_purpose_val"></span> / 10</span
-              >
-            </div>
-            <div class="breakdown-row">
-              <span class="breakdown-label">未來展望</span>
-              <div class="breakdown-bar">
-                <div id="bd_perspective" class="breakdown-fill"></div>
-              </div>
-              <span class="breakdown-score"
-                ><span id="bd_perspective_val"></span> / 10</span
-              >
-            </div>
-            <div class="breakdown-row">
-              <span
-                class="breakdown-label"
-                title="還款到期年齡 >65 扣 5 分、>70 扣 10 分"
-                >年齡調整</span
-              >
-              <div class="breakdown-bar breakdown-bar-empty"></div>
-              <span class="breakdown-score" id="bd_age_val"></span>
-            </div>
-          </div>
-
-          <!-- 雷達圖（初始隱藏，renderRadarChart 成功才顯示） -->
-          <div
-            id="radarChartContainer"
-            class="radar-chart-container no-print"
-            style="display: none"
-          >
-            <svg
-              id="radarSvg"
-              width="240"
-              height="240"
-              viewBox="0 0 240 240"
-              aria-label="5P 面向雷達圖"
-              role="img"
-            ></svg>
-            <div class="radar-legend" id="radarLegend"></div>
-          </div>
-
-          <!-- 決策分析卡（初始隱藏） -->
-          <div
-            id="insightCard"
-            class="card insight-card no-print"
-            style="display: none"
-          >
-            <div class="insight-header">
-              📋 強弱項與改善建議
-              <span class="insight-subtitle">供授信參考，非評分依據</span>
-            </div>
-            <div id="strengthWeaknessArea" class="insight-section"></div>
-            <div id="suggestionArea" class="insight-section"></div>
-          </div>
-
-          <div class="gauge-container">
-            <div class="gauge-heading">每月還款總負擔（占月收入比例）</div>
-            <div class="gauge-sub">
-              計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入
-            </div>
-            <div class="progress-container">
-              <div
-                id="progressFill"
-                class="progress-fill"
-                style="width: 0%"
-              ></div>
-              <div
-                class="progress-veto-marker"
-                style="left: 70%"
-                title="否決線 70%：核貸後總負債比超過即不予核貸"
-              ></div>
-              <div
-                id="progressLimit"
-                class="progress-limit-marker"
-                style="left: 0%"
-                title="該等級還款壓力上限"
-              ></div>
-            </div>
-            <div class="progress-scale">
-              <span style="left: 0%">0%</span>
-              <span style="left: 30%">30%</span>
-              <span style="left: 50%">50%</span>
-              <span class="scale-veto" style="left: 70%">70% 否決線</span>
-              <span style="left: 100%">100%</span>
-            </div>
-            <div class="dti-footer">
-              <span
-                >預計總月負擔：<strong
-                  id="resTotalDti"
-                  class="dti-value"
-                ></strong
-                >%
-                <span id="dtiOverflowBadge" class="overflow-badge"></span>
               </span>
-              <span>本級別上限：<strong id="resMaxDtiTxt"></strong>%</span>
             </div>
+            <div class="verdict-figures">
+              <div class="verdict-figure">
+                <span class="verdict-figure-label">評分可貸額度</span>
+                <span class="verdict-figure-value">
+                  NT$ <span id="resLimit"></span>
+                </span>
+              </div>
+              <div class="verdict-figure">
+                <span class="verdict-figure-label">核貸後每月負債比</span>
+                <span class="verdict-figure-value">
+                  <span id="resTotalDti"></span>%
+                  <span class="verdict-figure-sub"
+                    >（本級上限 <span id="resMaxDtiTxt"></span>%）</span
+                  >
+                </span>
+              </div>
+            </div>
+            <div id="verdictTriage" class="verdict-triage"></div>
+            <div id="verdictUnconfirmed" class="verdict-unconfirmed"></div>
           </div>
 
           <div id="resStatus" class="status-msg"></div>
@@ -737,11 +599,190 @@
             <span id="consolidationText"></span>
           </div>
 
-          <div class="tip-box">
-            <strong>💡 專業小叮嚀：</strong><br />
-            「本級別上限：<span id="resMaxDtiTxt2"></span
-            >%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不宜超過月收入的該比例，以維持良好的生活品質與信用風險控制。
-          </div>
+          <details id="resultDetails" class="result-details no-print">
+            <summary>查看評分明細與建議</summary>
+
+            <div class="result-dashboard">
+              <div class="score-gauge">
+                <svg
+                  width="140"
+                  height="140"
+                  viewBox="0 0 140 140"
+                  aria-label="總評分圓形儀表"
+                >
+                  <circle class="gauge-track" cx="70" cy="70" r="58"></circle>
+                  <circle
+                    id="gaugeFill"
+                    class="gauge-fill"
+                    cx="70"
+                    cy="70"
+                    r="58"
+                    stroke-dasharray="364.4"
+                    stroke-dashoffset="364.4"
+                    stroke="#4caf50"
+                  ></circle>
+                  <text
+                    class="gauge-score-text"
+                    x="70"
+                    y="76"
+                    text-anchor="middle"
+                  >
+                    <tspan id="gaugeScoreVal">0</tspan>
+                    <tspan class="gauge-score-suffix">分</tspan>
+                  </text>
+                </svg>
+                <div class="gauge-label">系統總評分（滿分 100）</div>
+              </div>
+              <div class="result-stat">
+                <span class="result-stat-label">申請額 / 股金倍數</span>
+                <span id="resShareMult" class="result-stat-value"></span>
+                <span class="stat-suffix">倍</span>
+              </div>
+              <div class="result-stat">
+                <span class="result-stat-label">在本社借款總金額</span>
+                <span id="resTotalExposure" class="result-stat-value"></span>
+                <span class="stat-suffix">元</span>
+              </div>
+            </div>
+
+            <div class="score-breakdown">
+              <div class="score-breakdown-title">評分組成（5P 面向）</div>
+              <div class="breakdown-row">
+                <span class="breakdown-label">還款能力</span>
+                <div class="breakdown-bar">
+                  <div id="bd_ability" class="breakdown-fill"></div>
+                </div>
+                <span class="breakdown-score"
+                  ><span id="bd_ability_val"></span> / 35</span
+                >
+              </div>
+              <div class="breakdown-row">
+                <span class="breakdown-label">借款人信用</span>
+                <div class="breakdown-bar">
+                  <div id="bd_credit" class="breakdown-fill"></div>
+                </div>
+                <span class="breakdown-score"
+                  ><span id="bd_credit_val"></span> / 25</span
+                >
+              </div>
+              <div class="breakdown-row">
+                <span class="breakdown-label">債權保障</span>
+                <div class="breakdown-bar">
+                  <div id="bd_protection" class="breakdown-fill"></div>
+                </div>
+                <span class="breakdown-score"
+                  ><span id="bd_protection_val"></span> / 20</span
+                >
+              </div>
+              <div class="breakdown-row">
+                <span class="breakdown-label">資金用途</span>
+                <div class="breakdown-bar">
+                  <div id="bd_purpose" class="breakdown-fill"></div>
+                </div>
+                <span class="breakdown-score"
+                  ><span id="bd_purpose_val"></span> / 10</span
+                >
+              </div>
+              <div class="breakdown-row">
+                <span class="breakdown-label">未來展望</span>
+                <div class="breakdown-bar">
+                  <div id="bd_perspective" class="breakdown-fill"></div>
+                </div>
+                <span class="breakdown-score"
+                  ><span id="bd_perspective_val"></span> / 10</span
+                >
+              </div>
+              <div class="breakdown-row">
+                <span
+                  class="breakdown-label"
+                  title="還款到期年齡 >65 扣 5 分、>70 扣 10 分"
+                  >年齡調整</span
+                >
+                <div class="breakdown-bar breakdown-bar-empty"></div>
+                <span class="breakdown-score" id="bd_age_val"></span>
+              </div>
+            </div>
+
+            <!-- 雷達圖（初始隱藏，renderRadarChart 成功才顯示） -->
+            <div
+              id="radarChartContainer"
+              class="radar-chart-container no-print"
+              style="display: none"
+            >
+              <svg
+                id="radarSvg"
+                width="240"
+                height="240"
+                viewBox="0 0 240 240"
+                aria-label="5P 面向雷達圖"
+                role="img"
+              ></svg>
+              <div class="radar-legend" id="radarLegend"></div>
+            </div>
+
+            <!-- 決策分析卡（初始隱藏） -->
+            <div
+              id="insightCard"
+              class="card insight-card no-print"
+              style="display: none"
+            >
+              <div class="insight-header">
+                📋 強弱項與改善建議
+                <span class="insight-subtitle">供授信參考，非評分依據</span>
+              </div>
+              <div id="strengthWeaknessArea" class="insight-section"></div>
+              <div id="suggestionArea" class="insight-section"></div>
+            </div>
+
+            <div class="gauge-container">
+              <div class="gauge-heading">每月還款總負擔（占月收入比例）</div>
+              <div class="gauge-sub">
+                計算方式：（社外月付 + 本社月付 + 本次新貸月付）÷ 月收入
+              </div>
+              <div class="progress-container">
+                <div
+                  id="progressFill"
+                  class="progress-fill"
+                  style="width: 0%"
+                ></div>
+                <div
+                  class="progress-veto-marker"
+                  style="left: 70%"
+                  title="否決線 70%：核貸後總負債比超過即不予核貸"
+                ></div>
+                <div
+                  id="progressLimit"
+                  class="progress-limit-marker"
+                  style="left: 0%"
+                  title="該等級還款壓力上限"
+                ></div>
+              </div>
+              <div class="progress-scale">
+                <span style="left: 0%">0%</span>
+                <span style="left: 30%">30%</span>
+                <span style="left: 50%">50%</span>
+                <span class="scale-veto" style="left: 70%">70% 否決線</span>
+                <span style="left: 100%">100%</span>
+              </div>
+              <div class="dti-footer">
+                <span
+                  >預計總月負擔：<strong
+                    id="resTotalDti2"
+                    class="dti-value"
+                  ></strong
+                  >%
+                  <span id="dtiOverflowBadge" class="overflow-badge"></span>
+                </span>
+                <span>本級別上限：<strong id="resMaxDtiTxt3"></strong>%</span>
+              </div>
+            </div>
+
+            <div class="tip-box">
+              <strong>💡 專業小叮嚀：</strong><br />
+              「本級別上限：<span id="resMaxDtiTxt2"></span
+              >%」是指您每個月「所有還債支出」的總和（含銀行外債與本社貸款），不宜超過月收入的該比例，以維持良好的生活品質與信用風險控制。
+            </div>
+          </details>
         </div>
       </div>
 

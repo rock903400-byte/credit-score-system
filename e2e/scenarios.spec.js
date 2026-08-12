@@ -22,6 +22,14 @@ async function fillForm(page, data) {
   }
 }
 
+// 5P 明細（雷達圖、長條、DTI 尺規）預設收在 <details> 裡，
+// 讀取其中的值前先展開。
+async function openResultDetails(page) {
+  await page.locator('#resultDetails').evaluate((el) => {
+    el.open = true;
+  });
+}
+
 test.describe('場景 1-6：常見優質案件', () => {
   test('① A 級模範生：公務人員 30 歲借 30 萬/5 年', async ({ page }) => {
     await page.goto('/');
@@ -120,6 +128,7 @@ test.describe('場景 1-6：常見優質案件', () => {
     });
     await page.locator('#btnCalc').click();
 
+    await openResultDetails(page);
     const age = await page.locator('#bd_age_val').innerText();
     const grade = await page.locator('#resGrade').innerText();
     // 70+5=75：AGE_SOFT_PENALTY=70 → 75>70 → 扣 10 分
@@ -140,6 +149,7 @@ test.describe('場景 1-6：常見優質案件', () => {
     });
     await page.locator('#btnCalc').click();
 
+    await openResultDetails(page);
     const age = await page.locator('#bd_age_val').innerText();
     // 68+1=69：69>65 但 ≤70 → 扣 5 分
     expect(age).toContain('-5');
@@ -350,6 +360,7 @@ test.describe('場景 13-18：實務進階', () => {
       await row.locator('.g-type').selectOption('non_member');
     }
     await page.locator('#btnCalc').click();
+    await openResultDetails(page);
     const nonMemberProtection = await page
       .locator('#bd_protection_val')
       .innerText();
@@ -378,6 +389,7 @@ test.describe('場景 13-18：實務進階', () => {
       await row.locator('.g-type').selectOption('member');
     }
     await page.locator('#btnCalc').click();
+    await openResultDetails(page);
     const memberProtection = await page
       .locator('#bd_protection_val')
       .innerText();
