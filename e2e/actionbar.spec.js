@@ -233,6 +233,7 @@ test.describe('回歸 — code review 發現', () => {
     await page.locator('#loan').fill('300000');
     await page.locator('#shares').fill('50000');
     await page.locator('#appraisalValue').fill('10000000');
+    await page.locator('#mortgageAmount').fill('500000');
     await page.locator('#houseAge').fill('15');
     await page.locator('#appraisalAge').fill('3');
     await page.locator('#btnCalc').click();

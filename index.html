@@ -321,6 +321,29 @@
               </div>
               <div
                 class="form-group"
+                id="mortgageAmountGroup"
+                style="display: none"
+              >
+                <label>
+                  抵押權設定金額 (元)
+                  <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
+                    >ⓘ<span class="tooltip-text"
+                      >依擔保放款辦法第 11 條，抵押權設定金額須達放款金額的 120%
+                      以上</span
+                    ></span
+                  >
+                </label>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="mortgageAmount"
+                  placeholder="例如：12,000,000"
+                  min="0"
+                />
+                <span class="error-msg"></span>
+              </div>
+              <div
+                class="form-group"
                 id="collateralZoneGroup"
                 style="display: none"
               >

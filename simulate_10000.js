@@ -114,6 +114,8 @@ for (let i = 0; i < 10000; i++) {
   const internalBalance = randInt(0, 200000);
   const shares = randInt(0, 500000);
   const appraisalValue = randInt(0, 20000000);
+  const mortgageAmount =
+    collateral === '10' ? Math.max(proposedLoan * 1.2, 100000) : 0;
   const collateralZone = randChoice([
     'residential_commercial_educational',
     'other',
@@ -143,6 +145,7 @@ for (let i = 0; i < 10000; i++) {
     internalBalance,
     shares,
     appraisalValue,
+    mortgageAmount,
     collateralZone,
     houseAge,
     appraisalAge,

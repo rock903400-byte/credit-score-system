@@ -616,12 +616,18 @@
         </li>
         <li>
           <strong>修復「在本社借款總金額」顯示 NaN</strong
-          >：計算入口仍引用已移除的舊欄位
-          <code>internalBalance2</code>（遷移至
+          >：計算入口仍引用已移除的舊欄位 <code>internalBalance2</code>（遷移至
           <code>additionalLoans[]</code> 後必為
           <code>undefined</code>），導致總金額算出
-          <code>NaN</code>；改為彙總所有額外筆餘額後再加總。
-          新增 E2E 斷言守護（⑭-2）。
+          <code>NaN</code>；改為彙總所有額外筆餘額後再加總。 新增 E2E
+          斷言守護（⑭-2）。
+        </li>
+        <li>
+          <strong>實作法規⑩-1 抵押權設定金額檢核</strong>：新增
+          <code>#mortgageAmount</code> 欄位（擔保放款時顯示），
+          設定金額不足放款金額 120% 即否決（否決規則從 15 條增至 16 條）。此前
+          <code>requiredMortgage</code> 僅估算卻從未比對， 屬長期未被觸發的 dead
+          code。
         </li>
       </ul>
     </div>

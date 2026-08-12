@@ -312,6 +312,7 @@ function parseInputs() {
     collateral: $('collateral').value,
     collateralKind: $('collateralKind').value || 'building',
     appraisalValue: parseAmount('appraisalValue'),
+    mortgageAmount: parseAmount('mortgageAmount'),
     collateralZone: $('collateralZone').value,
     houseAge: parseInt($('houseAge').value) || 0,
     appraisalAge: parseInt($('appraisalAge').value) || 0,
@@ -859,12 +860,14 @@ function updateCollateralByYears() {
   // 顯示/隱藏擔保放款相關欄位
   const isSecuredLoan = collateralEl.value === '10';
   const appraisalGroup = $('collateralAppraisalGroup');
+  const mortgageAmountGroup = $('mortgageAmountGroup');
   const zoneGroup = $('collateralZoneGroup');
   const kindGroup = $('collateralKindGroup');
   const houseAgeGroup = $('houseAgeGroup');
   const appraisalAgeGroup = $('appraisalAgeGroup');
   if (isSecuredLoan) {
     appraisalGroup.style.display = 'block';
+    if (mortgageAmountGroup) mortgageAmountGroup.style.display = 'block';
     zoneGroup.style.display = 'block';
     if (kindGroup) kindGroup.style.display = 'block';
     // 土地無建物：屋齡欄隱藏並清空，避免髒值進入報表或檢核
@@ -878,6 +881,7 @@ function updateCollateralByYears() {
     appraisalAgeGroup.style.display = 'block';
   } else {
     appraisalGroup.style.display = 'none';
+    if (mortgageAmountGroup) mortgageAmountGroup.style.display = 'none';
     zoneGroup.style.display = 'none';
     if (kindGroup) kindGroup.style.display = 'none';
     if (houseAgeGroup) houseAgeGroup.style.display = 'none';
@@ -1588,9 +1592,14 @@ function renderPrintReport(result) {
         kind === 'land'
           ? `（土地擔保品 / 鑑價報告 ${input.appraisalAge || 0} 年）`
           : `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
+      const mortgageNote =
+        input.mortgageAmount > 0
+          ? ` / 抵押權設定金額 ${input.mortgageAmount.toLocaleString('zh-TW')} 元`
+          : '';
       $('p_collateral_detail').innerText =
         `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
-        ageNote;
+        ageNote +
+        mortgageNote;
       collateralDetailRow.style.display = '';
     } else {
       collateralDetailRow.style.display = 'none';
@@ -1947,6 +1956,7 @@ const FORM_DRAFT_FIELDS = [
   'collateral',
   'collateralKind',
   'appraisalValue',
+  'mortgageAmount',
   'collateralZone',
   'houseAge',
   'appraisalAge',
@@ -2074,6 +2084,7 @@ function loadFormDraft() {
       'loan',
       'shares',
       'appraisalValue',
+      'mortgageAmount',
     ].forEach((id) => formatAmountInput($(id)));
     // 還原整併模式 toggle 後，既有貸款列表也要同步顯示
     const extGroup = $('internalExtGroup');
@@ -2132,6 +2143,7 @@ const SAMPLE_CASE = {
 // 保證人又計入 protectionScore，示範案件每次結果都不一樣。
 const SAMPLE_RESET = {
   appraisalValue: '',
+  mortgageAmount: '',
   collateralKind: 'building',
   houseAge: '',
   appraisalAge: '',
@@ -2229,6 +2241,16 @@ document.addEventListener('DOMContentLoaded', () => {
   if (appraisal) {
     appraisal.addEventListener('input', () => formatAmountInput(appraisal));
     appraisal.addEventListener('blur', () => formatAmountInput(appraisal));
+  }
+  // 抵押權設定金額（同上，隨擔保放款顯示）
+  const mortgageAmountEl = $('mortgageAmount');
+  if (mortgageAmountEl) {
+    mortgageAmountEl.addEventListener('input', () =>
+      formatAmountInput(mortgageAmountEl)
+    );
+    mortgageAmountEl.addEventListener('blur', () =>
+      formatAmountInput(mortgageAmountEl)
+    );
   }
 
   // 動態保證人列初始化

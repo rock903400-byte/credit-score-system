@@ -439,6 +439,12 @@ function applyRegulatoryVetoes(input) {
     }
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
     const requiredMortgage = input.proposedLoan * MORTGAGE_REGISTRATION_RATIO;
+    const mortgageRegistered = input.mortgageAmount || 0;
+    if (mortgageRegistered < requiredMortgage) {
+      vetoes.push(
+        `抵押權設定金額（${mortgageRegistered.toLocaleString('zh-TW')} 元）不足放款金額 ${input.proposedLoan.toLocaleString('zh-TW')} 元的 120%（${requiredMortgage.toLocaleString('zh-TW')} 元）`
+      );
+    }
 
     // ⑩-2 屋齡與年限檢核（辦法第 3 條之 1）；土地無建物 → 一律一般上限 20 年
     const collateralKind = input.collateralKind || 'building';

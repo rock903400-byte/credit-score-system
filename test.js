@@ -797,11 +797,37 @@ test('正常案 0 否決', () => {
     shares: 200000,
     internalBalance: 0,
     appraisalValue: 10_000_000,
+    mortgageAmount: 1_000_000,
     collateralZone: 'residential_commercial_educational',
     houseAge: 10,
     appraisalAge: 3,
   };
   assert(ARV(i).vetoes.length === 0, 'got:' + ARV(i).vetoes.join(';'));
+});
+test('抵押權設定金額不足放款 120% → 否決', () => {
+  const i = {
+    income: 80000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 500000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    shares: 200000,
+    internalBalance: 0,
+    appraisalValue: 10_000_000,
+    mortgageAmount: 599999,
+    collateralZone: 'residential_commercial_educational',
+    houseAge: 10,
+    appraisalAge: 3,
+  };
+  assert(
+    ARV(i).vetoes.some((v) => v.includes('120%')),
+    'got:' + ARV(i).vetoes.join(';')
+  );
 });
 test('income=0 → postLoanDti=Infinity', () => {
   const i = {
@@ -860,14 +886,14 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：15 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限）', () => {
+test('源碼：16 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 15,
+    (vf.match(/vetoes\.push/g) || []).length === 16,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
   );
 });
@@ -910,6 +936,7 @@ test('年限 25 年 + 不動產 → 不觸發年限否決', () => {
     shares: 200000,
     internalBalance: 0,
     appraisalValue: 10_000_000,
+    mortgageAmount: 8_000_000,
     collateralZone: 'residential_commercial_educational',
     houseAge: 10,
     appraisalAge: 3,
@@ -1341,6 +1368,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
       (!p.appraisalValue || p.appraisalValue === 0)
     ) {
       p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+      p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
       p.collateralZone = 'residential_commercial_educational';
       p.houseAge = ri(0, 25);
       p.appraisalAge = ri(0, 8);
@@ -1351,6 +1379,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
       else {
         p.collateral = '10';
         p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+        p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
         p.collateralZone = 'residential_commercial_educational';
         p.houseAge = ri(0, 20);
         p.appraisalAge = ri(0, 8);

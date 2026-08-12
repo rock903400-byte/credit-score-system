@@ -363,6 +363,55 @@ test.describe('場景 7-12：法規紅線', () => {
     expect(status).toContain('不予核貸');
     expect(status).toMatch(/LTV|超過鑑估價值/);
   });
+
+  test('⑫-3 抵押權設定金額 < 放款 120% → 否決', async ({ page }) => {
+    await page.goto('/');
+    await fillForm(page, {
+      income: 80000,
+      age: 35,
+      existing_debt: 0,
+      loan: 500000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#appraisalValue').fill('10000000');
+    // 設定金額 50 萬 < 60 萬（= 50 萬 × 120%）→ 否決
+    await page.locator('#mortgageAmount').fill('500000');
+    await page.locator('#houseAge').fill('5');
+    await page.locator('#appraisalAge').fill('2');
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    console.log(`  → 狀態：${status.replace(/\s+/g, ' ').slice(0, 100)}`);
+    expect(status).toContain('不予核貸');
+    expect(status).toMatch(/120%|抵押權設定金額/);
+  });
+
+  test('⑫-4 抵押權設定金額 ≥ 放款 120% → 不因 120% 否決', async ({ page }) => {
+    await page.goto('/');
+    await fillForm(page, {
+      income: 80000,
+      age: 35,
+      existing_debt: 0,
+      loan: 500000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#appraisalValue').fill('10000000');
+    await page.locator('#mortgageAmount').fill('600000');
+    await page.locator('#houseAge').fill('5');
+    await page.locator('#appraisalAge').fill('2');
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    console.log(`  → 狀態：${status.replace(/\s+/g, ' ').slice(0, 100)}`);
+    expect(status).not.toContain('不予核貸');
+    expect(status).not.toMatch(/120%/);
+  });
 });
 
 test.describe('場景 13-18：實務進階', () => {
