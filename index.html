@@ -515,14 +515,11 @@
         </div>
 
         <div id="resultCard" class="result-card">
-          <div
-            id="staleBanner"
-            class="stale-banner"
-            role="status"
-            aria-live="polite"
-            style="display: none"
-          >
-            ⚠️ 資料已變更，計算結果可能已過期，請重新計算
+          <!-- live region 只包文字；按鈕留在外層，否則每次更新都會被朗讀 -->
+          <div id="staleBanner" class="stale-banner" style="display: none">
+            <span role="status" aria-live="polite">
+              ⚠️ 資料已變更，計算結果可能已過期，請重新計算
+            </span>
             <button type="button" id="btnRecalc" class="btn-recalc">
               重新計算
             </button>

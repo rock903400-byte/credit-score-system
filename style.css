@@ -515,43 +515,6 @@ button {
   color: var(--text-muted);
 }
 
-/* 等級卡片配色（grade-A~E 由 renderDashboard 切換；深色模式於下方覆寫） */
-.result-stat.grade-A {
-  background: #e8f5e9;
-  border-color: #c8e6c9;
-}
-.result-stat.grade-B {
-  background: #e0f2f1;
-  border-color: #b2dfdb;
-}
-.result-stat.grade-C {
-  background: #fff3e0;
-  border-color: #ffe0b2;
-}
-.result-stat.grade-D {
-  background: #fbe9e7;
-  border-color: #ffccbc;
-}
-.result-stat.grade-E {
-  background: #ffebee;
-  border-color: #ffcdd2;
-}
-.result-stat.grade-A .result-stat-value {
-  color: #2e7d32;
-}
-.result-stat.grade-B .result-stat-value {
-  color: #00695c;
-}
-.result-stat.grade-C .result-stat-value {
-  color: #e65100;
-}
-.result-stat.grade-D .result-stat-value {
-  color: #bf360c;
-}
-.result-stat.grade-E .result-stat-value {
-  color: #c62828;
-}
-
 /* 評分組成（5P 分項橫條） */
 .score-breakdown {
   margin: 5px 0 25px;
@@ -1131,41 +1094,6 @@ button {
     border-color: #ef5350;
   }
   .breakdown-score.neg {
-    color: #f87171;
-  }
-  .result-stat.grade-A {
-    background: #14331f;
-    border-color: #1b5e20;
-  }
-  .result-stat.grade-B {
-    background: #0e2a28;
-    border-color: #00695c;
-  }
-  .result-stat.grade-C {
-    background: #3a2a12;
-    border-color: #92600a;
-  }
-  .result-stat.grade-D {
-    background: #3a1c10;
-    border-color: #bf360c;
-  }
-  .result-stat.grade-E {
-    background: #3f1d1d;
-    border-color: #7f1d1d;
-  }
-  .result-stat.grade-A .result-stat-value {
-    color: #81c784;
-  }
-  .result-stat.grade-B .result-stat-value {
-    color: #4db6ac;
-  }
-  .result-stat.grade-C .result-stat-value {
-    color: #ffb74d;
-  }
-  .result-stat.grade-D .result-stat-value {
-    color: #ff8a65;
-  }
-  .result-stat.grade-E .result-stat-value {
     color: #f87171;
   }
   .input-preview {

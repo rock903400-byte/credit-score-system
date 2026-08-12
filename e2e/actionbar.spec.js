@@ -71,6 +71,23 @@ test.describe('操作列 — 必填計數 / 待確認下拉', () => {
     await page.locator('#chipUnconfirmed').click();
     await expect(page.locator('#incomeStability')).toBeFocused();
   });
+
+  test('晶片導引展開收合區塊時，aria-expanded 必須同步', async ({ page }) => {
+    // 讓目標落在「二、借款人信用」，並先把該區塊收合
+    await page.locator('#incomeStability').selectOption('6');
+    await page.locator('#tenure').selectOption('4');
+    const card = page.locator('.card.collapsible').nth(2);
+    const title = card.locator('.section-title');
+    await title.click();
+    await expect(card).toHaveClass(/collapsed/);
+    await expect(title).toHaveAttribute('aria-expanded', 'false');
+
+    await page.locator('#chipUnconfirmed').click();
+    await expect(page.locator('#interaction')).toBeFocused();
+    await expect(card).not.toHaveClass(/collapsed/);
+    // class 與 ARIA 必須成對更新，否則讀屏軟體回報與畫面相反
+    await expect(title).toHaveAttribute('aria-expanded', 'true');
+  });
 });
 
 test.describe('結論條 — 一眼看到結論', () => {
@@ -146,7 +163,14 @@ test.describe('本社預設值 / 範例案件', () => {
 
     await expect(page.locator('#years')).toHaveValue('7');
     await expect(page.locator('#rate')).toHaveValue('2.75');
-    await expect(page.locator('.pref-hint').first()).toBeVisible();
+    await expect(page.locator('.pref-hint')).toHaveCount(2);
+
+    // 改掉其中一個 → 該欄的提示不再成立，必須撤掉；另一欄保留
+    await page.locator('#years').fill('5');
+    await expect(page.locator('.pref-hint')).toHaveCount(1);
+    await expect(
+      page.locator('#rate').locator('xpath=..').locator('.pref-hint')
+    ).toBeVisible();
   });
 
   test('載入範例案件 → 直接出結果且待確認歸零', async ({ page }) => {
@@ -161,6 +185,121 @@ test.describe('本社預設值 / 範例案件', () => {
     await expect(page.locator('#verdictBar')).toBeVisible();
     await expect(page.locator('#chipUnconfirmedCount')).toHaveText('0');
     await expect(page.locator('#chipRequiredCount')).toHaveText('6/6');
+  });
+});
+
+// Review findings 1-5 的回歸測試
+test.describe('回歸 — code review 發現', () => {
+  test('① 本社預設年限 8 年 → 擔保品連動要在載入時就跑，額度不得為 0', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+      localStorage.setItem(
+        'cu_prefs',
+        JSON.stringify({ years: '10', rate: '3' })
+      );
+    });
+    await page.reload();
+    // 載入當下就該鎖成不動產並攤開鑑估欄位，而不是等按下計算才靜默改
+    await expect(page.locator('#years')).toHaveValue('10');
+    await expect(page.locator('#collateral')).toHaveValue('10');
+    await expect(page.locator('#collateralLockMsg')).toBeVisible();
+    await expect(page.locator('#collateralAppraisalGroup')).toBeVisible();
+
+    await page.locator('#income').fill('50000');
+    await page.locator('#age').fill('40');
+    await page.locator('#loan').fill('300000');
+    await page.locator('#shares').fill('50000');
+    await page.locator('#appraisalValue').fill('10000000');
+    await page.locator('#houseAge').fill('15');
+    await page.locator('#appraisalAge').fill('3');
+    await page.locator('#btnCalc').click();
+    await expect(page.locator('#resLimit')).not.toHaveText('0');
+  });
+
+  test('② 晶片計數與結論條提醒不得互相矛盾', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    for (const [sel, v] of Object.entries(REQUIRED)) {
+      await page.locator(sel).fill(v);
+    }
+    // 直接改 years 的值再計算，不觸發 change → 走 calculateLoan 內的連動路徑
+    await page.locator('#years').fill('10');
+    await page.locator('#btnCalc').click();
+    const chip = parseInt(
+      await page.locator('#chipUnconfirmedCount').innerText()
+    );
+    const note = await page.locator('#verdictUnconfirmed').innerText();
+    const inNote = parseInt(note.match(/有\s*(\d+)\s*項/)[1]);
+    expect(chip).toBe(inNote);
+  });
+
+  test('③ 載入範例案件要清掉前一案的保證人與整併設定', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.locator('#guarantor_count').selectOption('2');
+    await page
+      .locator('.guarantor-row')
+      .first()
+      .locator('.g-name')
+      .fill('前一位保證人');
+    await page.locator('#consolidationMode').check();
+    await page.locator('#internal_monthly2').fill('3000');
+
+    page.on('dialog', (d) => d.accept());
+    await page.locator('#btnSampleCase').click();
+    await expect(page.locator('#resultCard')).toBeVisible();
+
+    await expect(page.locator('#guarantor_count')).toHaveValue('0');
+    await expect(page.locator('.guarantor-row')).toHaveCount(0);
+    await expect(page.locator('#consolidationMode')).not.toBeChecked();
+    await expect(page.locator('#internal_monthly2')).toHaveValue('');
+    await expect(page.locator('#consolidationBox')).toBeHidden();
+  });
+
+  test('④ 舊草稿（無 _touchedSelects）不得被整批誤標未確認', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+      // 模擬本功能上線前存下的草稿：有值、但沒有 _touchedSelects
+      localStorage.setItem(
+        'cu_form_draft',
+        JSON.stringify({
+          income: '50000',
+          age: '40',
+          loan: '300000',
+          years: '5',
+          rate: '3',
+          shares: '50000',
+          jcic: '2',
+          career: '0',
+          interaction: '3',
+        })
+      );
+    });
+    await page.reload();
+    await expect(page.locator('#jcic')).toHaveValue('2');
+    // 值已非預設 →「維持系統預設值」對這三項並不成立
+    await expect(page.locator('#chipUnconfirmedCount')).toHaveText('6');
+    await expect(page.locator('#jcic')).not.toHaveClass(/select-untouched/);
+    await expect(page.locator('#career')).not.toHaveClass(/select-untouched/);
+    await expect(page.locator('.untouched-pill')).toHaveCount(6);
+  });
+
+  test('⑤ 尚未計算過時，改欄位不得讓計算鈕顯示「已過期」', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.locator('#income').fill('50000');
+    await page.locator('#income').dispatchEvent('change');
+    await expect(page.locator('#btnCalc')).not.toHaveClass(/btn-stale/);
+    await expect(page.locator('#staleBanner')).toBeHidden();
   });
 });
 

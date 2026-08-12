@@ -157,15 +157,31 @@ function isFieldFilled(el) {
   return !!el && String(el.value).trim() !== '';
 }
 
+// 折疊狀態的唯一入口：class 與 aria-expanded 必須成對更新，
+// 否則讀屏軟體會回報與畫面相反的狀態。
+function setCardCollapsed(card, collapsed) {
+  if (!card) return;
+  card.classList.toggle('collapsed', collapsed);
+  const title = card.querySelector('.section-title');
+  if (title) title.setAttribute('aria-expanded', String(!collapsed));
+}
+
+// 「未確認」= 從未被確認過 **且** 仍停在系統預設值。
+// 第二個條件讓警語永遠為真：值已經不是預設值時，「維持系統預設值」就是假的。
+// 也讓本次改動之前存的舊草稿（沒有 _touchedSelects）不會被整批誤標。
 function getUntouchedSelects() {
   return SCORING_SELECT_IDS.map((id) => $(id)).filter(
-    (el) => el && el.dataset.untouched === 'true'
+    (el) =>
+      el &&
+      el.dataset.untouched === 'true' &&
+      el.value === el.dataset.defaultValue
   );
 }
 
 // 在 label 尾端掛「未確認」pill，並給 select 一條虛線邊
 function applyUntouchedStyling(el) {
-  const untouched = el.dataset.untouched === 'true';
+  const untouched =
+    el.dataset.untouched === 'true' && el.value === el.dataset.defaultValue;
   el.classList.toggle('select-untouched', untouched);
   const group = el.closest('.form-group');
   const label = group && group.querySelector('label');
@@ -187,12 +203,17 @@ function markSelectTouched(el) {
   if (!el || el.dataset.untouched !== 'true') return;
   el.dataset.untouched = 'false';
   applyUntouchedStyling(el);
+  // 呼叫端不只有 change handler（updateCollateralByYears、草稿還原、範例案件
+  // 都會呼叫），晶片計數必須跟著走，否則會與結論條的提醒數字互相矛盾。
+  updateActionBar();
 }
 
 function initScoringSelects() {
   SCORING_SELECT_IDS.forEach((id) => {
     const el = $(id);
     if (!el) return;
+    // 在草稿還原前記下出廠預設值，之後才判斷得出「是否仍停在預設」
+    el.dataset.defaultValue = el.value;
     el.dataset.untouched = 'true';
     el.dataset.scoreLabel = SCORING_SELECT_LABELS[id] || id;
     applyUntouchedStyling(el);
@@ -203,6 +224,15 @@ function initScoringSelects() {
       // 讀到的還是舊的 untouched 狀態 → 必須在標記後再存一次
       saveFormDraft();
     });
+  });
+}
+
+// 草稿還原是直接寫 el.value，不會經過 markSelectTouched，
+// 因此標示要在還原後整批重算一次（舊草稿沒有 _touchedSelects 時尤其重要）。
+function refreshScoringSelectMarks() {
+  SCORING_SELECT_IDS.forEach((id) => {
+    const el = $(id);
+    if (el) applyUntouchedStyling(el);
   });
 }
 
@@ -234,8 +264,7 @@ function focusFirstPending(kind) {
       ? REQUIRED_FIELD_IDS.map((id) => $(id)).find((e) => !isFieldFilled(e))
       : getUntouchedSelects()[0];
   if (!el) return;
-  const card = el.closest('.card.collapsible');
-  if (card) card.classList.remove('collapsed');
+  setCardCollapsed(el.closest('.card.collapsible'), false);
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.focus({ preventScroll: true });
 }
@@ -274,10 +303,12 @@ function loadPrefs() {
 function applyPrefsToEmptyFields() {
   const prefs = loadPrefs();
   if (!prefs) return;
+  let applied = false;
   PREF_FIELD_IDS.forEach((id) => {
     const el = $(id);
     if (!el || isFieldFilled(el) || !prefs[id]) return;
     el.value = prefs[id];
+    applied = true;
     const group = el.closest('.form-group');
     if (group && !group.querySelector('.pref-hint')) {
       const hint = document.createElement('div');
@@ -285,7 +316,24 @@ function applyPrefsToEmptyFields() {
       hint.textContent = '已帶入本社預設值';
       group.appendChild(hint);
     }
+    // 使用者一旦改成別的值，提示就不再成立，必須撤掉
+    el.addEventListener('input', () => {
+      if (el.value !== prefs[id]) clearPrefHint(el);
+    });
   });
+  // 程式設值不觸發 change，年限→擔保品的連動必須手動補跑；
+  // 否則本社預設年限 >7 年時，擔保品停在「足額股金內」、鑑估欄位不出現，
+  // 按下計算才被靜默改成不動產，鑑估價值 0 → 可貸額度算成 0。
+  if (applied) {
+    updateCollateralByYears();
+    updateShareHintLive();
+  }
+}
+
+function clearPrefHint(el) {
+  const group = el && el.closest('.form-group');
+  const hint = group && group.querySelector('.pref-hint');
+  if (hint) hint.remove();
 }
 
 function parseInputs() {
@@ -1798,7 +1846,11 @@ let isResultStale = false;
 
 function markResultStale() {
   const card = $('resultCard');
-  if (!card || card.style.display === 'none' || isResultStale) return;
+  // 初始隱藏來自 style.css 的 `.result-card { display: none }`，沒有 inline
+  // style，用 card.style.display 判斷不到 → 首次計算前改欄位就會讓常駐在
+  // 操作列的 #btnCalc 閃橘框說「結果已過期」，但根本還沒算過。
+  if (!card || getComputedStyle(card).display === 'none' || isResultStale)
+    return;
   isResultStale = true;
   card.classList.add('stale');
   $('btnCalc').classList.add('btn-stale');
@@ -2151,17 +2203,54 @@ const SAMPLE_CASE = {
   participation: '2',
 };
 
+// SAMPLE_CASE 沒列到、但會影響評分或列印的欄位，載入前一律歸零。
+// 否則前一位社員的保證人姓名／整併設定會混進「範例」，
+// 保證人又計入 protectionScore，示範案件每次結果都不一樣。
+const SAMPLE_RESET = {
+  internal_monthly2: '',
+  internal_balance2: '',
+  internal_years2: '',
+  internal_rate2: '',
+  appraisalValue: '',
+  houseAge: '',
+  appraisalAge: '',
+  guarantor_count: '0',
+};
+
 function loadSampleCase() {
   if (
     !confirm('載入範例案件會覆蓋目前表單內容，確定要繼續嗎？（草稿會被取代）')
   ) {
     return;
   }
+  Object.entries(SAMPLE_RESET).forEach(([id, v]) => {
+    const el = $(id);
+    if (el) el.value = v;
+  });
+  const zone = $('collateralZone');
+  if (zone) zone.value = 'other';
+  const cm = $('consolidationMode');
+  if (cm && cm.checked) {
+    cm.checked = false;
+    [
+      'internal2Group',
+      'internalBalance2Group',
+      'internalYears2Group',
+      'internalRate2Group',
+    ].forEach((gid) => {
+      const g = $(gid);
+      if (g) g.style.display = 'none';
+    });
+  }
+  renderGuarantorRows(0);
+
   Object.keys(SAMPLE_CASE).forEach((id) => {
     const el = $(id);
     if (!el) return;
     el.value = SAMPLE_CASE[id];
     if (el.tagName === 'SELECT') markSelectTouched(el);
+    // 範例值覆蓋掉本社預設值，提示不再成立（程式設值不觸發 input）
+    if (PREF_FIELD_IDS.includes(id)) clearPrefHint(el);
   });
   [
     'income',
@@ -2280,6 +2369,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 頁面載入時還原草稿（若存在）
   loadFormDraft();
+
+  // 草稿還原後重算「未確認」標示（值已非預設者不該再標）
+  refreshScoringSelectMarks();
 
   // 本社常用參數（只補空欄位，草稿優先）
   applyPrefsToEmptyFields();
@@ -2467,10 +2559,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!panel.id) panel.id = 'panel-' + Math.random().toString(36).slice(2);
       title.setAttribute('aria-controls', panel.id);
 
-      const toggle = () => {
-        const isCollapsed = card.classList.toggle('collapsed');
-        title.setAttribute('aria-expanded', String(!isCollapsed));
-      };
+      const toggle = () =>
+        setCardCollapsed(card, !card.classList.contains('collapsed'));
 
       title.addEventListener('click', toggle);
       title.addEventListener('keydown', (e) => {
@@ -2487,9 +2577,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cards = document.querySelectorAll('.card.collapsible');
     cards.forEach((card, idx) => {
       if (idx < 2) return; // 零、案件基本資訊 與 一、還款能力 保持展開
-      card.classList.add('collapsed');
-      const title = card.querySelector('.section-title');
-      if (title) title.setAttribute('aria-expanded', 'false');
+      setCardCollapsed(card, true);
     });
   }
 });
