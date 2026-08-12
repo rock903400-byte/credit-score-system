@@ -412,6 +412,37 @@ test.describe('場景 7-12：法規紅線', () => {
     expect(status).not.toContain('不予核貸');
     expect(status).not.toMatch(/120%/);
   });
+
+  test('⑪-2 屋齡≤20 非自用住宅：25 年否決；勾自用即放行', async ({ page }) => {
+    await page.goto('/');
+    await fillForm(page, {
+      income: 80000,
+      age: 35,
+      existing_debt: 0,
+      loan: 5000000,
+      years: 25,
+      rate: 3,
+      shares: 200000,
+    });
+    // 25 年已自動切到不動產，再保險指定一次
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#appraisalValue').fill('10000000');
+    await page.locator('#mortgageAmount').fill('8000000');
+    await page.locator('#houseAge').fill('10');
+    await page.locator('#appraisalAge').fill('3');
+    // 預設未勾自用 → 非自用住宅，25 年超過一般上限 20 年
+    await page.locator('#btnCalc').click();
+    let status = await page.locator('#resStatus').innerText();
+    console.log(`  → 非自用：${status.replace(/\s+/g, ' ').slice(0, 100)}`);
+    expect(status).toContain('不予核貸');
+    expect(status).toMatch(/非自用住宅/);
+    // 勾自用住宅 → 屋齡≤20 得放寬至 30 年，只剩 120%/LTV 檢核應通過
+    await page.locator('#selfOccupied').check();
+    await page.locator('#btnCalc').click();
+    status = await page.locator('#resStatus').innerText();
+    console.log(`  → 自用：${status.replace(/\s+/g, ' ').slice(0, 100)}`);
+    expect(status).not.toContain('不予核貸');
+  });
 });
 
 test.describe('場景 13-18：實務進階', () => {

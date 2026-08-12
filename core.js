@@ -442,7 +442,7 @@ function applyRegulatoryVetoes(input) {
     const mortgageRegistered = input.mortgageAmount || 0;
     if (mortgageRegistered < requiredMortgage) {
       vetoes.push(
-        `抵押權設定金額（${mortgageRegistered.toLocaleString('zh-TW')} 元）不足放款金額 ${input.proposedLoan.toLocaleString('zh-TW')} 元的 120%（${requiredMortgage.toLocaleString('zh-TW')} 元）`
+        `抵押權設定金額（${mortgageRegistered.toLocaleString('zh-TW')} 元）不足放款金額 ${input.proposedLoan.toLocaleString('zh-TW')} 元的 120%（${Math.round(requiredMortgage).toLocaleString('zh-TW')} 元）`
       );
     }
 
@@ -455,13 +455,20 @@ function applyRegulatoryVetoes(input) {
           `土地擔保品貸款年限上限 ${SECURED_YEARS_STANDARD} 年，目前 ${input.years} 年超過上限`
         );
       }
-    } else if (houseAge <= 20 && input.years > MAX_SECURED_YEARS) {
+    } else if (
+      input.years > SECURED_YEARS_STANDARD &&
+      (houseAge > 20 || !input.isSelfOccupied)
+    ) {
+      vetoes.push(
+        `屋齡 ${houseAge} 年${houseAge <= 20 ? '之非自用住宅' : ''}，貸款年限上限 ${SECURED_YEARS_STANDARD} 年，目前 ${input.years} 年超過上限`
+      );
+    } else if (
+      houseAge <= 20 &&
+      input.isSelfOccupied &&
+      input.years > MAX_SECURED_YEARS
+    ) {
       vetoes.push(
         `屋齡 ${houseAge} 年 ≤ 20 年之自用住宅，貸款年限上限 ${MAX_SECURED_YEARS} 年，目前 ${input.years} 年超過上限`
-      );
-    } else if (houseAge > 20 && input.years > SECURED_YEARS_STANDARD) {
-      vetoes.push(
-        `屋齡 ${houseAge} 年 > 20 年，貸款年限上限 ${SECURED_YEARS_STANDARD} 年，目前 ${input.years} 年超過上限`
       );
     }
     // ⑩-3 鑑價報告逾 10 年須重鑑（辦法第 12 條）

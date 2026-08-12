@@ -921,7 +921,7 @@ test('年限 35 年 → veto（擔保放款最長 30 年）', () => {
     'got:' + ARV(i).vetoes.join(';')
   );
 });
-test('年限 25 年 + 不動產 → 不觸發年限否決', () => {
+test('年限 25 年 + 不動產（自用住宅）→ 不觸發年限否決', () => {
   const i = {
     income: 80000,
     age: 35,
@@ -940,8 +940,68 @@ test('年限 25 年 + 不動產 → 不觸發年限否決', () => {
     collateralZone: 'residential_commercial_educational',
     houseAge: 10,
     appraisalAge: 3,
+    isSelfOccupied: true,
   };
   assert(ARV(i).vetoes.length === 0, 'got:' + ARV(i).vetoes.join(';'));
+});
+test('年限 25 年 + 屋齡≤20 非自用住宅 → 20 年上限否決', () => {
+  const i = {
+    income: 80000,
+    age: 35,
+    years: 25,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 5_000_000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    shares: 200000,
+    internalBalance: 0,
+    appraisalValue: 10_000_000,
+    mortgageAmount: 8_000_000,
+    collateralZone: 'residential_commercial_educational',
+    houseAge: 10,
+    appraisalAge: 3,
+    isSelfOccupied: false,
+  };
+  const v = ARV(i).vetoes;
+  assert(
+    v.some((x) => x.includes('非自用住宅') && x.includes('20 年')),
+    'got:' + v.join(';')
+  );
+});
+test('年限 21 年 + 屋齡≤20 非自用住宅 → 否決；自用住宅 → 放行', () => {
+  const base = {
+    income: 80000,
+    age: 35,
+    years: 21,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 5_000_000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    shares: 200000,
+    internalBalance: 0,
+    appraisalValue: 10_000_000,
+    mortgageAmount: 8_000_000,
+    collateralZone: 'residential_commercial_educational',
+    houseAge: 10,
+    appraisalAge: 3,
+  };
+  assert(
+    ARV({ ...base, isSelfOccupied: false }).vetoes.some((x) =>
+      x.includes('非自用住宅')
+    ),
+    '非自用應否決'
+  );
+  assert(
+    ARV({ ...base, isSelfOccupied: true }).vetoes.length === 0,
+    '自用 21 年應放行，got:' +
+      ARV({ ...base, isSelfOccupied: true }).vetoes.join(';')
+  );
 });
 
 console.log('\n── determineGrade (3) ──');

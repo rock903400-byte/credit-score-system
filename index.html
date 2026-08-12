@@ -3,11 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="金融機構內部授信審核工具：5P 信用評分、16 項法規否決檢核、可貸額度與每月負債比試算。"
+    />
     <title>信用評分與核貸試算系統</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="container">
+    <main class="container">
       <div class="no-print">
         <div class="header">
           <h1>信用評分與核貸試算系統</h1>
@@ -44,7 +48,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label
+                <label for="memberId"
                   >借款人編號 / 姓名
                   <span style="color: var(--text-muted); font-weight: normal"
                     >(選填，列印時顯示)</span
@@ -58,7 +62,7 @@
                 />
               </div>
               <div class="form-group">
-                <label>申請日期</label>
+                <label for="appDate">申請日期</label>
                 <input type="date" id="appDate" />
               </div>
             </div>
@@ -70,7 +74,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label>借款人月平均收入 (元)</label>
+                <label for="income">借款人月平均收入 (元)</label>
                 <input
                   type="text"
                   inputmode="numeric"
@@ -82,7 +86,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label>借款人年齡 (歲)</label>
+                <label for="age">借款人年齡 (歲)</label>
                 <input
                   type="number"
                   id="age"
@@ -93,7 +97,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label
+                <label for="existing_debt"
                   >社外債務每月應繳總額 (元)<br />
                   <small style="color: var(--text-muted); font-weight: normal"
                     >(銀行房貸、車貸、信貸、信用卡分期等)</small
@@ -111,7 +115,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label
+                <label for="internal_monthly"
                   >本社現有貸款每月應繳額 (元)<br />
                   <small style="color: var(--text-muted); font-weight: normal"
                     >(若無則填 0；同時會納入 債務比率(DSR)評分)</small
@@ -132,7 +136,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label
+                <label for="internal_balance"
                   >本社現有貸款餘額 (元)<br />
                   <small style="color: var(--text-muted); font-weight: normal"
                     >(用於計算在本社借款總金額、信用上限合計)</small
@@ -180,7 +184,7 @@
                 </button>
               </div>
               <div class="form-group">
-                <label>收入穩定性</label>
+                <label for="incomeStability">收入穩定性</label>
                 <select id="incomeStability">
                   <option value="9">公教人員或大型企業（受景氣影響小）</option>
                   <option value="6">一般企業正職員工</option>
@@ -189,7 +193,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>現職年資</label>
+                <label for="tenure">現職年資</label>
                 <select id="tenure">
                   <option value="6">現職年資 > 5 年</option>
                   <option value="4">現職年資 3~5 年</option>
@@ -198,7 +202,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>預計借款金額 (元)</label>
+                <label for="loan">預計借款金額 (元)</label>
                 <input
                   type="text"
                   inputmode="numeric"
@@ -210,7 +214,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label>貸款年限 (年)</label>
+                <label for="years">貸款年限 (年)</label>
                 <input type="number" id="years" placeholder="例如：5" min="1" />
                 <span class="error-msg"></span>
                 <div id="yearsHint" class="notice-warn">
@@ -219,7 +223,7 @@
                 </div>
               </div>
               <div class="form-group">
-                <label>年利率 (%)</label>
+                <label for="rate">年利率 (%)</label>
                 <input
                   type="number"
                   id="rate"
@@ -238,7 +242,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label>社內往來與儲蓄習慣</label>
+                <label for="interaction">社內往來與儲蓄習慣</label>
                 <select id="interaction">
                   <option value="10">不間斷儲蓄超過 12 個月</option>
                   <option value="7">穩定儲蓄但曾有短暫中斷</option>
@@ -247,7 +251,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>聯合徵信紀錄</label>
+                <label for="jcic">聯合徵信紀錄</label>
                 <select id="jcic">
                   <option value="10">無信用瑕疵且無預借現金</option>
                   <option value="5">有遲繳紀錄但已結清</option>
@@ -256,7 +260,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>入社年資</label>
+                <label for="membership">入社年資</label>
                 <select id="membership">
                   <option value="5">入社超過 5 年</option>
                   <option value="3">入社 1~5 年</option>
@@ -272,7 +276,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label>社內股金餘額 (元)</label>
+                <label for="shares">社內股金餘額 (元)</label>
                 <input
                   type="text"
                   inputmode="numeric"
@@ -284,7 +288,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label>擔保品設定</label>
+                <label for="collateral">擔保品設定</label>
                 <select id="collateral">
                   <option value="12">足額股金內借款 (極優)</option>
                   <option value="10">足額不動產抵押 (擔保放款)</option>
@@ -300,7 +304,7 @@
                 id="collateralAppraisalGroup"
                 style="display: none"
               >
-                <label>
+                <label for="appraisalValue">
                   擔保品鑑估價值 (元)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
@@ -324,7 +328,7 @@
                 id="mortgageAmountGroup"
                 style="display: none"
               >
-                <label>
+                <label for="mortgageAmount">
                   抵押權設定金額 (元)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
@@ -347,7 +351,7 @@
                 id="collateralZoneGroup"
                 style="display: none"
               >
-                <label>
+                <label for="collateralZone">
                   都市計畫區分
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
@@ -369,7 +373,7 @@
                 id="collateralKindGroup"
                 style="display: none"
               >
-                <label>
+                <label for="collateralKind">
                   擔保品性質
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
@@ -386,7 +390,7 @@
                 </select>
               </div>
               <div class="form-group" id="houseAgeGroup" style="display: none">
-                <label>
+                <label for="houseAge">
                   屋齡 (年)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
@@ -404,11 +408,21 @@
                 <span class="error-msg"></span>
               </div>
               <div
+                class="form-group form-group-checkbox"
+                id="selfOccupiedGroup"
+                style="display: none"
+              >
+                <label>
+                  <input type="checkbox" id="selfOccupied" />
+                  自用住宅（屋齡 20 年內自用住宅得放寬貸款年限至 30 年）
+                </label>
+              </div>
+              <div
                 class="form-group"
                 id="appraisalAgeGroup"
                 style="display: none"
               >
-                <label>
+                <label for="appraisalAge">
                   鑑價報告年數 (年)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text">逾 10 年須重新鑑價</span></span
@@ -424,7 +438,7 @@
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
-                <label>保證人人數</label>
+                <label for="guarantor_count">保證人人數</label>
                 <select id="guarantor_count">
                   <option value="0">無保證人</option>
                   <option value="1">1 人</option>
@@ -449,7 +463,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label>借款用途正當性</label>
+                <label for="purpose">借款用途正當性</label>
                 <select id="purpose">
                   <option value="10">生產、教育、修繕房屋、醫療</option>
                   <option value="10">債務整合 (清償高利貸/卡債)</option>
@@ -466,7 +480,7 @@
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label>職業前景</label>
+                <label for="career">職業前景</label>
                 <select id="career">
                   <option value="6">公教或大型企業 (受景氣影響小)</option>
                   <option value="4">一般產業 (穩定)</option>
@@ -476,7 +490,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>社務參與度</label>
+                <label for="participation">社務參與度</label>
                 <select id="participation">
                   <option value="4">積極參與社務並擔任幹部</option>
                   <option value="3">積極參與社務 (出席會議/活動)</option>
@@ -969,7 +983,7 @@
           本報告書由信用評分系統自動生成，僅供內部授信審核參考之用。借款人實際核貸金額、利率及條件，仍須依據本社授信規章辦理，並以「放款委員會」之最終審議決議為準。
         </div>
       </div>
-    </div>
+    </main>
 
     <script src="core.js"></script>
     <script src="ui.js"></script>

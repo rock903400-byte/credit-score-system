@@ -124,7 +124,7 @@ function applyUntouchedStyling(el) {
       pill.title = '維持此預設值，點我標記為已確認';
       pill.setAttribute(
         'aria-label',
-        `標記「${el.dataset.scoreLabel || el.id}」為已確認`
+        `未確認 — 標記「${el.dataset.scoreLabel || el.id}」為已確認`
       );
       pill.addEventListener('click', () => {
         markSelectTouched(el);
@@ -316,6 +316,7 @@ function parseInputs() {
     collateralZone: $('collateralZone').value,
     houseAge: parseInt($('houseAge').value) || 0,
     appraisalAge: parseInt($('appraisalAge').value) || 0,
+    isSelfOccupied: !!($('selfOccupied')?.checked || false),
     guarantorCount: parseInt($('guarantor_count').value) || 0,
     guarantors: Array.from(document.querySelectorAll('.guarantor-row')).map(
       (row) => ({
@@ -515,8 +516,12 @@ function renderGuarantorRows(count) {
     r.className = 'guarantor-row';
     r.innerHTML =
       '<div class="form-group">' +
-      '<label>保證人類型 <span style="font-size: 11px; font-weight: normal; color: #666; margin-left: 5px;">(社員全重/非社員 0.7 倍)</span></label>' +
-      '<select class="g-type">' +
+      '<label for="g-type-' +
+      i +
+      '">保證人類型 <span style="font-size: 11px; font-weight: normal; color: #666; margin-left: 5px;">(社員全重/非社員 0.7 倍)</span></label>' +
+      '<select class="g-type" id="g-type-' +
+      i +
+      '">' +
       '<option value="member" ' +
       (d.type === 'member' ? 'selected' : '') +
       '>社員保證人 (加權 1.0)</option>' +
@@ -527,15 +532,23 @@ function renderGuarantorRows(count) {
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>保證人姓名</label>' +
-      '<input type="text" class="g-name" placeholder="姓名（如：王大成）" value="' +
+      '<label for="g-name-' +
+      i +
+      '">保證人姓名</label>' +
+      '<input type="text" class="g-name" id="g-name-' +
+      i +
+      '" placeholder="姓名（如：王大成）" value="' +
       escapeHtml(d.name) +
       '">' +
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>月收入 (元)</label>' +
-      '<input type="number" class="g-income" placeholder="例如：50000" min="0" value="' +
+      '<label for="g-income-' +
+      i +
+      '">月收入 (元)</label>' +
+      '<input type="number" class="g-income" id="g-income-' +
+      i +
+      '" placeholder="例如：50000" min="0" value="' +
       d.income +
       '">' +
       '<span class="input-preview g-income-preview"></span>' +
@@ -554,8 +567,12 @@ function renderGuarantorRows(count) {
       '</small>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>既有債務月付 (元)</label>' +
-      '<input type="number" class="g-debt" placeholder="0" min="0" value="' +
+      '<label for="g-debt-' +
+      i +
+      '">既有債務月付 (元)</label>' +
+      '<input type="number" class="g-debt" id="g-debt-' +
+      i +
+      '" placeholder="0" min="0" value="' +
       (d.unknown ? '' : d.debt) +
       '"' +
       (d.unknown ? ' disabled' : '') +
@@ -700,31 +717,47 @@ function renderExtLoanRows(rows) {
     r.className = 'ext-row';
     r.innerHTML =
       '<div class="form-group">' +
-      '<label>每月應繳額 (元)</label>' +
-      '<input type="text" inputmode="numeric" class="ext-monthly" placeholder="0" min="0" value="' +
+      '<label for="ext-monthly-' +
+      i +
+      '">每月應繳額 (元)</label>' +
+      '<input type="text" inputmode="numeric" class="ext-monthly" id="ext-monthly-' +
+      i +
+      '" placeholder="0" min="0" value="' +
       escapeHtml(d.monthly || '') +
       '">' +
       '<span class="input-preview ext-monthly-preview"></span>' +
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>剩餘餘額 (元)</label>' +
-      '<input type="text" inputmode="numeric" class="ext-balance" placeholder="0" min="0" value="' +
+      '<label for="ext-balance-' +
+      i +
+      '">剩餘餘額 (元)</label>' +
+      '<input type="text" inputmode="numeric" class="ext-balance" id="ext-balance-' +
+      i +
+      '" placeholder="0" min="0" value="' +
       escapeHtml(d.balance || '') +
       '">' +
       '<span class="input-preview ext-balance-preview"></span>' +
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>剩餘年限 (年)</label>' +
-      '<input type="number" class="ext-years" placeholder="例如：3" min="0" step="0.5" value="' +
+      '<label for="ext-years-' +
+      i +
+      '">剩餘年限 (年)</label>' +
+      '<input type="number" class="ext-years" id="ext-years-' +
+      i +
+      '" placeholder="例如：3" min="0" step="0.5" value="' +
       escapeHtml(d.years || '') +
       '">' +
       '<span class="error-msg"></span>' +
       '</div>' +
       '<div class="form-group">' +
-      '<label>利率 (%)</label>' +
-      '<input type="number" class="ext-rate" placeholder="例如：3" min="0" step="0.01" value="' +
+      '<label for="ext-rate-' +
+      i +
+      '">利率 (%)</label>' +
+      '<input type="number" class="ext-rate" id="ext-rate-' +
+      i +
+      '" placeholder="例如：3" min="0" step="0.01" value="' +
       escapeHtml(d.rate || '') +
       '">' +
       '<span class="error-msg"></span>' +
@@ -826,6 +859,35 @@ function updateShareHintLive() {
   shareHint.style.display = 'block';
 }
 
+// 抵押權設定金額即時檢查：⑩-1 設定金額須 ≥ 放款金額 × 120%
+// （與 core.applyRegulatoryVetoes 同標準：未填視同 0 元，不足即否決）
+function updateMortgageHint() {
+  const el = $('mortgageAmount');
+  if (!el) return;
+  const collateral = $('collateral').value;
+  const loan = parseAmount('loan');
+  if (collateral !== '10' || loan <= 0) {
+    setFieldError(el, '');
+    return;
+  }
+  const registered = parseAmount('mortgageAmount');
+  const required = loan * 1.2;
+  if (registered < required) {
+    setFieldError(
+      el,
+      `抵押權設定金額${
+        registered > 0
+          ? `（${registered.toLocaleString('zh-TW')} 元）`
+          : '未填（視同 0 元）'
+      }，低於放款金額 ${loan.toLocaleString('zh-TW')} 元的 120%（${Math.round(
+        required
+      ).toLocaleString('zh-TW')} 元），將觸發法規否決`
+    );
+  } else {
+    setFieldError(el, '');
+  }
+}
+
 function updateCollateralByYears() {
   const yearsVal = parseInt($('years').value) || 0;
   const collateralEl = $('collateral');
@@ -878,6 +940,13 @@ function updateCollateralByYears() {
       const ha = $('houseAge');
       if (ha && ha.value !== '') ha.value = '';
     }
+    // 自用住宅欄：僅建物且屋齡 ≤ 20 年時顯示（放寬 30 年的前提）
+    const selfOccupiedGroup = $('selfOccupiedGroup');
+    if (selfOccupiedGroup) {
+      const haVal = parseFloat($('houseAge')?.value) || 0;
+      selfOccupiedGroup.style.display =
+        !isLandKind && haVal <= 20 ? 'block' : 'none';
+    }
     appraisalAgeGroup.style.display = 'block';
   } else {
     appraisalGroup.style.display = 'none';
@@ -892,6 +961,8 @@ function updateCollateralByYears() {
     kindEl.dataset.bound = 'true';
     kindEl.addEventListener('change', updateCollateralByYears);
   }
+  // 擔保品顯示狀態變動後，同步更新抵押權設定金額的即時檢查
+  updateMortgageHint();
 }
 
 // ============================================================
@@ -1591,7 +1662,13 @@ function renderPrintReport(result) {
       const ageNote =
         kind === 'land'
           ? `（土地擔保品 / 鑑價報告 ${input.appraisalAge || 0} 年）`
-          : `（屋齡 ${input.houseAge || 0} 年 / 鑑價報告 ${input.appraisalAge || 0} 年）`;
+          : `（屋齡 ${input.houseAge || 0} 年${
+              (input.houseAge || 0) <= 20
+                ? input.isSelfOccupied
+                  ? '，自用住宅'
+                  : '，非自用住宅'
+                : ''
+            } / 鑑價報告 ${input.appraisalAge || 0} 年）`;
       const mortgageNote =
         input.mortgageAmount > 0
           ? ` / 抵押權設定金額 ${input.mortgageAmount.toLocaleString('zh-TW')} 元`
@@ -1998,6 +2075,9 @@ function saveFormDraft() {
       const el = $(id);
       return el && el.dataset.untouched !== 'true';
     });
+    // 自用住宅 checkbox（value 無法反映 checked 狀態，需另存）
+    const so = $('selfOccupied');
+    if (so) data._selfOccupied = so.checked;
     localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
   } catch (e) {
     /* localStorage 不可用時略過 */
@@ -2023,6 +2103,11 @@ function loadFormDraft() {
     // 還原「已確認」的評分下拉
     if (Array.isArray(data._touchedSelects)) {
       data._touchedSelects.forEach((id) => markSelectTouched($(id)));
+    }
+    // 還原自用住宅勾選
+    if (typeof data._selfOccupied === 'boolean') {
+      const so = $('selfOccupied');
+      if (so) so.checked = data._selfOccupied;
     }
     // 重建保證人 row（會清空再 render 一次）
     const gCount = parseInt($('guarantor_count').value) || 0;
@@ -2126,7 +2211,7 @@ const SAMPLE_CASE = {
   loan: '300000',
   years: '5',
   rate: '3',
-  shares: '50000',
+  shares: '200000',
   incomeStability: '6',
   tenure: '4',
   interaction: '7',
@@ -2168,6 +2253,8 @@ function loadSampleCase() {
     const extGroup = $('internalExtGroup');
     if (extGroup) extGroup.style.display = 'none';
   }
+  const so = $('selfOccupied');
+  if (so && so.checked) so.checked = false;
   renderExtLoanRows([]);
   renderGuarantorRows(0);
 
@@ -2235,12 +2322,22 @@ document.addEventListener('DOMContentLoaded', () => {
     input.addEventListener('input', () => formatAmountInput(input));
     input.addEventListener('blur', () => formatAmountInput(input));
     update();
+    if (id === 'loan') {
+      input.addEventListener('input', updateMortgageHint);
+      input.addEventListener('blur', updateMortgageHint);
+    }
   });
   // 鑑估價值（沒有 preview 也要千分位）
   const appraisal = $('appraisalValue');
   if (appraisal) {
     appraisal.addEventListener('input', () => formatAmountInput(appraisal));
     appraisal.addEventListener('blur', () => formatAmountInput(appraisal));
+  }
+  // 屋齡變動 → 自用住宅欄的顯示狀態（僅 ≤20 年顯示）
+  const houseAgeEl = $('houseAge');
+  if (houseAgeEl) {
+    houseAgeEl.addEventListener('input', updateCollateralByYears);
+    houseAgeEl.addEventListener('change', updateCollateralByYears);
   }
   // 抵押權設定金額（同上，隨擔保放款顯示）
   const mortgageAmountEl = $('mortgageAmount');
@@ -2251,6 +2348,8 @@ document.addEventListener('DOMContentLoaded', () => {
     mortgageAmountEl.addEventListener('blur', () =>
       formatAmountInput(mortgageAmountEl)
     );
+    mortgageAmountEl.addEventListener('input', updateMortgageHint);
+    mortgageAmountEl.addEventListener('blur', updateMortgageHint);
   }
 
   // 動態保證人列初始化
