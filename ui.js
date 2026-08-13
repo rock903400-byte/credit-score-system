@@ -68,7 +68,7 @@ const SCORING_SELECT_IDS = [
   'participation',
 ];
 const SCORING_SELECT_LABELS = {
-  incomeStability: '收入穩定性',
+  incomeStability: '收入型態',
   tenure: '現職年資',
   interaction: '社內往來',
   jcic: '聯徵紀錄',
@@ -1482,7 +1482,7 @@ function renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes) {
       // 5. (dsrScore + stability) < 25
       if (dsrScore + stability < 25) {
         candidates.push({
-          text: '提升收入穩定性或降低既有債務可提高還款能力',
+          text: '改以固定薪資收入為主，或降低既有債務可提高還款能力',
           gain: 10,
         });
       }
@@ -1552,7 +1552,7 @@ function renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes) {
       // 14. incomeStability < 9
       if (incomeStability < 9) {
         candidates.push({
-          text: '提升收入穩定性可提高還款能力評分',
+          text: '改以固定薪資收入為主可提高還款能力評分',
           gain: 5,
         });
       }
