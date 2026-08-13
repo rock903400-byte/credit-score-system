@@ -266,7 +266,7 @@ function computeScore(input) {
     }
   }
 
-  // Protection (20%) — 擔保 12 + 保證人(加權) 8 + 保證人DSR 5 = 25 理論值 → ×0.8 正規化到 20 滿分
+  // Protection (20%) — 擔保 12 + 保證人(加權) 8 + 保證人DSR 5 + LTV覆蓋 3 = 28 理論值 → ×0.8 正規化到 20 滿分
   let effectiveGuarantorCount = 0;
   if (input.guarantors && input.guarantors.length > 0) {
     input.guarantors.forEach((g) => {
@@ -275,10 +275,18 @@ function computeScore(input) {
     });
   }
   effectiveGuarantorCount = Math.round(effectiveGuarantorCount);
+  const collateralScore = COLLATERAL_SCORE[input.collateral] || 0;
+  const guarantorScore = GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0;
+  // 擔保覆蓋加成：不動產抵押依 LTV（貸款/鑑價）加成——價值越足、保障越高
+  let ltvBonus = 0;
+  if (input.collateral === '10') {
+    const appraisal = input.appraisalValue || 0;
+    const ltv = appraisal > 0 ? input.proposedLoan / appraisal : Infinity;
+    if (ltv <= 0.5) ltvBonus = 3;
+    else if (ltv <= 0.7) ltvBonus = 2;
+  }
   const rawProtectionScore =
-    (COLLATERAL_SCORE[input.collateral] || 0) +
-    (GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0) +
-    guarantorDsrScore;
+    collateralScore + guarantorScore + guarantorDsrScore + ltvBonus;
   const protectionScore = Math.min(20, Math.round(rawProtectionScore * 0.8));
 
   // Purpose (10%)
@@ -303,6 +311,12 @@ function computeScore(input) {
     ageScore,
     peopleScore,
     protectionScore,
+    protectionBreakdown: {
+      collateral: collateralScore,
+      ltvBonus,
+      guarantor: guarantorScore,
+      guarantorDsr: guarantorDsrScore,
+    },
     purposeScore,
     perspectiveScore,
     total: Math.max(

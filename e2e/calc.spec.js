@@ -36,8 +36,6 @@ test.describe('Calc — 計算流程', () => {
 
     await expect(page.locator('#resultCard')).toBeVisible();
     await expect(page.locator('#resGrade')).toContainText(/[A-E]/);
-    // 計算時間戳
-    await expect(page.locator('#calcTimestamp')).toContainText('計算時間');
   });
 
   test('驗證失敗 → 顯示錯誤訊息、不顯示結果', async ({ page }) => {
@@ -53,5 +51,26 @@ test.describe('Calc — 計算流程', () => {
     await page.locator('#age').focus();
     await page.keyboard.press('Control+Enter');
     await expect(page.locator('#resultCard')).toBeVisible();
+  });
+
+  test('LTV 覆蓋充足（300萬/1000萬）→ 債權保障 12/20 且明細含加成', async ({
+    page,
+  }) => {
+    await fillMinimalValidForm(page);
+    await page.locator('#loan').fill('3000000');
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#collateralZone').selectOption('other');
+    await page.locator('#appraisalValue').fill('10000000');
+    await page.locator('#houseAge').fill('5');
+    await page.locator('#appraisalAge').fill('2');
+    await page.locator('#mortgageAmount').fill('3600000');
+    await page.locator('#btnCalc').click();
+    await page.locator('#resultDetails').evaluate((el) => {
+      el.open = true;
+    });
+    await expect(page.locator('#bd_protection_val')).toHaveText('12');
+    await expect(page.locator('#bd_protection_detail')).toContainText(
+      'LTV 加成 3'
+    );
   });
 });

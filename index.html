@@ -511,9 +511,6 @@
           <button id="btnSampleCase" type="button" class="btn-clear-draft">
             📄 載入範例案件
           </button>
-          <button id="btnSavePrefs" type="button" class="btn-clear-draft">
-            ⭐ 設為本社預設（年限／利率）
-          </button>
           <button id="clearDraftBtn" type="button" class="btn-clear-draft">
             🗑 清除草稿
           </button>
@@ -529,10 +526,7 @@
               重新計算
             </button>
           </div>
-          <div class="section-title">
-            📊 試算分析結果
-            <span id="calcTimestamp" class="calc-timestamp"></span>
-          </div>
+          <div class="section-title">📊 試算分析結果</div>
 
           <!-- 結論條：經辦當下只需要「能不能貸／可貸多少／走哪種對保」 -->
           <div id="verdictBar" class="verdict-bar">
@@ -675,6 +669,7 @@
                 <span class="breakdown-score"
                   ><span id="bd_protection_val"></span> / 20</span
                 >
+                <span id="bd_protection_detail" class="breakdown-detail"></span>
               </div>
               <div class="breakdown-row">
                 <span class="breakdown-label">資金用途</span>

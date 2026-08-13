@@ -167,32 +167,7 @@ test.describe('結論條 — 一眼看到結論', () => {
   });
 });
 
-test.describe('本社預設值 / 範例案件', () => {
-  test('設為本社預設 → 清除草稿後仍自動帶入年限與利率', async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-
-    await page.locator('#years').fill('7');
-    await page.locator('#rate').fill('2.75');
-    page.on('dialog', (d) => d.accept());
-    await page.locator('#btnSavePrefs').click();
-
-    await page.locator('#clearDraftBtn').click();
-    await page.waitForLoadState('load');
-
-    await expect(page.locator('#years')).toHaveValue('7');
-    await expect(page.locator('#rate')).toHaveValue('2.75');
-    await expect(page.locator('.pref-hint')).toHaveCount(2);
-
-    // 改掉其中一個 → 該欄的提示不再成立，必須撤掉；另一欄保留
-    await page.locator('#years').fill('5');
-    await expect(page.locator('.pref-hint')).toHaveCount(1);
-    await expect(
-      page.locator('#rate').locator('xpath=..').locator('.pref-hint')
-    ).toBeVisible();
-  });
-
+test.describe('範例案件', () => {
   test('載入範例案件 → 直接出結果且待確認歸零', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
@@ -210,37 +185,7 @@ test.describe('本社預設值 / 範例案件', () => {
 
 // Review findings 1-5 的回歸測試
 test.describe('回歸 — code review 發現', () => {
-  test('① 本社預設年限 8 年 → 擔保品連動要在載入時就跑，額度不得為 0', async ({
-    page,
-  }) => {
-    await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.clear();
-      localStorage.setItem(
-        'cu_prefs',
-        JSON.stringify({ years: '10', rate: '3' })
-      );
-    });
-    await page.reload();
-    // 載入當下就該鎖成不動產並攤開鑑估欄位，而不是等按下計算才靜默改
-    await expect(page.locator('#years')).toHaveValue('10');
-    await expect(page.locator('#collateral')).toHaveValue('10');
-    await expect(page.locator('#collateralLockMsg')).toBeVisible();
-    await expect(page.locator('#collateralAppraisalGroup')).toBeVisible();
-
-    await page.locator('#income').fill('50000');
-    await page.locator('#age').fill('40');
-    await page.locator('#loan').fill('300000');
-    await page.locator('#shares').fill('50000');
-    await page.locator('#appraisalValue').fill('10000000');
-    await page.locator('#mortgageAmount').fill('500000');
-    await page.locator('#houseAge').fill('15');
-    await page.locator('#appraisalAge').fill('3');
-    await page.locator('#btnCalc').click();
-    await expect(page.locator('#resLimit')).not.toHaveText('0');
-  });
-
-  test('② 晶片計數與結論條提醒不得互相矛盾', async ({ page }) => {
+  test('① 晶片計數與結論條提醒不得互相矛盾', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
@@ -258,7 +203,7 @@ test.describe('回歸 — code review 發現', () => {
     expect(chip).toBe(inNote);
   });
 
-  test('③ 載入範例案件要清掉前一案的保證人與整併設定', async ({ page }) => {
+  test('② 載入範例案件要清掉前一案的保證人與整併設定', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
@@ -284,7 +229,7 @@ test.describe('回歸 — code review 發現', () => {
     await expect(page.locator('#consolidationBox')).toBeHidden();
   });
 
-  test('④ 舊草稿（無 _touchedSelects）不得被整批誤標未確認', async ({
+  test('③ 舊草稿（無 _touchedSelects）不得被整批誤標未確認', async ({
     page,
   }) => {
     await page.goto('/');
@@ -315,7 +260,7 @@ test.describe('回歸 — code review 發現', () => {
     await expect(page.locator('.untouched-pill')).toHaveCount(6);
   });
 
-  test('⑤ 尚未計算過時，改欄位不得讓計算鈕顯示「已過期」', async ({ page }) => {
+  test('④ 尚未計算過時，改欄位不得讓計算鈕顯示「已過期」', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();

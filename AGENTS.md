@@ -47,7 +47,7 @@
 - **抵押權設定金額** `#mortgageAmount`：`collateral='10'` 時顯示（連動於 `collateralAppraisalGroup` 顯示狀態）。法規⑩-1 要求設定金額 ≥ 放款 × 120%（第 16 條否決；`test.js` 規則計數為 16）。未填視同 0 → 否決，因此**所有 `collateral='10'` 的測試與產生器（test.js `coherent`、simulate\_\*.js）都必須補 `mortgageAmount = max(loan×1.2, 100000)`**，否則判定會忽然被 120% 打回。
 - **「未確認」pill 是可點擊按鈕**（`.untouched-pill`）：維持預設值的使用者點一下即 `markSelectTouched` + `saveFormDraft`，不必改值再改回。E2E：`actionbar.spec.js`「維持預設值：點「未確認」pill 即標記已確認」。
 - `TRIAGE_MAP` (A/B/C 三級分流) is **display only** — it never touches the limit calculation. Keep it in `ui.js`, out of `core.js`.
-- `cu_prefs` (年限/利率 本社預設) is deliberately separate from `cu_form_draft`; `clearFormDraft()` must not remove it. `applyPrefsToEmptyFields()` runs after `loadFormDraft()` so a draft always wins. It assigns `el.value` programmatically (no `change` event), so it **must** re-run `updateCollateralByYears()` — a 本社預設年限 of 8+ years otherwise leaves 擔保品 on `'12'` with the 鑑估 fields hidden, and 可貸額度 computes to **0**.
+- 「設為本社預設」功能已移除（`cu_prefs` 不再被讀取，殘留的 localStorage 資料無害）。`clearFormDraft()` must not remove `cu_prefs`-like keys — just leave storage alone.
 - `markResultStale()` gates on `getComputedStyle(card).display`, not `card.style.display`: `#resultCard` is hidden by a stylesheet rule with no inline style, and `#btnCalc` now lives in the always-visible action bar, so an inline-only check makes the button blink 「已過期」 before the first calculation.
 - `loadSampleCase()` resets `SAMPLE_RESET` + guarantors + 整併模式 before applying `SAMPLE_CASE`. Anything added to the form that affects scoring must be added to one of those two maps, or the previous case bleeds into the demo.
 - `core.js` has no input validation. UI `<select>`s bound to numeric scores must keep values within option ranges — out-of-range inputs can still produce out-of-range sub-scores (the `total` is clamped 0–100, sub-scores are NOT).
@@ -70,7 +70,7 @@
   - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
   - otherwise → `shares + 1 M`.
 - Default `<option>` for `#collateral` is `'12'`. If `proposedLoan > shares`, set to `'5'` or `'10'` to avoid silent veto.
-- Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 would otherwise exceed 100).
+- Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 + LTV bonus 3 would otherwise exceed 100). 不動產抵押（`collateral='10'`）另依 LTV（loan/appraisal）加成：≤50% ＋3、≤70% ＋2、其餘/無鑑價 ＋0。`computeScore` 回傳 `protectionBreakdown` 供 UI 顯示構成（擔保/LTV/保證人/DSR）。注意 `test.js` 的 `coherent()` 兜底鑑價為 `loan×1.3` 而非固定 500 萬——若改用固定大額兜底，小額貸款 LTV 會掉到加成區間、A 級分布暴增。
 - `pmt()` is the simplified **first-period** formula: `principal/months + principal × (rate/100/12)`. Not the standard amortizing PMT — `computeMaxLoan` does the real math separately.
 - Credit scores are written to `localStorage` as a debounced draft under `cu_form_draft`; Report ID sequence uses `cu_seq_YYYYMMDD` keys.
 - **保證人「債務不詳」** (`g.unknown=true`):

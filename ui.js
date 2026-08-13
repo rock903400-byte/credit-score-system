@@ -208,73 +208,6 @@ function focusFirstPending(kind) {
   el.focus({ preventScroll: true });
 }
 
-// ============================================================
-// 本社常用參數（年限／利率）— 與草稿分開存，清草稿不會清掉
-// ============================================================
-const PREFS_KEY = 'cu_prefs';
-const PREF_FIELD_IDS = ['years', 'rate'];
-
-function savePrefs() {
-  try {
-    const data = {};
-    PREF_FIELD_IDS.forEach((id) => {
-      const el = $(id);
-      if (el) data[id] = el.value;
-    });
-    localStorage.setItem(PREFS_KEY, JSON.stringify(data));
-    return true;
-  } catch (e) {
-    console.warn('本社預設值儲存失敗', e);
-    return false;
-  }
-}
-
-function loadPrefs() {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// 只填空欄位 —— 草稿永遠優先於本社預設值
-function applyPrefsToEmptyFields() {
-  const prefs = loadPrefs();
-  if (!prefs) return;
-  let applied = false;
-  PREF_FIELD_IDS.forEach((id) => {
-    const el = $(id);
-    if (!el || isFieldFilled(el) || !prefs[id]) return;
-    el.value = prefs[id];
-    applied = true;
-    const group = el.closest('.form-group');
-    if (group && !group.querySelector('.pref-hint')) {
-      const hint = document.createElement('div');
-      hint.className = 'pref-hint';
-      hint.textContent = '已帶入本社預設值';
-      group.appendChild(hint);
-    }
-    // 使用者一旦改成別的值，提示就不再成立，必須撤掉
-    el.addEventListener('input', () => {
-      if (el.value !== prefs[id]) clearPrefHint(el);
-    });
-  });
-  // 程式設值不觸發 change，年限→擔保品的連動必須手動補跑；
-  // 否則本社預設年限 >7 年時，擔保品停在「足額股金內」、鑑估欄位不出現，
-  // 按下計算才被靜默改成不動產，鑑估價值 0 → 可貸額度算成 0。
-  if (applied) {
-    updateCollateralByYears();
-    updateShareHintLive();
-  }
-}
-
-function clearPrefHint(el) {
-  const group = el && el.closest('.form-group');
-  const hint = group && group.querySelector('.pref-hint');
-  if (hint) hint.remove();
-}
-
 function parseInputs() {
   const consolidationMode = $('consolidationMode').checked;
   // 整併模式：收集所有額外既有貸款（過濾全空列）
@@ -1165,6 +1098,22 @@ function renderDashboard(result) {
     scoreDetail.ageScore === 0 ? '—' : `${scoreDetail.ageScore} 分`;
   bdAge.classList.toggle('neg', scoreDetail.ageScore < 0);
 
+  // 債權保障明細：擔保／LTV 加成／保證人／DSR 構成（0 分項省略）
+  const protB = scoreDetail.protectionBreakdown;
+  const protDetail = $('bd_protection_detail');
+  if (protDetail && protB) {
+    const parts = [`擔保 ${protB.collateral}`];
+    if (protB.ltvBonus > 0) parts.push(`LTV 加成 ${protB.ltvBonus}`);
+    if (protB.guarantor > 0) parts.push(`保證人 ${protB.guarantor}`);
+    if (protB.guarantorDsr > 0) parts.push(`DSR ${protB.guarantorDsr}`);
+    const raw =
+      protB.collateral + protB.ltvBonus + protB.guarantor + protB.guarantorDsr;
+    const capNote = raw * 0.8 > 20 ? '（上限 20）' : '';
+    protDetail.textContent =
+      parts.join('＋') +
+      ` ＝ ${raw} → ×0.8 ＝ ${scoreDetail.protectionScore}/20${capNote}`;
+  }
+
   // 狀態訊息（[FIX 1.3] 否決清單以 <ul> 累積呈現）
   const statusEl = $('resStatus');
   statusEl.className = 'status-msg';
@@ -1841,7 +1790,6 @@ function renderPrintReport(result) {
 // ============================================================
 // 結果過期狀態管理
 // ============================================================
-let lastCalculatedAt = null;
 let isResultStale = false;
 
 function markResultStale() {
@@ -1856,12 +1804,6 @@ function markResultStale() {
   $('btnCalc').classList.add('btn-stale');
   const banner = $('staleBanner');
   if (banner) banner.style.display = 'block';
-  const ts = $('calcTimestamp');
-  if (ts && lastCalculatedAt) {
-    ts.textContent =
-      '計算時間 ' + formatTime(lastCalculatedAt) + '（資料已變更）';
-    ts.classList.add('stale');
-  }
 }
 
 function clearResultStale() {
@@ -1870,14 +1812,6 @@ function clearResultStale() {
   $('btnCalc').classList.remove('btn-stale');
   const banner = $('staleBanner');
   if (banner) banner.style.display = 'none';
-  const ts = $('calcTimestamp');
-  if (ts) ts.classList.remove('stale');
-}
-
-function formatTime(d) {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
 }
 
 function setCalcLoading(loading) {
@@ -1997,10 +1931,7 @@ function calculateLoan() {
 
     renderDashboard(result);
     renderPrintReport(result);
-    lastCalculatedAt = new Date();
     clearResultStale();
-    const ts = $('calcTimestamp');
-    if (ts) ts.textContent = '計算時間 ' + formatTime(lastCalculatedAt);
   } catch (e) {
     console.error('calculateLoan error:', e);
     alert('計算過程發生錯誤，請檢查輸入資料。\n' + e.message);
@@ -2263,8 +2194,6 @@ function loadSampleCase() {
     if (!el) return;
     el.value = SAMPLE_CASE[id];
     if (el.tagName === 'SELECT') markSelectTouched(el);
-    // 範例值覆蓋掉本社預設值，提示不再成立（程式設值不觸發 input）
-    if (PREF_FIELD_IDS.includes(id)) clearPrefHint(el);
   });
   [
     'income',
@@ -2407,9 +2336,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // 草稿還原後重算「未確認」標示（值已非預設者不該再標）
   refreshScoringSelectMarks();
 
-  // 本社常用參數（只補空欄位，草稿優先）
-  applyPrefsToEmptyFields();
-
   // 操作列狀態：必填數 + 待確認數
   REQUIRED_FIELD_IDS.forEach((id) => {
     const el = $(id);
@@ -2436,24 +2362,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (confirm('確定要清除已填寫的草稿並重置表單？')) {
         clearFormDraft();
         location.reload();
-      }
-    });
-  }
-
-  // 設為本社預設（年限／利率）
-  const savePrefsBtn = $('btnSavePrefs');
-  if (savePrefsBtn) {
-    savePrefsBtn.addEventListener('click', () => {
-      const years = $('years').value;
-      const rate = $('rate').value;
-      if (!years && !rate) {
-        alert('請先填入貸款年限或年利率，再設為本社預設值。');
-        return;
-      }
-      if (savePrefs()) {
-        alert(
-          `已設為本社預設值：\n貸款年限 ${years || '（未填）'} 年\n年利率 ${rate || '（未填）'}%\n\n往後開新案件時會自動帶入，清除草稿也不會消失。`
-        );
       }
     });
   }

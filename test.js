@@ -1222,6 +1222,116 @@ test('擔保12+5保人 protection=20 (raw 12+8+5=25→×0.8→20)、總分≤100
   assert(r.total <= 100, 'total got:' + r.total);
 });
 
+console.log('\n── LTV 覆蓋加成 (6) ──');
+const protectionBase = {
+  income: 80000,
+  age: 35,
+  years: 5,
+  ratePercent: 3,
+  existingDebt: 0,
+  internalMonthly: 0,
+  proposedLoan: 3000000,
+  incomeStability: 9,
+  tenure: 6,
+  interaction: 10,
+  jcic: '10',
+  membership: 5,
+  collateral: '10',
+  guarantorCount: 0,
+  guarantors: [],
+  purpose: '10',
+  career: 6,
+  participation: 4,
+  internalBalance: 0,
+  shares: 200000,
+};
+const ltvCase = (loan, appraisal) =>
+  CS({ ...protectionBase, proposedLoan: loan, appraisalValue: appraisal });
+test('LTV 30%（300萬/1000萬）→ ltvBonus=3、protection=12', () => {
+  const r = ltvCase(3000000, 10000000);
+  assert(
+    r.protectionBreakdown.ltvBonus === 3,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+  assert(r.protectionScore === 12, 'score got:' + r.protectionScore);
+});
+test('LTV 60% → ltvBonus=2、protection=11', () => {
+  const r = ltvCase(3000000, 5000000);
+  assert(
+    r.protectionBreakdown.ltvBonus === 2,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+  assert(r.protectionScore === 11, 'score got:' + r.protectionScore);
+});
+test('LTV 77% → ltvBonus=0（逼近否決線不加成）', () => {
+  const r = ltvCase(3000000, 3900000);
+  assert(
+    r.protectionBreakdown.ltvBonus === 0,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+  assert(r.protectionScore === 10, 'score got:' + r.protectionScore);
+});
+test('無鑑價（appraisal=0）→ ltvBonus=0', () => {
+  const r = ltvCase(3000000, 0);
+  assert(
+    r.protectionBreakdown.ltvBonus === 0,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+});
+test('股金內借款（collateral=12）不適用 LTV 加成', () => {
+  const r = CS({
+    ...protectionBase,
+    collateral: '12',
+    proposedLoan: 100000,
+    appraisalValue: 10000000,
+  });
+  assert(
+    r.protectionBreakdown.ltvBonus === 0,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+});
+test('LTV 邊界：50%→+3、50.01%→+2、70%→+2、70.01%→+0', () => {
+  assert(ltvCase(5000000, 10000000).protectionBreakdown.ltvBonus === 3);
+  assert(ltvCase(5001000, 10000000).protectionBreakdown.ltvBonus === 2);
+  assert(ltvCase(7000000, 10000000).protectionBreakdown.ltvBonus === 2);
+  assert(ltvCase(7001000, 10000000).protectionBreakdown.ltvBonus === 0);
+});
+test('雙滿案件（擔保10+LTV3+5保人8+DSR5 raw=28）→ cap 在 20', () => {
+  const r = CS({
+    ...protectionBase,
+    collateral: '10',
+    proposedLoan: 3000000,
+    appraisalValue: 10000000,
+    guarantorCount: 5,
+    guarantors: [1, 2, 3, 4, 5].map((n) => ({
+      name: 'g' + n,
+      income: 60000,
+      debt: 0,
+      type: 'member',
+    })),
+  });
+  assert(
+    r.protectionBreakdown.ltvBonus === 3,
+    'bonus got:' + r.protectionBreakdown.ltvBonus
+  );
+  assert(
+    r.protectionBreakdown.guarantor === 8,
+    'guarantor got:' + r.protectionBreakdown.guarantor
+  );
+  assert(
+    r.protectionBreakdown.guarantorDsr === 5,
+    'dsr got:' + r.protectionBreakdown.guarantorDsr
+  );
+  const raw =
+    r.protectionBreakdown.collateral +
+    r.protectionBreakdown.ltvBonus +
+    r.protectionBreakdown.guarantor +
+    r.protectionBreakdown.guarantorDsr;
+  assert(raw === 28, 'raw got:' + raw);
+  assert(raw * 0.8 > 20, 'raw×0.8 should exceed cap');
+  assert(r.protectionScore === 20, 'score got:' + r.protectionScore);
+});
+
 // ============================================================
 // 100-人分布迴歸測試：coherent 輸入快照
 // 偵測日後微調公式時分布劇烈漂移（A 級從 30% 掉到 5% 等）
@@ -1427,7 +1537,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
       p.collateral === '10' &&
       (!p.appraisalValue || p.appraisalValue === 0)
     ) {
-      p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+      p.appraisalValue = p.proposedLoan * 1.3;
       p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
       p.collateralZone = 'residential_commercial_educational';
       p.houseAge = ri(0, 25);
@@ -1438,7 +1548,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
       if (p.proposedLoan <= p.shares * 2) p.collateral = '5';
       else {
         p.collateral = '10';
-        p.appraisalValue = Math.max(p.proposedLoan * 1.3, 5_000_000);
+        p.appraisalValue = p.proposedLoan * 1.3;
         p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
         p.collateralZone = 'residential_commercial_educational';
         p.houseAge = ri(0, 20);

@@ -93,24 +93,7 @@ button:active {
   padding-left: 15px;
 }
 
-/* 計算時間戳（嵌在 section-title 內） */
-.calc-timestamp {
-  margin-left: auto;
-  font-size: 0.7em;
-  font-weight: 500;
-  color: var(--text-muted);
-  border-left: none;
-  padding-left: 0;
-  border: 1px solid var(--border-color, #e0e6ed);
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: var(--bg-color);
-}
-.calc-timestamp.stale {
-  color: #c62828;
-  border-color: #ef9a9a;
-  background: #ffebee;
-}
+/* Stale banner（橘色全寬警告） */
 @keyframes staleBlink {
   0%,
   100% {
@@ -120,11 +103,6 @@ button:active {
     background-color: #fff3e0;
   }
 }
-.calc-timestamp.stale {
-  animation: staleBlink 1.6s ease-in-out infinite;
-}
-
-/* Stale banner（橘色全寬警告） */
 .stale-banner {
   margin: 0 0 16px 0;
   padding: 12px 16px;
@@ -573,6 +551,12 @@ button {
 }
 .breakdown-score.neg {
   color: #c62828;
+}
+.breakdown-detail {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* 儀表板進度條 */
@@ -1189,15 +1173,6 @@ button {
     color: #fbbf24;
     border-color: #b45309;
   }
-  .calc-timestamp {
-    background-color: #1e293b;
-    border-color: #334155;
-  }
-  .calc-timestamp.stale {
-    background-color: #3f1d1d;
-    color: #f87171;
-    border-color: #7f1d1d;
-  }
   .btn-primary {
     background: var(--primary-color);
     color: #fff;
@@ -1603,14 +1578,7 @@ select.select-untouched {
   outline-offset: 1px;
 }
 
-/* --- 本社預設值提示 --- */
-.pref-hint {
-  margin-top: 6px;
-  font-size: 0.8em;
-  color: var(--text-muted);
-}
-
-/* --- 次要操作列（範例案件 / 本社預設 / 清除草稿） --- */
+/* --- 次要操作列（範例案件 / 清除草稿） --- */
 .secondary-actions {
   display: flex;
   justify-content: center;
