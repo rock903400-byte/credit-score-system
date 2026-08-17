@@ -296,7 +296,7 @@ function setFieldError(inputEl, msg) {
     }
     if (!span || !span.classList?.contains('error-msg')) {
       // 找最近一個 form-group 內的 error-msg（相容保證人動態 row）
-      const group = inputEl.closest('.form-group');
+      const group = inputEl.closest('.form-group, .guarantor-row, .ext-row');
       if (group) {
         span = group.querySelector('.error-msg');
       }
@@ -306,14 +306,31 @@ function setFieldError(inputEl, msg) {
       span.style.display = 'block';
     }
   } else {
-    inputEl.classList.remove('has-error');
-    const group = inputEl.closest('.form-group');
+    clearFieldError(inputEl);
+  }
+}
+
+function clearFieldError(inputEl) {
+  if (!inputEl) return;
+  inputEl.classList.remove('has-error');
+  let span = inputEl.nextElementSibling;
+  while (span && !span.classList?.contains('error-msg')) {
+    span = span.nextElementSibling;
+  }
+  if (!span || !span.classList?.contains('error-msg')) {
+    const group = inputEl.closest('.form-group, .guarantor-row, .ext-row');
     if (group) {
-      const span = group.querySelector('.error-msg');
-      if (span) {
-        span.textContent = '';
-        span.style.display = 'none';
-      }
+      span = group.querySelector('.error-msg');
+    }
+  }
+  if (span) {
+    const group = inputEl.closest('.form-group, .guarantor-row, .ext-row');
+    const remainingErrors = group
+      ? group.querySelectorAll('.has-error').length
+      : 0;
+    if (remainingErrors === 0) {
+      span.textContent = '';
+      span.style.display = 'none';
     }
   }
 }
@@ -328,24 +345,28 @@ function clearAllFieldErrors() {
   });
 }
 
+const FIELD_ERROR_ID_MAP = {
+  income: 'income',
+  existing_debt: 'existing_debt',
+  internal_monthly: 'internal_monthly',
+  internal_balance: 'internal_balance',
+  loan: 'loan',
+  shares: 'shares',
+  years: 'years',
+  rate: 'rate',
+  age: 'age',
+  appraisalValue: 'appraisalValue',
+  houseAge: 'houseAge',
+  appraisalAge: 'appraisalAge',
+  livingExpense: 'livingExpense',
+  dependents: 'dependents',
+  dependentExpense: 'dependentExpense',
+};
+
 function applyFieldErrors(fieldErrors) {
   // 主表單欄位
-  const idMap = {
-    income: 'income',
-    existing_debt: 'existing_debt',
-    internal_monthly: 'internal_monthly',
-    internal_balance: 'internal_balance',
-    loan: 'loan',
-    shares: 'shares',
-    years: 'years',
-    rate: 'rate',
-    age: 'age',
-    appraisalValue: 'appraisalValue',
-    houseAge: 'houseAge',
-    appraisalAge: 'appraisalAge',
-  };
-  Object.keys(idMap).forEach((key) => {
-    const el = $(idMap[key]);
+  Object.keys(FIELD_ERROR_ID_MAP).forEach((key) => {
+    const el = $(FIELD_ERROR_ID_MAP[key]);
     if (el) setFieldError(el, fieldErrors[key] || '');
   });
   // 整併模式：額外既有貸款動態列
@@ -384,6 +405,81 @@ function applyFieldErrors(fieldErrors) {
   });
 }
 
+function validateAndClearFieldError(el) {
+  if (!el) return;
+  const input = parseInputs();
+  const fieldErrors = validateInputsByField(input);
+
+  const id = el.id;
+  if (id && id in FIELD_ERROR_ID_MAP) {
+    if (fieldErrors[id]) {
+      setFieldError(el, fieldErrors[id]);
+    } else {
+      clearFieldError(el);
+    }
+  }
+
+  // 檢查是否為保證人動態列
+  const gRow = el.closest('.guarantor-row');
+  if (gRow) {
+    const rows = Array.from(document.querySelectorAll('.guarantor-row'));
+    const idx = rows.indexOf(gRow);
+    if (idx !== -1) {
+      const nameEl = gRow.querySelector('.g-name');
+      const incEl = gRow.querySelector('.g-income');
+      const debtEl = gRow.querySelector('.g-debt');
+      if (nameEl) {
+        if (fieldErrors[`g_name_${idx}`])
+          setFieldError(nameEl, fieldErrors[`g_name_${idx}`]);
+        else clearFieldError(nameEl);
+      }
+      if (incEl) {
+        if (fieldErrors[`g_income_${idx}`])
+          setFieldError(incEl, fieldErrors[`g_income_${idx}`]);
+        else clearFieldError(incEl);
+      }
+      if (debtEl) {
+        if (fieldErrors[`g_debt_${idx}`])
+          setFieldError(debtEl, fieldErrors[`g_debt_${idx}`]);
+        else clearFieldError(debtEl);
+      }
+    }
+  }
+
+  // 檢查是否為整併貸款動態列
+  const extRow = el.closest('.ext-row');
+  if (extRow) {
+    const rows = Array.from(document.querySelectorAll('.ext-row'));
+    const idx = rows.indexOf(extRow);
+    if (idx !== -1) {
+      const mEl = extRow.querySelector('.ext-monthly');
+      const bEl = extRow.querySelector('.ext-balance');
+      const yEl = extRow.querySelector('.ext-years');
+      const rEl = extRow.querySelector('.ext-rate');
+      if (mEl) {
+        if (fieldErrors[`internal_ext_${idx}_monthly`])
+          setFieldError(mEl, fieldErrors[`internal_ext_${idx}_monthly`]);
+        else clearFieldError(mEl);
+      }
+      if (bEl) {
+        if (fieldErrors[`internal_ext_${idx}_balance`])
+          setFieldError(bEl, fieldErrors[`internal_ext_${idx}_balance`]);
+        else clearFieldError(bEl);
+      }
+      if (yEl) {
+        if (fieldErrors[`internal_ext_${idx}_years`])
+          setFieldError(yEl, fieldErrors[`internal_ext_${idx}_years`]);
+        else clearFieldError(yEl);
+      }
+      if (rEl) {
+        if (fieldErrors[`internal_ext_${idx}_rate`])
+          setFieldError(rEl, fieldErrors[`internal_ext_${idx}_rate`]);
+        else clearFieldError(rEl);
+      }
+    }
+  }
+}
+
 function getFirstErrorElement(fieldErrors) {
   const order = [
     'income',
@@ -392,9 +488,15 @@ function getFirstErrorElement(fieldErrors) {
     'loan',
     'rate',
     'shares',
+    'livingExpense',
+    'dependents',
+    'dependentExpense',
     'existing_debt',
     'internal_monthly',
     'internal_balance',
+    'appraisalValue',
+    'houseAge',
+    'appraisalAge',
   ];
   for (const k of order) {
     if (fieldErrors[k]) {
@@ -2398,6 +2500,7 @@ function loadSampleCase() {
   ) {
     return;
   }
+  clearAllFieldErrors();
   Object.entries(SAMPLE_RESET).forEach(([id, v]) => {
     const el = $(id);
     if (el) el.value = v;
@@ -2574,12 +2677,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     el.addEventListener('input', saveFormDraft);
     el.addEventListener('change', saveFormDraft);
+    // 即時錯誤清除與動態重新驗證
+    el.addEventListener('input', () => validateAndClearFieldError(el));
+    el.addEventListener('change', () => validateAndClearFieldError(el));
   });
   // 保證人動態欄位：事件委派到容器
   const guarantorList = $('guarantorList');
   if (guarantorList) {
     guarantorList.addEventListener('input', saveFormDraft);
     guarantorList.addEventListener('change', saveFormDraft);
+    guarantorList.addEventListener('input', (e) =>
+      validateAndClearFieldError(e.target)
+    );
+    guarantorList.addEventListener('change', (e) =>
+      validateAndClearFieldError(e.target)
+    );
   }
 
   // 過期標記：所有欄位 change 事件（user 完成輸入才觸發，非 input）
@@ -2679,6 +2791,12 @@ document.addEventListener('DOMContentLoaded', () => {
     extList.addEventListener('input', saveFormDraft);
     extList.addEventListener('change', saveFormDraft);
     extList.addEventListener('change', markResultStale);
+    extList.addEventListener('input', (e) =>
+      validateAndClearFieldError(e.target)
+    );
+    extList.addEventListener('change', (e) =>
+      validateAndClearFieldError(e.target)
+    );
   }
 
   // 全域快捷鍵：Ctrl+Enter 觸發計算

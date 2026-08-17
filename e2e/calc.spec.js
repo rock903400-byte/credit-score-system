@@ -73,4 +73,63 @@ test.describe('Calc — 計算流程', () => {
       'LTV 加成 3'
     );
   });
+
+  test('Bug 1 修復：補填合法數值後，即時清除該欄位的紅框與錯誤文字', async ({
+    page,
+  }) => {
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1. 空表單直接點擊計算 → 觸發驗證紅框
+    await page.locator('#btnCalc').click();
+
+    const incomeInput = page.locator('#income');
+    await expect(incomeInput).toHaveClass(/has-error/);
+    const group = incomeInput.locator(
+      'xpath=ancestor::div[contains(@class, "form-group")][1]'
+    );
+    const errorMsg = group.locator('.error-msg');
+    await expect(errorMsg).toBeVisible();
+    expect(await errorMsg.innerText()).toContain('月收入');
+
+    // 2. 補填月收入 50,000 → 紅框與錯誤文字應在鍵入當下立即清除
+    await incomeInput.fill('50000');
+    await expect(incomeInput).not.toHaveClass(/has-error/);
+    await expect(errorMsg).toBeHidden();
+
+    // 3. 補填年齡與借款金額 → 同樣即時清除
+    const ageInput = page.locator('#age');
+    await expect(ageInput).toHaveClass(/has-error/);
+    await ageInput.fill('35');
+    await expect(ageInput).not.toHaveClass(/has-error/);
+
+    const loanInput = page.locator('#loan');
+    await expect(loanInput).toHaveClass(/has-error/);
+    await loanInput.fill('300000');
+    await expect(loanInput).not.toHaveClass(/has-error/);
+
+    // 4. 輸入負數測試再次觸發錯誤，改回正數立即消除
+    await ageInput.fill('-5');
+    await expect(ageInput).toHaveClass(/has-error/);
+    await ageInput.fill('30');
+    await expect(ageInput).not.toHaveClass(/has-error/);
+  });
+
+  test('載入範例案件 → 自動清除先前殘留的錯誤紅框', async ({ page }) => {
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 點擊計算觸發錯誤
+    await page.locator('#btnCalc').click();
+    await expect(page.locator('#income.has-error')).toBeVisible();
+
+    // 載入範例案件
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('#btnSampleCase').click();
+
+    // 驗證所有 has-error 均被清除且順利完成評分
+    const errorCount = await page.locator('.has-error').count();
+    expect(errorCount).toBe(0);
+    await expect(page.locator('#resultCard')).toBeVisible();
+  });
 });
