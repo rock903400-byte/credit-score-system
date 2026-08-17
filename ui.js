@@ -2275,7 +2275,9 @@ function calculateLoan() {
       $('btnPrint').style.display = 'none';
       const firstEl = getFirstErrorElement(fieldErrors);
       if (firstEl) {
-        firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const scrollTarget =
+          firstEl.closest('.form-group, .guarantor-row, .ext-row') || firstEl;
+        scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof firstEl.focus === 'function') {
           firstEl.focus({ preventScroll: true });
         }
@@ -2629,11 +2631,6 @@ const SAMPLE_RESET = {
 };
 
 function loadSampleCase() {
-  if (
-    !confirm('載入範例案件會覆蓋目前表單內容，確定要繼續嗎？（草稿會被取代）')
-  ) {
-    return;
-  }
   clearAllFieldErrors();
   Object.entries(SAMPLE_RESET).forEach(([id, v]) => {
     const el = $(id);

@@ -356,4 +356,21 @@ test.describe('頂部載入範例與全域 Toast 提示', () => {
     // 驗證首個錯誤欄位聚焦
     await expect(page.locator('#income')).toBeFocused();
   });
+
+  test('點擊底部「📄 載入範例案件」按鈕 → 亦無彈窗即時帶入資料並試算', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await page.locator('#btnSampleCase').click();
+
+    await expect(page.locator('#memberId')).toHaveValue(
+      'A00123 王小明（範例）'
+    );
+    await expect(page.locator('#income')).toHaveValue('50,000');
+    await expect(page.locator('#resultCard')).toBeVisible();
+    await expect(page.locator('#globalToast')).toBeVisible();
+  });
 });

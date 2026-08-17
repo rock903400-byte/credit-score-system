@@ -1567,11 +1567,15 @@ button {
 }
 
 /* scrollIntoView 的目標不能被置頂的操作列蓋住 */
+input,
+select,
+textarea,
 .result-card,
 .card,
 .form-group,
-.guarantor-row {
-  scroll-margin-top: 96px;
+.guarantor-row,
+.ext-row {
+  scroll-margin-top: 110px;
 }
 
 .action-bar .btn-calc {
@@ -2057,6 +2061,17 @@ select.select-untouched {
   input:not([type='checkbox']):not([type='radio']),
   .btn-clear-draft {
     min-height: 44px;
+  }
+  input,
+  select,
+  textarea,
+  .result-card,
+  .card,
+  .form-group,
+  .guarantor-row,
+  .ext-row {
+    scroll-margin-top: 20px;
+    scroll-margin-bottom: 90px;
   }
 }
 
