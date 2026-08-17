@@ -154,6 +154,8 @@ for (let i = 0; i < 1000; i++) {
     collateralZone,
     houseAge,
     appraisalAge,
+    livingExpense: randInt(15000, 25000),
+    dependents: randInt(0, 3),
   };
 
   try {

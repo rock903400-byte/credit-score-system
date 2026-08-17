@@ -42,6 +42,23 @@ const COLLATERAL_REAPPRAISAL_YEARS = 10; // 鑑價報告逾 10 年須重鑑（�
 //  0 = 純信用借款（超過股金 2 倍）
 const COLLATERAL_SCORE = { 12: 12, 10: 12, 5: 5, 0: 0 };
 
+// 115 年度（2026年）各縣市每人每月最低生活費標準（衛福部、各直轄市政府、司法院公告）
+var DEFAULT_LIVING_EXPENSE = 17750; // 預設個人每月生活費基準（新北市標準）
+var DEFAULT_DEPENDENT_EXPENSE_RATIO = 0.5; // 受扶養人生活費預設為本人的 50%
+var JUDICIAL_LIVING_MULTIPLIER = 1.2; // 強制執行法第 122 條維持生活所必需倍數
+
+var REGIONAL_MIN_LIVING_COST_115 = {
+  taipei: 20744,
+  new_taipei: 17750,
+  taoyuan: 17186,
+  kaohsiung: 16970,
+  taichung: 16431,
+  tainan: 15515,
+  taiwan_province: 15515,
+  kinmen_lienchiang: 15173,
+  custom: 17750,
+};
+
 // ============================================================
 // 工具函式
 // ============================================================
@@ -104,6 +121,48 @@ function getReportSeq() {
   }
 }
 
+// 實質收支與現金流試算（生活支出、受扶養親屬、核貸前後淨可支配盈餘）
+function computeCashFlow(input, newLoanMonthlyPmt = 0) {
+  const livingExpense =
+    typeof input.livingExpense === 'number' ? input.livingExpense : 0;
+  const dependents =
+    typeof input.dependents === 'number' ? input.dependents : 0;
+  const depExpense =
+    typeof input.dependentExpense === 'number'
+      ? input.dependentExpense
+      : livingExpense * DEFAULT_DEPENDENT_EXPENSE_RATIO;
+  const totalLivingExpenses = livingExpense + dependents * depExpense;
+
+  const extMonthly = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.monthly || 0),
+    0
+  );
+  const totalExistingDebt =
+    (input.existingDebt || 0) + (input.internalMonthly || 0) + extMonthly;
+  const totalMonthlyPayment = totalExistingDebt + (newLoanMonthlyPmt || 0);
+
+  const netSurplusPreLoan =
+    (input.income || 0) - totalExistingDebt - totalLivingExpenses;
+  const netSurplusPostLoan =
+    (input.income || 0) - totalMonthlyPayment - totalLivingExpenses;
+  const totalBurdenRatio =
+    input.income > 0
+      ? (totalMonthlyPayment + totalLivingExpenses) / input.income
+      : Infinity;
+
+  return {
+    livingExpense,
+    dependents,
+    dependentExpense: depExpense,
+    totalLivingExpenses,
+    totalExistingDebt,
+    totalMonthlyPayment,
+    netSurplusPreLoan,
+    netSurplusPostLoan,
+    totalBurdenRatio,
+  };
+}
+
 // ============================================================
 // 解析與驗證輸入
 // ============================================================
@@ -126,9 +185,14 @@ function validateInputs(input) {
     'appraisalValue',
     'houseAge',
     'appraisalAge',
+    'livingExpense',
+    'dependents',
+    'dependentExpense',
   ];
   for (const f of numericFields) {
-    if (input[f] < 0) errors.push(`「${f}」不可為負值`);
+    if (typeof input[f] === 'number' && input[f] < 0) {
+      errors.push(`「${f}」不可為負值`);
+    }
   }
   if (input.ratePercent > 20) errors.push('年利率 > 20% 異常，請確認');
   if (input.years > 50) errors.push('貸款年限過長（> 50 年），請確認');
@@ -179,6 +243,10 @@ function validateInputsByField(input) {
   if (input.appraisalValue < 0) setErr('appraisalValue', '鑑估價值不可為負值');
   if (input.houseAge < 0) setErr('houseAge', '屋齡不可為負值');
   if (input.appraisalAge < 0) setErr('appraisalAge', '鑑價屋齡/年分不可為負值');
+  if (input.livingExpense < 0) setErr('livingExpense', '生活支出不可為負值');
+  if (input.dependents < 0) setErr('dependents', '扶養人數不可為負值');
+  if (input.dependentExpense < 0)
+    setErr('dependentExpense', '扶養生活支出不可為負值');
   if (input.ratePercent > 20) setErr('rate', '年利率 > 20% 異常，請確認');
   if (input.years > 50) setErr('years', '貸款年限過長（> 50 年），請確認');
   if (input.age <= 0) setErr('age', '年齡為必填欄位且須大於 0');
@@ -507,7 +575,16 @@ function applyRegulatoryVetoes(input) {
     }
   }
 
-  return { vetoes, newLoanMonthlyPmt, postLoanDti };
+  // ⑱ [115年授信規範] 收支赤字否決 (Cashflow Deficit Veto)：核貸後總支出 > 月收入（每月淨餘額 < 0）
+  const cashFlow = computeCashFlow(input, newLoanMonthlyPmt);
+  if (cashFlow.totalLivingExpenses > 0 && cashFlow.netSurplusPostLoan < 0) {
+    const deficit = Math.abs(Math.round(cashFlow.netSurplusPostLoan));
+    vetoes.push(
+      `核貸後每月總支出（總月付 ${Math.round(cashFlow.totalMonthlyPayment).toLocaleString('zh-TW')} 元 ＋ 生活支出 ${Math.round(cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元 ＝ ${Math.round(cashFlow.totalMonthlyPayment + cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元）超過月收入（${input.income.toLocaleString('zh-TW')} 元），每月收支赤字 ${deficit.toLocaleString('zh-TW')} 元，不予核貸`
+    );
+  }
+
+  return { vetoes, newLoanMonthlyPmt, postLoanDti, cashFlow };
 }
 
 function determineGrade(score, isVetoed) {
@@ -529,11 +606,16 @@ function computeMaxLoan(input, maxDti) {
     (sum, l) => sum + (l.monthly || 0),
     0
   );
-  const maxAvailablePmt =
-    input.income * maxDti -
-    input.existingDebt -
-    input.internalMonthly -
-    extMonthly;
+  const totalExisting = input.existingDebt + input.internalMonthly + extMonthly;
+  const maxPmtByDti = input.income * maxDti - totalExisting;
+
+  const cashFlow = computeCashFlow(input, 0);
+  const maxPmtByCashflow =
+    cashFlow.totalLivingExpenses > 0
+      ? input.income - totalExisting - cashFlow.totalLivingExpenses
+      : Infinity;
+
+  const maxAvailablePmt = Math.min(maxPmtByDti, Math.max(0, maxPmtByCashflow));
   if (maxAvailablePmt <= 0) return 0;
   const r = input.ratePercent / 100 / 12;
   const n = input.years * 12;
@@ -550,7 +632,15 @@ function computeSuggestedAdditionalLoan(input, maxDti) {
   const extBalance = ext.reduce((sum, l) => sum + (l.balance || 0), 0);
   const totalExistingMonthly =
     input.existingDebt + input.internalMonthly + extMonthly;
-  const maxAvailablePmt = input.income * maxDti - totalExistingMonthly;
+
+  const maxPmtByDti = input.income * maxDti - totalExistingMonthly;
+  const cashFlow = computeCashFlow(input, 0);
+  const maxPmtByCashflow =
+    cashFlow.totalLivingExpenses > 0
+      ? input.income - totalExistingMonthly - cashFlow.totalLivingExpenses
+      : Infinity;
+  const maxAvailablePmt = Math.min(maxPmtByDti, Math.max(0, maxPmtByCashflow));
+
   if (maxAvailablePmt <= 0) return { general: 0, consolidation: 0 };
   const r = input.ratePercent / 100 / 12;
   const n = input.years * 12;

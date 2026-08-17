@@ -53,6 +53,10 @@ const {
   computeSuggestedAdditionalLoan: CSAL,
   computeConsolidationScenario: CCS,
   determineGovernanceRouting: DGR,
+  computeCashFlow: CCF,
+  DEFAULT_LIVING_EXPENSE,
+  REGIONAL_MIN_LIVING_COST_115,
+  JUDICIAL_LIVING_MULTIPLIER,
   pmt: PMT,
   formatAmount: FA,
   escapeHtml: EH,
@@ -887,14 +891,14 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：17 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人）', () => {
+test('源碼：18 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人、收支赤字否決）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 17,
+    (vf.match(/vetoes\.push/g) || []).length === 18,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
   );
 });
@@ -1454,6 +1458,234 @@ test('雙滿案件（擔保10+LTV3+5保人8+DSR5 raw=28）→ cap 在 20', () =>
   assert(raw === 28, 'raw got:' + raw);
   assert(raw * 0.8 > 20, 'raw×0.8 should exceed cap');
   assert(r.protectionScore === 20, 'score got:' + r.protectionScore);
+});
+
+// ============================================================
+// 115 年度生活支出與現金流收支評估測試
+// ============================================================
+console.log('\n── 115 年度生活支出與現金流收支 (8) ──');
+
+test('115 年度各縣市最低生活費常數檢核', () => {
+  assert(REGIONAL_MIN_LIVING_COST_115.taipei === 20744, 'taipei 20744');
+  assert(REGIONAL_MIN_LIVING_COST_115.new_taipei === 17750, 'new_taipei 17750');
+  assert(REGIONAL_MIN_LIVING_COST_115.taoyuan === 17186, 'taoyuan 17186');
+  assert(REGIONAL_MIN_LIVING_COST_115.kaohsiung === 16970, 'kaohsiung 16970');
+  assert(REGIONAL_MIN_LIVING_COST_115.taichung === 16431, 'taichung 16431');
+  assert(REGIONAL_MIN_LIVING_COST_115.tainan === 15515, 'tainan 15515');
+  assert(
+    REGIONAL_MIN_LIVING_COST_115.taiwan_province === 15515,
+    'taiwan_province 15515'
+  );
+  assert(
+    REGIONAL_MIN_LIVING_COST_115.kinmen_lienchiang === 15173,
+    'kinmen_lienchiang 15173'
+  );
+  assert(DEFAULT_LIVING_EXPENSE === 17750, 'default 17750');
+  assert(JUDICIAL_LIVING_MULTIPLIER === 1.2, 'multiplier 1.2');
+});
+
+test('computeCashFlow：基本生活費與受扶養親屬支出計算', () => {
+  // 1. 本人 17,750，無扶養
+  const cf1 = CCF(
+    {
+      income: 50000,
+      existingDebt: 5000,
+      internalMonthly: 0,
+      livingExpense: 17750,
+      dependents: 0,
+    },
+    5750
+  );
+  assert(
+    cf1.totalLivingExpenses === 17750,
+    'cf1 living got:' + cf1.totalLivingExpenses
+  );
+  assert(
+    cf1.totalMonthlyPayment === 10750,
+    'cf1 payment got:' + cf1.totalMonthlyPayment
+  );
+  assert(
+    cf1.netSurplusPostLoan === 50000 - 10750 - 17750,
+    'cf1 surplus got:' + cf1.netSurplusPostLoan
+  );
+  assert(cf1.netSurplusPostLoan === 21500, 'surplus 21500');
+
+  // 2. 本人 17,750，扶養 2 人（預設 50% = 8,875/人，合計 17,750），總生活費 35,500
+  const cf2 = CCF(
+    {
+      income: 60000,
+      existingDebt: 5000,
+      internalMonthly: 0,
+      livingExpense: 17750,
+      dependents: 2,
+    },
+    10000
+  );
+  assert(
+    cf2.totalLivingExpenses === 35500,
+    'cf2 living got:' + cf2.totalLivingExpenses
+  );
+  assert(
+    cf2.totalMonthlyPayment === 15000,
+    'cf2 payment got:' + cf2.totalMonthlyPayment
+  );
+  assert(
+    cf2.netSurplusPostLoan === 60000 - 15000 - 35500,
+    'cf2 surplus got:' + cf2.netSurplusPostLoan
+  );
+  assert(cf2.netSurplusPostLoan === 9500, 'surplus 9500');
+});
+
+test('收支赤字否決 (第18條)：核貸後入不敷出觸發否決', () => {
+  // 月收 30,000，生活費 17,750，既有負債 5,000，申請 100 萬/5年/3% (月付 19,166.67)
+  // 總支出 = 19,166.67 + 5,000 + 17,750 = 41,916.67 > 30,000（赤字 11,917）
+  const inp = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 5000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 1000000,
+    shares: 1000000,
+    collateral: '5',
+    livingExpense: 17750,
+    dependents: 0,
+  };
+  const res = ARV(inp);
+  assert(
+    res.vetoes.some((v) => v.includes('收支赤字') || v.includes('入不敷出')),
+    '應觸發收支赤字否決，got:' + res.vetoes.join(';')
+  );
+});
+
+test('收支平衡充裕：不觸發赤字否決', () => {
+  const inp = {
+    income: 50000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 5000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 300000,
+    shares: 200000,
+    collateral: '5',
+    livingExpense: 17750,
+    dependents: 0,
+  };
+  const res = ARV(inp);
+  assert(
+    !res.vetoes.some((v) => v.includes('收支赤字')),
+    '不應觸發赤字否決，got:' + res.vetoes.join(';')
+  );
+});
+
+test('可貸額度受生活支出限制 (雙重天花板)', () => {
+  // 月收入 50,000，A 級 (maxDti 0.6，5年 3%)
+  // 若無生活費限制：maxAvailablePmt = 50000 * 0.6 = 30000 → 可貸約 156.5 萬
+  // 若生活費 35,000：maxAvailablePmt = 50000 - 35000 = 15000 → 可貸約 78.2 萬
+  const inpNoLiving = {
+    income: 50000,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    livingExpense: 0,
+  };
+  const maxLoanNoLiving = CML(inpNoLiving, 0.6);
+  approx(maxLoanNoLiving, 1565217, 100);
+
+  const inpWithLiving = {
+    income: 50000,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    livingExpense: 35000,
+  };
+  const maxLoanWithLiving = CML(inpWithLiving, 0.6);
+  approx(maxLoanWithLiving, 782608, 100);
+  assert(maxLoanWithLiving < maxLoanNoLiving, '生活支出應降低額度');
+});
+
+test('扶養親屬增加 → 生活總支出上升 → 額度進一步受約束', () => {
+  const base = {
+    income: 60000,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    livingExpense: 17750,
+    dependents: 0,
+  };
+  const loanDep0 = CML(base, 0.6);
+  const withDep = { ...base, dependents: 3 }; // 3 扶養人
+  const loanDep3 = CML(withDep, 0.6);
+  assert(loanDep3 < loanDep0, '扶養親屬增加應減少可貸額度');
+});
+
+test('validateInputs：生活支出、扶養人數、扶養每人支出負值阻擋', () => {
+  const err1 = VI({
+    income: 50000,
+    years: 5,
+    proposedLoan: 100000,
+    age: 30,
+    livingExpense: -1000,
+  });
+  assert(
+    err1.some((e) => e.includes('livingExpense') && e.includes('負值')),
+    'livingExpense 負值 got:' + err1.join(';')
+  );
+
+  const err2 = VI({
+    income: 50000,
+    years: 5,
+    proposedLoan: 100000,
+    age: 30,
+    dependents: -1,
+  });
+  assert(
+    err2.some((e) => e.includes('dependents') && e.includes('負值')),
+    'dependents 負值 got:' + err2.join(';')
+  );
+
+  const err3 = VI({
+    income: 50000,
+    years: 5,
+    proposedLoan: 100000,
+    age: 30,
+    dependentExpense: -500,
+  });
+  assert(
+    err3.some((e) => e.includes('dependentExpense') && e.includes('負值')),
+    'dependentExpense 負值 got:' + err3.join(';')
+  );
+});
+
+test('validateInputsByField：生活支出欄位錯誤訊息分組', () => {
+  const fe = VIBF({
+    income: 50000,
+    years: 5,
+    proposedLoan: 100000,
+    age: 30,
+    livingExpense: -500,
+    dependents: -2,
+    dependentExpense: -300,
+  });
+  assert(
+    fe.livingExpense && fe.livingExpense.includes('不可為負值'),
+    'fe.livingExpense got:' + fe.livingExpense
+  );
+  assert(
+    fe.dependents && fe.dependents.includes('不可為負值'),
+    'fe.dependents got:' + fe.dependents
+  );
+  assert(
+    fe.dependentExpense && fe.dependentExpense.includes('不可為負值'),
+    'fe.dependentExpense got:' + fe.dependentExpense
+  );
 });
 
 // ============================================================

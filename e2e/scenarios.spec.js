@@ -16,6 +16,8 @@ async function fillForm(page, data) {
     years: '#years',
     rate: '#rate',
     shares: '#shares',
+    livingExpense: '#livingExpense',
+    dependentExpense: '#dependentExpense',
   };
   for (const [k, v] of Object.entries(data)) {
     if (fields[k]) await page.locator(fields[k]).fill(String(v));
@@ -872,5 +874,102 @@ test.describe('場景 13-18：實務進階', () => {
     expect(await govEl.innerText()).toContain('理事會決議');
 
     console.log(`  → 第三人擔保品連帶保證人檢核及理事會決議層級驗證通過`);
+  });
+
+  test('㉓ 115 年度生活支出地區切換與 1.2 倍強制執行標準連動', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 預設為新北市 17,750
+    const livingExp = page.locator('#livingExpense');
+    await expect(livingExp).toHaveValue('17,750');
+
+    // 切換為臺北市 → 應自動變為 20,744
+    await page.locator('#livingRegion').selectOption('taipei');
+    await expect(livingExp).toHaveValue('20,744');
+    expect(await page.locator('#dependentExpense').inputValue()).toBe('10,372');
+
+    // 勾選 1.2 倍強制執行生活必需標準 → 20,744 * 1.2 = 24,893
+    await page.locator('#livingMultiplier12').check();
+    await expect(livingExp).toHaveValue('24,893');
+    expect(await page.locator('#dependentExpense').inputValue()).toBe('12,447');
+
+    // 切換受扶養人數為 2 人 → 家庭總生活費更新
+    await page.locator('#dependents').selectOption('2');
+    const hintTotal = await page.locator('#hint_livingTotal').innerText();
+    expect(hintTotal).toBe('49,787');
+
+    console.log(`  → 115 年地區切換、1.2 倍乘數與扶養親屬連動驗證通過`);
+  });
+
+  test('㉔ 收支赤字否決 (第18條) 與現金流平衡分析卡', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 月薪 30,000，借 100 萬/5年/3% (月付約 19,167 元)，生活費 17,750 元
+    // 總支出 = 19,167 + 17,750 = 36,917 > 30,000（赤字 6,917 元）
+    await fillForm(page, {
+      income: 30000,
+      age: 35,
+      existing_debt: 0,
+      loan: 1000000,
+      years: 5,
+      rate: 3,
+      shares: 1000000,
+      livingExpense: 17750,
+      dependentExpense: 8875,
+    });
+    await page.locator('#collateral').selectOption('5');
+    await page.locator('#btnCalc').click();
+
+    // 驗證觸發收支赤字否決
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('不予核貸');
+    expect(status).toContain('收支赤字');
+
+    // 展開明細檢查現金流分析卡
+    await openResultDetails(page);
+    const surplusVal = await page.locator('#cf_net_surplus').innerText();
+    expect(surplusVal).toContain('－');
+    const badge = await page.locator('#cf_surplus_badge').innerText();
+    expect(badge).toBe('赤字警告');
+
+    console.log(`  → 收支赤字否決與現金流分析卡驗證通過`);
+  });
+
+  test('㉕ 列印報表：包含生活支出與每月收支淨盈餘', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      memberId: 'C88888 陳大同',
+      income: 60000,
+      age: 35,
+      existing_debt: 5000,
+      loan: 300000,
+      years: 5,
+      rate: 3,
+      shares: 200000,
+      livingExpense: 17750,
+      dependentExpense: 8875,
+    });
+    await page.locator('#dependents').selectOption('1');
+    await page.locator('#collateral').selectOption('5');
+    await page.locator('#btnCalc').click();
+
+    const livingInfo = await page.locator('#p_living_info').innerText();
+    expect(livingInfo).toContain('17,750');
+    expect(livingInfo).toContain('扶養親屬 1 人');
+
+    const surplusInfo = await page.locator('#p_cashflow_surplus').innerText();
+    expect(surplusInfo).toContain('每月淨盈餘');
+    expect(surplusInfo).toContain('＋');
+
+    console.log(`  → 列印報表生活支出與現金流盈餘資訊列驗證通過`);
   });
 });

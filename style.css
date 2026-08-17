@@ -838,6 +838,47 @@ button {
   border: 2px solid #ffb300;
 }
 
+.notice-info {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background-color: #e8f4fd;
+  color: #0d47a1;
+  border: 1px solid #bbdefb;
+  border-radius: 8px;
+  font-size: 0.88em;
+  font-weight: 500;
+}
+
+/* 現金流與生活支出收支平衡卡 */
+.cashflow-card {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 16px;
+}
+
+.surplus-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.surplus-badge.badge-pass {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+  border: 1px solid #c8e6c9;
+}
+.surplus-badge.badge-warn {
+  background-color: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffe0b2;
+}
+.surplus-badge.badge-fail {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
 /* DTI 溢出徽章 */
 .overflow-badge {
   display: none;
@@ -1137,6 +1178,30 @@ button {
   }
   .breakdown-score.neg {
     color: #f87171;
+  }
+  .notice-info {
+    background-color: #1e293b;
+    color: #93c5fd;
+    border-color: #1d4ed8;
+  }
+  .cashflow-card {
+    background: #0f172a;
+    border-color: #334155;
+  }
+  .surplus-badge.badge-pass {
+    background-color: #14331f;
+    color: #81c784;
+    border-color: #1b5e20;
+  }
+  .surplus-badge.badge-warn {
+    background-color: #3a2a12;
+    color: #ffb74d;
+    border-color: #92600a;
+  }
+  .surplus-badge.badge-fail {
+    background-color: #3f1d1d;
+    color: #f87171;
+    border-color: #7f1d1d;
   }
   .input-preview {
     color: #a5b4fc;

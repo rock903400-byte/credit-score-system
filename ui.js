@@ -238,6 +238,11 @@ function parseInputs() {
     years: parseInt($('years').value) || 0,
     ratePercent: parseFloat($('rate').value) || 0,
     shares: parseAmount('shares'),
+    livingRegion: $('livingRegion') ? $('livingRegion').value : 'new_taipei',
+    livingMultiplier12: !!($('livingMultiplier12')?.checked || false),
+    livingExpense: parseAmount('livingExpense'),
+    dependents: parseInt($('dependents')?.value) || 0,
+    dependentExpense: parseAmount('dependentExpense'),
     incomeStability: parseInt($('incomeStability').value) || 0,
     tenure: parseInt($('tenure').value) || 0,
     interaction: parseInt($('interaction').value) || 0,
@@ -825,6 +830,52 @@ function updateMortgageHint() {
   }
 }
 
+// ============================================================
+// 生活支出與扶養親屬連動（依 115 年度各縣市標準與 1.2 倍強制執行標準）
+// ============================================================
+function updateLivingExpenseByRegion(keepCustom = false) {
+  const regionEl = $('livingRegion');
+  const multEl = $('livingMultiplier12');
+  const livingExpEl = $('livingExpense');
+  const depExpEl = $('dependentExpense');
+  if (!regionEl || !livingExpEl) return;
+
+  const region = regionEl.value;
+  const is12 = !!(multEl && multEl.checked);
+
+  if (region !== 'custom' && !keepCustom) {
+    let base = REGIONAL_MIN_LIVING_COST_115[region] || DEFAULT_LIVING_EXPENSE;
+    if (is12) {
+      base = Math.round(base * JUDICIAL_LIVING_MULTIPLIER);
+    }
+    livingExpEl.value = base.toLocaleString('zh-TW');
+    const previewSelf = $('preview_livingExpense');
+    if (previewSelf) previewSelf.innerText = formatAmount(base);
+
+    const depCost = Math.round(base * DEFAULT_DEPENDENT_EXPENSE_RATIO);
+    if (depExpEl) {
+      depExpEl.value = depCost.toLocaleString('zh-TW');
+      const previewDep = $('preview_dependentExpense');
+      if (previewDep) previewDep.innerText = formatAmount(depCost);
+    }
+  }
+  updateLivingSummaryLive();
+}
+
+function updateLivingSummaryLive() {
+  const selfCost = parseAmount('livingExpense');
+  const deps = parseInt($('dependents')?.value) || 0;
+  const depCost = parseAmount('dependentExpense');
+  const totalLiving = selfCost + deps * depCost;
+
+  const hintSelf = $('hint_livingSelf');
+  const hintDeps = $('hint_livingDeps');
+  const hintTotal = $('hint_livingTotal');
+  if (hintSelf) hintSelf.innerText = selfCost.toLocaleString('zh-TW');
+  if (hintDeps) hintDeps.innerText = (deps * depCost).toLocaleString('zh-TW');
+  if (hintTotal) hintTotal.innerText = totalLiving.toLocaleString('zh-TW');
+}
+
 function updateCollateralByYears() {
   const yearsVal = parseInt($('years').value) || 0;
   const collateralEl = $('collateral');
@@ -1166,6 +1217,50 @@ function renderDashboard(result) {
     protDetail.textContent =
       parts.join('＋') +
       ` ＝ ${raw} → ×0.8 ＝ ${scoreDetail.protectionScore}/20${capNote}`;
+  }
+
+  // 現金流與生活支出收支平衡分析
+  const cashFlow =
+    result.cashFlow || computeCashFlow(input, result.newLoanMonthlyPmt);
+  if ($('cf_income'))
+    $('cf_income').textContent = Math.round(input.income).toLocaleString(
+      'zh-TW'
+    );
+  if ($('cf_living'))
+    $('cf_living').textContent = Math.round(
+      cashFlow.totalLivingExpenses
+    ).toLocaleString('zh-TW');
+  if ($('cf_debt_payment'))
+    $('cf_debt_payment').textContent = Math.round(
+      cashFlow.totalMonthlyPayment
+    ).toLocaleString('zh-TW');
+
+  const surplusEl = $('cf_net_surplus');
+  const badgeEl = $('cf_surplus_badge');
+  if (surplusEl) {
+    const isSurplus = cashFlow.netSurplusPostLoan >= 0;
+    surplusEl.textContent =
+      (isSurplus ? '＋' : '－') +
+      Math.abs(Math.round(cashFlow.netSurplusPostLoan)).toLocaleString('zh-TW');
+    surplusEl.style.color = isSurplus ? '#2e7d32' : '#c62828';
+  }
+  if (badgeEl) {
+    badgeEl.className = 'surplus-badge';
+    if (cashFlow.netSurplusPostLoan < 0) {
+      badgeEl.textContent = '赤字警告';
+      badgeEl.classList.add('badge-fail');
+    } else if (cashFlow.netSurplusPostLoan < 5000) {
+      badgeEl.textContent = '收支偏緊';
+      badgeEl.classList.add('badge-warn');
+    } else {
+      badgeEl.textContent = '現金流充裕';
+      badgeEl.classList.add('badge-pass');
+    }
+  }
+  if ($('cf_total_burden_ratio')) {
+    $('cf_total_burden_ratio').textContent = (
+      cashFlow.totalBurdenRatio * 100
+    ).toFixed(1);
   }
 
   // 狀態訊息（[FIX 1.3] 否決清單以 <ul> 累積呈現）
@@ -1654,6 +1749,37 @@ function renderPrintReport(result) {
       ? `${input.shares.toLocaleString('zh-TW')} 元 / 倍數 ${shareMult.toFixed(1)} 倍`
       : '未填寫';
 
+  const cashFlow =
+    result.cashFlow || computeCashFlow(input, result.newLoanMonthlyPmt);
+  if ($('p_living_info')) {
+    const depText =
+      input.dependents > 0
+        ? ` ＋ 扶養親屬 ${input.dependents} 人 (${(
+            input.dependents * cashFlow.dependentExpense
+          ).toLocaleString('zh-TW')} 元)`
+        : ' (無扶養親屬)';
+    $('p_living_info').innerText =
+      `借款人生活費 ${cashFlow.livingExpense.toLocaleString(
+        'zh-TW'
+      )} 元${depText}（家庭最低生活總支出：${cashFlow.totalLivingExpenses.toLocaleString(
+        'zh-TW'
+      )} 元）`;
+  }
+  if ($('p_cashflow_surplus')) {
+    const isSurplus = cashFlow.netSurplusPostLoan >= 0;
+    const sign = isSurplus ? '＋' : '－';
+    const statusNote = isSurplus
+      ? cashFlow.netSurplusPostLoan < 5000
+        ? '（收支偏緊）'
+        : '（現金流充裕）'
+      : '（⚠️ 收支赤字，入不敷出）';
+    $('p_cashflow_surplus').innerText = `每月淨盈餘 ${sign}${Math.abs(
+      Math.round(cashFlow.netSurplusPostLoan)
+    ).toLocaleString('zh-TW')} 元 ${statusNote} / 實質總支出負擔率 ${(
+      cashFlow.totalBurdenRatio * 100
+    ).toFixed(1)}%`;
+  }
+
   // 擔保品鑑估資訊（僅擔保放款 collateral=10 時顯示）
   const collateralDetailRow = $('p_collateral_detail_row');
   if (collateralDetailRow) {
@@ -2029,6 +2155,10 @@ const FORM_DRAFT_FIELDS = [
   'years',
   'rate',
   'shares',
+  'livingRegion',
+  'livingExpense',
+  'dependents',
+  'dependentExpense',
   'incomeStability',
   'tenure',
   'interaction',
@@ -2058,6 +2188,9 @@ function saveFormDraft() {
     // 整併模式 checkbox（value 無法反映 checked 狀態，需另存）
     const cm = $('consolidationMode');
     if (cm) data._consolidationMode = cm.checked;
+    // 採 1.2 倍強制執行生活標準 checkbox
+    const lm = $('livingMultiplier12');
+    if (lm) data._livingMultiplier12 = lm.checked;
     // 整併模式：額外既有貸款動態列
     data._internalExt = readExtRows();
     // 保證人動態欄位
@@ -2105,6 +2238,11 @@ function loadFormDraft() {
       const cm = $('consolidationMode');
       if (cm) cm.checked = data._consolidationMode;
     }
+    // 還原 1.2 倍標準 checkbox
+    if (typeof data._livingMultiplier12 === 'boolean') {
+      const lm = $('livingMultiplier12');
+      if (lm) lm.checked = data._livingMultiplier12;
+    }
     // 還原「已確認」的評分下拉
     if (Array.isArray(data._touchedSelects)) {
       data._touchedSelects.forEach((id) => markSelectTouched($(id)));
@@ -2146,6 +2284,7 @@ function loadFormDraft() {
     }
     updateGuarantorWeightHint();
     updateCollateralByYears();
+    updateLivingSummaryLive();
     // 整併模式：還原額外既有貸款列（舊草稿的 internal_monthly2 等欄位做一次遷移）
     let extRows = Array.isArray(data._internalExt) ? data._internalExt : null;
     if (
@@ -2175,6 +2314,8 @@ function loadFormDraft() {
       'shares',
       'appraisalValue',
       'mortgageAmount',
+      'livingExpense',
+      'dependentExpense',
     ].forEach((id) => formatAmountInput($(id)));
     // 還原整併模式 toggle 後，既有貸款列表也要同步顯示
     const extGroup = $('internalExtGroup');
@@ -2218,6 +2359,10 @@ const SAMPLE_CASE = {
   years: '5',
   rate: '3',
   shares: '200000',
+  livingRegion: 'new_taipei',
+  livingExpense: '17750',
+  dependents: '0',
+  dependentExpense: '8875',
   incomeStability: '6',
   tenure: '4',
   interaction: '7',
@@ -2241,6 +2386,10 @@ const SAMPLE_RESET = {
   houseAge: '',
   appraisalAge: '',
   guarantor_count: '0',
+  livingRegion: 'new_taipei',
+  livingExpense: '17750',
+  dependents: '0',
+  dependentExpense: '8875',
 };
 
 function loadSampleCase() {
@@ -2263,6 +2412,8 @@ function loadSampleCase() {
   }
   const so = $('selfOccupied');
   if (so && so.checked) so.checked = false;
+  const lm = $('livingMultiplier12');
+  if (lm && lm.checked) lm.checked = false;
   renderExtLoanRows([]);
   renderGuarantorRows(0);
 
@@ -2279,6 +2430,8 @@ function loadSampleCase() {
     'internal_balance',
     'loan',
     'shares',
+    'livingExpense',
+    'dependentExpense',
   ].forEach((id) => {
     formatAmountInput($(id));
     const preview = $('preview_' + id);
@@ -2288,6 +2441,7 @@ function loadSampleCase() {
       );
     }
   });
+  updateLivingSummaryLive();
   updateCollateralByYears();
   updateShareHintLive();
   updateActionBar();
@@ -2315,6 +2469,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'internal_balance',
     'loan',
     'shares',
+    'livingExpense',
+    'dependentExpense',
   ];
   moneyFields.forEach((id) => {
     const input = $(id);
@@ -2332,7 +2488,48 @@ document.addEventListener('DOMContentLoaded', () => {
       input.addEventListener('input', updateMortgageHint);
       input.addEventListener('blur', updateMortgageHint);
     }
+    if (id === 'livingExpense' || id === 'dependentExpense') {
+      input.addEventListener('input', () => {
+        if (id === 'livingExpense' && $('livingRegion')) {
+          const reg = $('livingRegion').value;
+          const is12 = !!$('livingMultiplier12')?.checked;
+          let std = REGIONAL_MIN_LIVING_COST_115[reg] || DEFAULT_LIVING_EXPENSE;
+          if (is12) std = Math.round(std * JUDICIAL_LIVING_MULTIPLIER);
+          const cur = parseAmount('livingExpense');
+          if (cur !== std && $('livingRegion').value !== 'custom') {
+            $('livingRegion').value = 'custom';
+          }
+        }
+        updateLivingSummaryLive();
+      });
+    }
   });
+
+  // 生活地區與 1.2 倍勾選變更
+  const livingRegionEl = $('livingRegion');
+  if (livingRegionEl) {
+    livingRegionEl.addEventListener('change', () => {
+      updateLivingExpenseByRegion(false);
+      saveFormDraft();
+      markResultStale();
+    });
+  }
+  const livingMultiplier12El = $('livingMultiplier12');
+  if (livingMultiplier12El) {
+    livingMultiplier12El.addEventListener('change', () => {
+      updateLivingExpenseByRegion(false);
+      saveFormDraft();
+      markResultStale();
+    });
+  }
+  const dependentsEl = $('dependents');
+  if (dependentsEl) {
+    dependentsEl.addEventListener('change', () => {
+      updateLivingSummaryLive();
+      saveFormDraft();
+      markResultStale();
+    });
+  }
   // 鑑估價值（沒有 preview 也要千分位）
   const appraisal = $('appraisalValue');
   if (appraisal) {
@@ -2495,6 +2692,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // B1 初始化：頁面載入時跑一次即時提示（草稿還原後的狀態）
   updateShareHintLive();
+  if (!$('livingExpense').value) {
+    updateLivingExpenseByRegion(false);
+  } else {
+    updateLivingSummaryLive();
+  }
 
   // 區塊折疊（滑鼠 + 鍵盤無障礙）
   document
