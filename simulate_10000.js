@@ -122,8 +122,12 @@ for (let i = 0; i < 10000; i++) {
   ]);
   const houseAge = randInt(0, 30);
   const appraisalAge = randInt(0, 15);
+  const collateralKind = randChoice(['building', 'land']);
+  const collateralOwner = randChoice(['self', 'third_party']);
+  const borrowerRole = randChoice(['member', 'board', 'staff']);
 
   const input = {
+    borrowerRole,
     income,
     years,
     ratePercent,
@@ -137,6 +141,8 @@ for (let i = 0; i < 10000; i++) {
     jcic,
     membership,
     collateral,
+    collateralKind,
+    collateralOwner,
     guarantorCount,
     guarantors,
     purpose,

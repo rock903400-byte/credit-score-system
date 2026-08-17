@@ -777,4 +777,100 @@ test.describe('場景 13-18：實務進階', () => {
     await expect(debtAfter).toBeDisabled();
     console.log(`  → 重整後 checkbox 仍勾選，debt 欄仍 disabled`);
   });
+
+  test('㉑ 借款人身分（理監事/職員）：利益迴避提示 + 理事會特別決議層級', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 選擇「理事 / 監事」
+    await page.locator('#borrowerRole').selectOption('board');
+    // 利益迴避提示應顯示
+    const hint = page.locator('#roleAvoidanceHint');
+    await expect(hint).toBeVisible();
+    expect(await hint.innerText()).toContain('迴避');
+
+    // 填寫無擔保借款 50 萬（股金 10 萬，超股金）
+    await fillForm(page, {
+      income: 80000,
+      age: 45,
+      existing_debt: 0,
+      loan: 500000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('5');
+    await page.locator('#btnCalc').click();
+
+    // 結論條法定送審層級應為「理事會特別決議」
+    const govEl = page.locator('#verdictGovernance');
+    await expect(govEl).toBeVisible();
+    const govText = await govEl.innerText();
+    expect(govText).toContain('理事會特別決議');
+    expect(govText).toContain('2/3');
+
+    // 列印報表應正確標註借款人身分與法定送審層級
+    const printRole = await page.locator('#p_borrower_role').innerText();
+    expect(printRole).toContain('理事 / 監事');
+    const printGov = await page.locator('#p_governance').innerText();
+    expect(printGov).toContain('理事會特別決議');
+
+    console.log(`  → 利益迴避提示顯示正常，法定層級：理事會特別決議`);
+  });
+
+  test('㉒ 第三人名下擔保品：未填保證人否決，填寫保證人通過並標記理事會決議', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      income: 80000,
+      age: 40,
+      existing_debt: 0,
+      loan: 2000000,
+      years: 10,
+      rate: 2.5,
+      shares: 200000,
+    });
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#appraisalValue').fill('5000000');
+    await page.locator('#mortgageAmount').fill('3000000');
+    await page.locator('#collateralKind').selectOption('building');
+    await page.locator('#houseAge').fill('10');
+
+    // 擔保品所有權人選擇「他人（第三人）名下」
+    await page.locator('#collateralOwner').selectOption('third_party');
+    const thirdPartyHint = page.locator('#thirdPartyGuarantorHint');
+    await expect(thirdPartyHint).toBeVisible();
+    expect(await thirdPartyHint.innerText()).toContain('連帶保證人');
+
+    // 尚未填保證人時點計算 → 應遭第 17 條否決
+    await page.locator('#btnCalc').click();
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('不予核貸');
+    expect(status).toContain('第三人');
+
+    // 加入 1 位保證人
+    await page.locator('#guarantor_count').selectOption('1');
+    const row = page.locator('.guarantor-row').first();
+    await row.locator('.g-name').fill('陳大明（擔保物提供人）');
+    await row.locator('.g-income').fill('60000');
+    await row.locator('.g-debt').fill('0');
+
+    await page.locator('#btnCalc').click();
+    const statusPass = await page.locator('#resStatus').innerText();
+    expect(statusPass).not.toContain('第三人');
+
+    // 擔保放款法定層級應為「理事會決議」
+    const govEl = page.locator('#verdictGovernance');
+    await expect(govEl).toBeVisible();
+    expect(await govEl.innerText()).toContain('理事會決議');
+
+    console.log(`  → 第三人擔保品連帶保證人檢核及理事會決議層級驗證通過`);
+  });
 });

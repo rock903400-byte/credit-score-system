@@ -494,6 +494,17 @@ function applyRegulatoryVetoes(input) {
         `擔保品鑑價報告已逾 ${COLLATERAL_REAPPRAISAL_YEARS} 年（目前 ${input.appraisalAge} 年），須重新辦理鑑價`
       );
     }
+    // ⑩-4 第三人擔保品連帶保證人檢核（辦法第 14 條）
+    if (input.collateralOwner === 'third_party') {
+      const hasGuarantor =
+        (input.guarantorCount && input.guarantorCount > 0) ||
+        (input.guarantors && input.guarantors.length > 0);
+      if (!hasGuarantor) {
+        vetoes.push(
+          '提供第三人名下不動產為擔保物者，該第三人必須於借據中擔任連帶保證人（請於保證人區塊填寫連帶保證人資料）'
+        );
+      }
+    }
   }
 
   return { vetoes, newLoanMonthlyPmt, postLoanDti };
@@ -603,4 +614,77 @@ function applyLegalCeiling(input, maxLoanLimit) {
     limit = Math.min(limit, Math.max(0, input.shares - input.internalBalance));
   }
   return limit;
+}
+
+// ============================================================
+// 法定核決送審層級（依《章程範例》第27條、《放款委員會組織規則》第9條、《放款實施要點》第5條）
+// ============================================================
+
+function determineGovernanceRouting(input, result) {
+  if (!result || result.isVetoed) {
+    return {
+      level: 'veto',
+      tag: '不予核貸',
+      authority: '放款委員會 / 理事會',
+      text: '案件違反法定或規章限制，原則不予核貸；若屬爭議案件依章程第 28 條提交理事會決議。',
+      requiresBoardSpecialMajority: false,
+    };
+  }
+
+  const isStaffOrBoard =
+    input.borrowerRole === 'board' || input.borrowerRole === 'staff';
+  const extBalance = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.balance || 0),
+    0
+  );
+  const totalUnsecuredExposure =
+    input.proposedLoan + (input.internalBalance || 0) + extBalance;
+  const shares = input.shares || 0;
+  const exceedsShares = totalUnsecuredExposure > shares;
+
+  // 1. 理監事或職員無擔保借款超過股金：章程第 27 條第 2 項、放款委員會組織規則第 9 條第 1 款
+  if (
+    isStaffOrBoard &&
+    (input.collateral === '0' || input.collateral === '5') &&
+    exceedsShares
+  ) {
+    return {
+      level: 'board_special',
+      tag: '理事會特別決議',
+      authority: '理事會（須 2/3 出席理事同意）',
+      text: '理事、監事或職員申請無擔保借款超過股金，經放款委員會初審後，須送交理事會經三分之二出席理事同意後始得貸放。本人、配偶及二親等內親屬應迴避審查與對保（要點第 9 條）。',
+      requiresBoardSpecialMajority: true,
+    };
+  }
+
+  // 2. 社員申請擔保借款：章程第 27 條第 1 項、放款委員會組織規則第 9 條第 2 款
+  if (input.collateral === '10') {
+    return {
+      level: 'board_general',
+      tag: '理事會決議',
+      authority: '放款委員會初審 → 理事會決議',
+      text: '社員申請擔保借款應經放款委員會先行初審後，提交理事會作最後決議。',
+      requiresBoardSpecialMajority: false,
+    };
+  }
+
+  // 3. 小額無擔保借款（股金內）：放款實施要點第 5 條
+  if (input.collateral === '12' || totalUnsecuredExposure <= shares) {
+    return {
+      level: 'staff_delegated',
+      tag: '專職授權核放',
+      authority: '專職人員核放（10 日內送放款會追認）',
+      text: '無擔保借款於社員股金內得由理事會授權專職人員或社務助理核放，並於 10 日內提交放款委員會追認。',
+      requiresBoardSpecialMajority: false,
+    };
+  }
+
+  // 4. 一般無擔保放款（超股金但為一般社員）：放款委員會組織規則第 10 條、第 11 條
+  return {
+    level: 'committee',
+    tag: '放款委員會審查',
+    authority: '放款委員會（全數通過）',
+    text: '放款委員會審核放款應有過半數委員出席並須出席委員全數通過方可批准。',
+    requiresBoardSpecialMajority: false,
+  };
 }

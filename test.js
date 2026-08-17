@@ -52,6 +52,7 @@ const {
   validateInputsByField: VIBF,
   computeSuggestedAdditionalLoan: CSAL,
   computeConsolidationScenario: CCS,
+  determineGovernanceRouting: DGR,
   pmt: PMT,
   formatAmount: FA,
   escapeHtml: EH,
@@ -886,15 +887,79 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：16 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%）', () => {
+test('源碼：17 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 16,
+    (vf.match(/vetoes\.push/g) || []).length === 17,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
+  );
+});
+test('第三人擔保品無保證人 → 否決（辦法第 14 條）', () => {
+  const i = {
+    income: 80000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 500000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    collateralOwner: 'third_party',
+    guarantorCount: 0,
+    guarantors: [],
+    shares: 200000,
+    internalBalance: 0,
+    appraisalValue: 10_000_000,
+    mortgageAmount: 1_000_000,
+    collateralZone: 'residential_commercial_educational',
+    houseAge: 10,
+    appraisalAge: 3,
+  };
+  assert(
+    ARV(i).vetoes.some((v) => v.includes('第三人')),
+    'got:' + ARV(i).vetoes.join(';')
+  );
+});
+test('第三人擔保品有保證人 → 通過第三人檢核', () => {
+  const i = {
+    income: 80000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 500000,
+    jcic: '10',
+    purpose: '10',
+    collateral: '10',
+    collateralOwner: 'third_party',
+    guarantorCount: 1,
+    guarantors: [
+      {
+        name: '王大明',
+        income: 50000,
+        debt: 0,
+        type: 'member',
+        unknown: false,
+      },
+    ],
+    shares: 200000,
+    internalBalance: 0,
+    appraisalValue: 10_000_000,
+    mortgageAmount: 1_000_000,
+    collateralZone: 'residential_commercial_educational',
+    houseAge: 10,
+    appraisalAge: 3,
+  };
+  assert(
+    !ARV(i).vetoes.some((v) => v.includes('第三人')),
+    'got:' + ARV(i).vetoes.join(';')
   );
 });
 test('年限 35 年 → veto（擔保放款最長 30 年）', () => {
@@ -1002,6 +1067,65 @@ test('年限 21 年 + 屋齡≤20 非自用住宅 → 否決；自用住宅 → 
     '自用 21 年應放行，got:' +
       ARV({ ...base, isSelfOccupied: true }).vetoes.join(';')
   );
+});
+
+console.log('\n── determineGovernanceRouting (5) ──');
+test('案件被否決 → veto 層級', () => {
+  const inp = { proposedLoan: 500000, shares: 100000, collateral: '0' };
+  const res = { isVetoed: true };
+  const gov = DGR(inp, res);
+  assert(gov.level === 'veto' && gov.tag === '不予核貸');
+});
+test('理監事無擔保借款超過股金 → 理事會特別決議（須 2/3 出席同意）', () => {
+  const inp = {
+    borrowerRole: 'board',
+    proposedLoan: 500000,
+    internalBalance: 0,
+    shares: 200000,
+    collateral: '5',
+  };
+  const res = { isVetoed: false };
+  const gov = DGR(inp, res);
+  assert(
+    gov.level === 'board_special' && gov.requiresBoardSpecialMajority === true
+  );
+  assert(gov.tag.includes('特別決議'));
+});
+test('職員無擔保借款在股金內 → 專職授權核放', () => {
+  const inp = {
+    borrowerRole: 'staff',
+    proposedLoan: 100000,
+    internalBalance: 0,
+    shares: 200000,
+    collateral: '5',
+  };
+  const res = { isVetoed: false };
+  const gov = DGR(inp, res);
+  assert(gov.level === 'staff_delegated' && gov.tag === '專職授權核放');
+});
+test('一般社員申請擔保放款 → 理事會決議（放款會初審後送理事會）', () => {
+  const inp = {
+    borrowerRole: 'member',
+    proposedLoan: 3000000,
+    internalBalance: 0,
+    shares: 200000,
+    collateral: '10',
+  };
+  const res = { isVetoed: false };
+  const gov = DGR(inp, res);
+  assert(gov.level === 'board_general' && gov.tag === '理事會決議');
+});
+test('一般社員申請無擔保放款超過股金 → 放款委員會審查（全數通過）', () => {
+  const inp = {
+    borrowerRole: 'member',
+    proposedLoan: 500000,
+    internalBalance: 0,
+    shares: 200000,
+    collateral: '5',
+  };
+  const res = { isVetoed: false };
+  const gov = DGR(inp, res);
+  assert(gov.level === 'committee' && gov.tag === '放款委員會審查');
 });
 
 console.log('\n── determineGrade (3) ──');

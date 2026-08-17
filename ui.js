@@ -226,8 +226,9 @@ function parseInputs() {
   return {
     consolidationMode,
     additionalLoans,
-    memberId: $('memberId').value.trim(),
-    appDate: $('appDate').value,
+    memberId: $('memberId') ? $('memberId').value.trim() : '',
+    borrowerRole: $('borrowerRole') ? $('borrowerRole').value : 'member',
+    appDate: $('appDate') ? $('appDate').value : '',
     income: parseAmount('income'),
     age: parseInt($('age').value) || 0,
     existingDebt: parseAmount('existing_debt'),
@@ -243,10 +244,13 @@ function parseInputs() {
     jcic: $('jcic').value,
     membership: parseInt($('membership').value) || 0,
     collateral: $('collateral').value,
-    collateralKind: $('collateralKind').value || 'building',
+    collateralKind: $('collateralKind')
+      ? $('collateralKind').value || 'building'
+      : 'building',
+    collateralOwner: $('collateralOwner') ? $('collateralOwner').value : 'self',
     appraisalValue: parseAmount('appraisalValue'),
     mortgageAmount: parseAmount('mortgageAmount'),
-    collateralZone: $('collateralZone').value,
+    collateralZone: $('collateralZone') ? $('collateralZone').value : 'other',
     houseAge: parseInt($('houseAge').value) || 0,
     appraisalAge: parseInt($('appraisalAge').value) || 0,
     isSelfOccupied: !!($('selfOccupied')?.checked || false),
@@ -860,11 +864,13 @@ function updateCollateralByYears() {
   const kindGroup = $('collateralKindGroup');
   const houseAgeGroup = $('houseAgeGroup');
   const appraisalAgeGroup = $('appraisalAgeGroup');
+  const ownerGroup = $('collateralOwnerGroup');
   if (isSecuredLoan) {
     appraisalGroup.style.display = 'block';
     if (mortgageAmountGroup) mortgageAmountGroup.style.display = 'block';
     zoneGroup.style.display = 'block';
     if (kindGroup) kindGroup.style.display = 'block';
+    if (ownerGroup) ownerGroup.style.display = 'block';
     // 土地無建物：屋齡欄隱藏並清空，避免髒值進入報表或檢核
     const isLandKind = kindEl && kindEl.value === 'land';
     if (houseAgeGroup)
@@ -886,6 +892,7 @@ function updateCollateralByYears() {
     if (mortgageAmountGroup) mortgageAmountGroup.style.display = 'none';
     zoneGroup.style.display = 'none';
     if (kindGroup) kindGroup.style.display = 'none';
+    if (ownerGroup) ownerGroup.style.display = 'none';
     if (houseAgeGroup) houseAgeGroup.style.display = 'none';
     appraisalAgeGroup.style.display = 'none';
   }
@@ -894,8 +901,39 @@ function updateCollateralByYears() {
     kindEl.dataset.bound = 'true';
     kindEl.addEventListener('change', updateCollateralByYears);
   }
+  // 擔保品所有人變動時的提示更新
+  const ownerEl = $('collateralOwner');
+  if (ownerEl && !ownerEl.dataset.bound) {
+    ownerEl.dataset.bound = 'true';
+    ownerEl.addEventListener('change', updateCollateralOwnerHint);
+  }
+  updateCollateralOwnerHint();
+  // 借款人身分提示更新
+  const roleEl = $('borrowerRole');
+  if (roleEl && !roleEl.dataset.bound) {
+    roleEl.dataset.bound = 'true';
+    roleEl.addEventListener('change', updateBorrowerRoleHint);
+  }
+  updateBorrowerRoleHint();
   // 擔保品顯示狀態變動後，同步更新抵押權設定金額的即時檢查
   updateMortgageHint();
+}
+
+function updateCollateralOwnerHint() {
+  const ownerEl = $('collateralOwner');
+  const hint = $('thirdPartyGuarantorHint');
+  if (ownerEl && hint) {
+    hint.style.display = ownerEl.value === 'third_party' ? 'block' : 'none';
+  }
+}
+
+function updateBorrowerRoleHint() {
+  const roleEl = $('borrowerRole');
+  const hint = $('roleAvoidanceHint');
+  if (roleEl && hint) {
+    hint.style.display =
+      roleEl.value === 'board' || roleEl.value === 'staff' ? 'block' : 'none';
+  }
 }
 
 // ============================================================
@@ -970,6 +1008,22 @@ function renderVerdictBar(result) {
   const triage = isVetoed ? TRIAGE_VETOED : TRIAGE_MAP[grade] || TRIAGE_VETOED;
   $('verdictTriage').innerHTML =
     `建議流程：<span class="triage-tag">${escapeHtml(triage.tag)}</span>${escapeHtml(triage.text)}`;
+
+  const govEl = $('verdictGovernance');
+  if (govEl) {
+    const gov = determineGovernanceRouting(result.input, result);
+    const badgeClass =
+      gov.level === 'board_special'
+        ? 'gov-board-special'
+        : gov.level === 'board_general'
+          ? 'gov-board'
+          : gov.level === 'staff_delegated'
+            ? 'gov-staff'
+            : gov.level === 'veto'
+              ? 'gov-veto'
+              : 'gov-committee';
+    govEl.innerHTML = `法定送審層級：<span class="gov-tag ${badgeClass}">${escapeHtml(gov.tag)}</span>（${escapeHtml(gov.authority)}）<br><small style="color: #64748b; font-size: 0.9em; display: inline-block; margin-top: 4px;">${escapeHtml(gov.text)}</small>`;
+  }
 
   // 未確認提醒：9 個評分下拉若還維持系統預設值，分數會偏樂觀
   const untouched = getUntouchedSelects();
@@ -1574,6 +1628,13 @@ function renderPrintReport(result) {
 
   // [FIX 3.2] 案件基本資訊
   $('p_memberId').innerText = input.memberId || '—';
+  const roleText =
+    input.borrowerRole === 'board'
+      ? '理事 / 監事'
+      : input.borrowerRole === 'staff'
+        ? '專職幹部 / 職員'
+        : '一般社員';
+  if ($('p_borrower_role')) $('p_borrower_role').innerText = roleText;
   $('p_income').innerText = input.income.toLocaleString('zh-TW') + ' 元';
   $('p_existing').innerText =
     input.existingDebt.toLocaleString('zh-TW') + ' 元';
@@ -1622,10 +1683,15 @@ function renderPrintReport(result) {
         input.mortgageAmount > 0
           ? ` / 抵押權設定金額 ${input.mortgageAmount.toLocaleString('zh-TW')} 元`
           : '';
+      const ownerNote =
+        input.collateralOwner === 'third_party'
+          ? ' / 擔保品為他人(第三人)名下'
+          : '';
       $('p_collateral_detail').innerText =
         `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
         ageNote +
-        mortgageNote;
+        mortgageNote +
+        ownerNote;
       collateralDetailRow.style.display = '';
     } else {
       collateralDetailRow.style.display = 'none';
@@ -1734,6 +1800,12 @@ function renderPrintReport(result) {
   $('p_limit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
   // [FIX 3.4] 列印狀態去 emoji
   $('p_status').innerText = stripEmoji(statusText);
+
+  const pGovEl = $('p_governance');
+  if (pGovEl) {
+    const gov = determineGovernanceRouting(input, result);
+    pGovEl.innerHTML = `<strong>法定送審核決層級：</strong>【${escapeHtml(gov.tag)}】（權責單位：${escapeHtml(gov.authority)}）<br><span style="color:#444; font-size:12px; display:inline-block; margin-top:3px;">${escapeHtml(gov.text)}</span>`;
+  }
 
   $('p_grade2').innerText = grade;
   $('p_maxdti2').innerText = maxDti * 100;
@@ -1946,6 +2018,7 @@ function calculateLoan() {
 const FORM_DRAFT_KEY = 'cu_form_draft';
 const FORM_DRAFT_FIELDS = [
   'memberId',
+  'borrowerRole',
   'appDate',
   'income',
   'age',
@@ -1963,6 +2036,7 @@ const FORM_DRAFT_FIELDS = [
   'membership',
   'collateral',
   'collateralKind',
+  'collateralOwner',
   'appraisalValue',
   'mortgageAmount',
   'collateralZone',
@@ -2134,6 +2208,7 @@ function clearFormDraft() {
 // ============================================================
 const SAMPLE_CASE = {
   memberId: 'A00123 王小明（範例）',
+  borrowerRole: 'member',
   income: '50000',
   age: '40',
   existing_debt: '5000',
@@ -2158,9 +2233,11 @@ const SAMPLE_CASE = {
 // 否則前一位社員的保證人姓名／整併設定會混進「範例」，
 // 保證人又計入 protectionScore，示範案件每次結果都不一樣。
 const SAMPLE_RESET = {
+  borrowerRole: 'member',
   appraisalValue: '',
   mortgageAmount: '',
   collateralKind: 'building',
+  collateralOwner: 'self',
   houseAge: '',
   appraisalAge: '',
   guarantor_count: '0',
