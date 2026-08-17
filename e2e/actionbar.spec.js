@@ -311,3 +311,49 @@ test.describe('Stale banner 重算鈕', () => {
     await expect(page.locator('#staleBanner')).toBeHidden();
   });
 });
+
+test.describe('頂部載入範例與全域 Toast 提示', () => {
+  test('點擊頂部「📄 載入範例」按鈕 → 一鍵帶入王小明資料並試算，且浮現成功 Toast', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('#btnSampleCaseTop').click();
+
+    // 驗證表單已填入王小明資料
+    await expect(page.locator('#memberId')).toHaveValue(
+      'A00123 王小明（範例）'
+    );
+    await expect(page.locator('#income')).toHaveValue('50,000');
+    await expect(page.locator('#chipRequiredCount')).toHaveText('6/6');
+
+    // 驗證試算結果已產出
+    await expect(page.locator('#resultCard')).toBeVisible();
+
+    // 驗證成功 Toast 顯示
+    const toast = page.locator('#globalToast');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText('已成功載入示範案件');
+  });
+
+  test('必填未填點擊「開始授信評分」→ 浮現警告 Toast 且聚焦首個錯誤欄位', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await page.locator('#btnCalc').click();
+
+    // 驗證 Toast 出現
+    const toast = page.locator('#globalToast');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText('需填寫或修正');
+
+    // 驗證首個錯誤欄位聚焦
+    await expect(page.locator('#income')).toBeFocused();
+  });
+});

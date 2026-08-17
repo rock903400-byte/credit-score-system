@@ -282,6 +282,27 @@ function parseInputs() {
 }
 
 // ============================================================
+// 全域 Toast 提示元件
+// ============================================================
+let toastTimer = null;
+function showToast(msg, type = 'warn', durationMs = 3500) {
+  const toast = $('globalToast');
+  if (!toast) return;
+  toast.className = `global-toast toast-${type}`;
+  toast.textContent = msg;
+  toast.style.display = 'flex';
+  toast.offsetHeight; // trigger reflow
+  toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      if (!toast.classList.contains('show')) toast.style.display = 'none';
+    }, 300);
+  }, durationMs);
+}
+
+// ============================================================
 // Inline 驗證 UI
 // ============================================================
 
@@ -2253,8 +2274,16 @@ function calculateLoan() {
       $('resultCard').style.display = 'none';
       $('btnPrint').style.display = 'none';
       const firstEl = getFirstErrorElement(fieldErrors);
-      if (firstEl)
+      if (firstEl) {
         firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof firstEl.focus === 'function') {
+          firstEl.focus({ preventScroll: true });
+        }
+      }
+      showToast(
+        `⚠️ 表單尚有 ${errors.length} 處欄位需填寫或修正，已為您自動定位`,
+        'warn'
+      );
       return;
     }
     clearAllFieldErrors();
@@ -2656,6 +2685,7 @@ function loadSampleCase() {
   updateActionBar();
   saveFormDraft();
   calculateLoan();
+  showToast('📄 已成功載入示範案件（王小明）', 'success', 2500);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2869,6 +2899,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 載入範例案件（新手訓練 / 理監事會展示）
   const sampleBtn = $('btnSampleCase');
   if (sampleBtn) sampleBtn.addEventListener('click', loadSampleCase);
+  const sampleBtnTop = $('btnSampleCaseTop');
+  if (sampleBtnTop) sampleBtnTop.addEventListener('click', loadSampleCase);
 
   // 整併模式切換
   const consolidationMode = $('consolidationMode');

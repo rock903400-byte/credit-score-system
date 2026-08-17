@@ -1655,6 +1655,72 @@ select.select-untouched {
   outline-offset: 1px;
 }
 
+.btn-sample-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.btn-sample-top:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+.btn-sample-top:active {
+  transform: translateY(0);
+}
+
+/* 全域浮動 Toast 提示 */
+.global-toast {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 12px 20px;
+  background: #1e293b;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 0.92em;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    top 0.3s ease;
+}
+.global-toast.show {
+  opacity: 1;
+  pointer-events: auto;
+  top: 80px;
+}
+.global-toast.toast-warn {
+  background: #b45309;
+  border-left: 4px solid #f59e0b;
+}
+.global-toast.toast-info {
+  background: #1e40af;
+  border-left: 4px solid #3b82f6;
+}
+.global-toast.toast-success {
+  background: #15803d;
+  border-left: 4px solid #22c55e;
+}
+
 /* --- 次要操作列（範例案件 / 清除草稿） --- */
 .secondary-actions {
   display: flex;

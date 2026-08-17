@@ -11,6 +11,13 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div
+      id="globalToast"
+      class="global-toast"
+      style="display: none"
+      role="alert"
+      aria-live="assertive"
+    ></div>
     <main class="container">
       <div class="no-print">
         <div class="header">
@@ -35,6 +42,14 @@
               aria-live="polite"
             >
               待確認 <strong id="chipUnconfirmedCount">9</strong> 項
+            </button>
+            <button
+              type="button"
+              id="btnSampleCaseTop"
+              class="btn-sample-top"
+              title="一鍵載入示範案件資料（王小明）"
+            >
+              📄 載入範例
             </button>
           </div>
           <button id="btnCalc" class="btn-calc">
