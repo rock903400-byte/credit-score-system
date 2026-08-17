@@ -355,6 +355,8 @@ const FIELD_ERROR_ID_MAP = {
   years: 'years',
   rate: 'rate',
   age: 'age',
+  interaction: 'interaction',
+  membership: 'membership',
   appraisalValue: 'appraisalValue',
   houseAge: 'houseAge',
   appraisalAge: 'appraisalAge',
@@ -488,6 +490,8 @@ function getFirstErrorElement(fieldErrors) {
     'loan',
     'rate',
     'shares',
+    'interaction',
+    'membership',
     'livingExpense',
     'dependents',
     'dependentExpense',
@@ -976,6 +980,30 @@ function updateLivingSummaryLive() {
   if (hintSelf) hintSelf.innerText = selfCost.toLocaleString('zh-TW');
   if (hintDeps) hintDeps.innerText = (deps * depCost).toLocaleString('zh-TW');
   if (hintTotal) hintTotal.innerText = totalLiving.toLocaleString('zh-TW');
+}
+
+// ============================================================
+// 入社年資與儲蓄習慣連動防呆（未滿 1 年不得選超過 12 個月儲蓄）
+// ============================================================
+function updateInteractionByMembership() {
+  const membershipEl = $('membership');
+  const interactionEl = $('interaction');
+  if (!membershipEl || !interactionEl) return;
+
+  const isUnderOneYear = membershipEl.value === '1';
+  const opt10 = interactionEl.querySelector('option[value="10"]');
+  if (opt10) {
+    opt10.disabled = isUnderOneYear;
+    if (isUnderOneYear) {
+      opt10.textContent = '不間斷儲蓄超過 12 個月（入社滿 1 年以上適用）';
+      if (interactionEl.value === '10') {
+        interactionEl.value = '7'; // 自動切換為最高可選合法項
+        markSelectTouched(interactionEl);
+      }
+    } else {
+      opt10.textContent = '不間斷儲蓄超過 12 個月';
+    }
+  }
 }
 
 function updateCollateralByYears() {
@@ -2138,8 +2166,9 @@ function setCalcLoading(loading) {
 function calculateLoan() {
   setCalcLoading(true);
   try {
-    // 擔保品聯動保險：確保之前年的變更已同步（若未失焦）
+    // 擔保品與年資聯動保險：確保之前年的變更已同步（若未失焦）
     updateCollateralByYears();
+    updateInteractionByMembership();
     const input = parseInputs();
 
     // [FIX 4.1] 輸入驗證（含負值防呆）
@@ -2386,6 +2415,7 @@ function loadFormDraft() {
     }
     updateGuarantorWeightHint();
     updateCollateralByYears();
+    updateInteractionByMembership();
     updateLivingSummaryLive();
     // 整併模式：還原額外既有貸款列（舊草稿的 internal_monthly2 等欄位做一次遷移）
     let extRows = Array.isArray(data._internalExt) ? data._internalExt : null;
@@ -2546,6 +2576,7 @@ function loadSampleCase() {
   });
   updateLivingSummaryLive();
   updateCollateralByYears();
+  updateInteractionByMembership();
   updateShareHintLive();
   updateActionBar();
   saveFormDraft();
@@ -2670,6 +2701,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('years').addEventListener('change', updateCollateralByYears);
   $('collateral').addEventListener('change', updateCollateralByYears);
   updateCollateralByYears();
+
+  // 入社年資與儲蓄習慣連動防呆
+  const membershipEl = $('membership');
+  if (membershipEl) {
+    membershipEl.addEventListener('change', updateInteractionByMembership);
+    membershipEl.addEventListener('input', updateInteractionByMembership);
+  }
+  updateInteractionByMembership();
 
   // 草稿自動存：所有欄位的 input/change 事件
   FORM_DRAFT_FIELDS.forEach((id) => {

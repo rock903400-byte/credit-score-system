@@ -232,6 +232,28 @@ test('保證人錯誤', () => {
   const fe = VIBF(i);
   assert(fe.g_name_0 && fe.g_income_0 && fe.g_debt_0, '缺保證人欄位錯誤');
 });
+test('入社未滿1年但選儲蓄超過12個月 → 邏輯矛盾阻擋', () => {
+  const i = {
+    income: 50000,
+    years: 5,
+    proposedLoan: 300000,
+    age: 40,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    ratePercent: 3,
+    shares: 50000,
+    membership: 1,
+    interaction: 10,
+    guarantors: [],
+  };
+  assert(VI(i).some((e) => e.includes('入社年資未滿 1 年')));
+  const fe = VIBF(i);
+  assert(
+    fe.interaction && fe.interaction.includes('入社未滿 1 年'),
+    'interaction 欄位應有矛盾錯誤'
+  );
+});
 
 console.log('\n── computeScore (3) ──');
 test('優質借款人 ≥ 90 分', () => {

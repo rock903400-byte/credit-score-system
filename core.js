@@ -200,6 +200,12 @@ function validateInputs(input) {
   if (input.age <= 0) errors.push('年齡為必填欄位且須大於 0');
   else if (input.age < 18)
     errors.push('年齡未滿 18 歲，須取得法定代理人書面同意後送件');
+  // 入社年資與儲蓄習慣邏輯矛盾防呆
+  if (input.membership === 1 && input.interaction === 10) {
+    errors.push(
+      '入社年資未滿 1 年，不得選擇「不間斷儲蓄超過 12 個月」（邏輯矛盾，請確認儲蓄習慣或入社年資）'
+    );
+  }
   // Validate each additional loan (整併模式多筆)
   if (input.additionalLoans && input.additionalLoans.length > 0) {
     input.additionalLoans.forEach((l, i) => {
@@ -252,6 +258,9 @@ function validateInputsByField(input) {
   if (input.age <= 0) setErr('age', '年齡為必填欄位且須大於 0');
   else if (input.age < 18)
     setErr('age', '年齡未滿 18 歲須取得法定代理人書面同意');
+  if (input.membership === 1 && input.interaction === 10) {
+    setErr('interaction', '入社未滿 1 年無法累積超過 12 個月不間斷儲蓄');
+  }
 
   if (input.additionalLoans && input.additionalLoans.length > 0) {
     input.additionalLoans.forEach((l, i) => {

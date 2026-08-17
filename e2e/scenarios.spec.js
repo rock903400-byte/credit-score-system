@@ -972,4 +972,46 @@ test.describe('場景 13-18：實務進階', () => {
 
     console.log(`  → 列印報表生活支出與現金流盈餘資訊列驗證通過`);
   });
+
+  test('㉖ 入社年資未滿 1 年與儲蓄習慣連動防呆（超過 12 個月禁用且自動降階）', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      income: 50000,
+      age: 35,
+      loan: 300000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+
+    // 1. 預設 interaction 為 10，切換 membership 為 1（未滿 1 年）
+    await page.locator('#membership').selectOption('1');
+
+    // 2. 驗證 option[value="10"] 變為 disabled，且值自動調降為 7
+    const opt10Disabled = await page
+      .locator('#interaction option[value="10"]')
+      .getAttribute('disabled');
+    expect(opt10Disabled).not.toBeNull();
+    expect(await page.locator('#interaction').inputValue()).toBe('7');
+
+    // 3. 點擊計算，驗證順利以合法選項 7 完成評分
+    await page.locator('#btnCalc').click();
+    await expect(page.locator('#resultCard')).toBeVisible();
+
+    // 4. 切換回 membership = 5（超過 5 年）→ 恢復為可選狀態且能成功選取 10
+    await page.locator('#membership').selectOption('5');
+    const opt10DisabledAfter = await page
+      .locator('#interaction option[value="10"]')
+      .getAttribute('disabled');
+    expect(opt10DisabledAfter).toBeNull();
+    await page.locator('#interaction').selectOption('10');
+    expect(await page.locator('#interaction').inputValue()).toBe('10');
+
+    console.log(`  → 入社年資與儲蓄習慣連動禁用與自動降階驗證通過`);
+  });
 });
