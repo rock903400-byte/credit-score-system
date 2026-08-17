@@ -2582,6 +2582,142 @@ function clearFormDraft() {
   }
 }
 
+function resetFormToDefaults() {
+  clearFormDraft();
+  clearAllFieldErrors();
+  clearResultStale();
+
+  // 1. 所有表單欄位設為原廠預設值
+  const FACTORY_DEFAULTS = {
+    memberId: '',
+    borrowerRole: 'member',
+    income: '',
+    age: '',
+    existing_debt: '',
+    internal_monthly: '',
+    internal_balance: '',
+    loan: '',
+    years: '',
+    rate: '',
+    shares: '',
+    livingRegion: 'new_taipei',
+    livingExpense: String(DEFAULT_LIVING_EXPENSE || 17750),
+    dependents: '0',
+    dependentExpense: String(
+      Math.round((DEFAULT_LIVING_EXPENSE || 17750) * 0.5)
+    ),
+    incomeStability: '9',
+    tenure: '6',
+    interaction: '10',
+    jcic: '10',
+    membership: '5',
+    collateral: '12',
+    collateralKind: 'building',
+    collateralOwner: 'self',
+    appraisalValue: '',
+    mortgageAmount: '',
+    collateralZone: 'other',
+    houseAge: '',
+    appraisalAge: '',
+    guarantor_count: '0',
+    purpose: '10',
+    career: '6',
+    participation: '4',
+  };
+
+  Object.entries(FACTORY_DEFAULTS).forEach(([id, val]) => {
+    const el = $(id);
+    if (el) el.value = val;
+  });
+
+  // 申請日期預設今天
+  const appDate = $('appDate');
+  if (appDate) {
+    const t = new Date();
+    appDate.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }
+
+  // 2. 重設 Checkbox
+  const cm = $('consolidationMode');
+  if (cm) cm.checked = false;
+  const so = $('selfOccupied');
+  if (so) so.checked = false;
+  const lm = $('livingMultiplier12');
+  if (lm) lm.checked = false;
+
+  // 3. 重設動態列
+  renderExtLoanRows([]);
+  renderGuarantorRows(0);
+
+  // 4. 重設 9 個評分下拉為「未確認」狀態
+  SCORING_SELECT_IDS.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.dataset.untouched = 'true';
+    el.classList.add('select-untouched');
+    // 確保 label 內有 .untouched-pill
+    const formGroup = el.closest('.form-group');
+    const label = formGroup ? formGroup.querySelector('label') : null;
+    if (label && !label.querySelector('.untouched-pill')) {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'untouched-pill';
+      pill.textContent = '未確認';
+      pill.title = '點擊以目前預設值確認';
+      pill.setAttribute(
+        'aria-label',
+        `${el.dataset.scoreLabel || '此項'}：維持系統預設值，點擊標記為已確認`
+      );
+      pill.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        markSelectTouched(el);
+        saveFormDraft();
+      });
+      label.appendChild(pill);
+    }
+  });
+
+  // 5. 清除所有金額預覽
+  document.querySelectorAll('.input-preview').forEach((el) => {
+    el.innerText = '';
+  });
+
+  // 6. 隱藏條件群組與提示
+  const groupsToHide = [
+    'internalExtGroup',
+    'collateralAppraisalGroup',
+    'collateralZoneGroup',
+    'collateralKindGroup',
+    'houseAgeGroup',
+    'selfOccupiedGroup',
+    'appraisalAgeGroup',
+    'roleAvoidanceHint',
+    'shareHint',
+    'unknownGuarantorWarn',
+    'minorWarn',
+    'suggestedLoanBox',
+    'consolidationBox',
+  ];
+  groupsToHide.forEach((id) => {
+    const el = $(id);
+    if (el) el.style.display = 'none';
+  });
+
+  // 7. 隱藏結果卡與列印按鈕
+  $('resultCard').style.display = 'none';
+  $('btnPrint').style.display = 'none';
+
+  // 8. 同步更新各連動機制
+  updateLivingSummaryLive();
+  updateCollateralByYears();
+  updateInteractionByMembership();
+  updateShareHintLive();
+  updateActionBar();
+
+  showToast('🗑 已清除草稿並重置表單', 'info', 2500);
+}
+
 // ============================================================
 // 範例案件：一鍵看完整輸出，降低第一次使用的理解成本
 // ============================================================
@@ -2885,12 +3021,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 清除草稿按鈕
   const clearBtn = $('clearDraftBtn');
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (confirm('確定要清除已填寫的草稿並重置表單？')) {
-        clearFormDraft();
-        location.reload();
-      }
-    });
+    clearBtn.addEventListener('click', resetFormToDefaults);
   }
 
   // 載入範例案件（新手訓練 / 理監事會展示）

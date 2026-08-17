@@ -16,14 +16,34 @@ test.describe('Draft — 草稿存讀', () => {
     await expect(page.locator('#age')).toHaveValue('35');
   });
 
-  test('點擊清除草稿 → 重置表單', async ({ page }) => {
+  test('點擊清除草稿 → 即時清空表單且重整後依然保持完全乾淨', async ({
+    page,
+  }) => {
     await page.goto('/');
     await page.locator('#income').fill('88888');
+    await page.locator('#memberId').fill('測試員王大明');
+    await page.locator('#loan').fill('500000');
     await page.waitForTimeout(100);
-    page.on('dialog', (d) => d.accept());
+
+    // 點擊清除草稿
     await page.locator('#clearDraftBtn').click();
-    await page.waitForLoadState('load');
+
+    // 驗證 DOM 欄位即時清空
     await expect(page.locator('#income')).toHaveValue('');
+    await expect(page.locator('#memberId')).toHaveValue('');
+    await expect(page.locator('#loan')).toHaveValue('');
+    await expect(page.locator('#chipRequiredCount')).toHaveText('0/6');
+    await expect(page.locator('#chipUnconfirmedCount')).toHaveText('9');
+    await expect(page.locator('#globalToast')).toBeVisible();
+    await expect(page.locator('#globalToast')).toContainText(
+      '已清除草稿並重置表單'
+    );
+
+    // 驗證重新整理後依然保持完全乾淨
+    await page.reload();
+    await expect(page.locator('#income')).toHaveValue('');
+    await expect(page.locator('#memberId')).toHaveValue('');
+    await expect(page.locator('#chipRequiredCount')).toHaveText('0/6');
   });
 
   test('整併模式勾選 → 草稿還原後既有貸款列表仍顯示', async ({ page }) => {
