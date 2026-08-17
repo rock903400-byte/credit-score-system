@@ -54,6 +54,7 @@ const {
   computeConsolidationScenario: CCS,
   determineGovernanceRouting: DGR,
   computeCashFlow: CCF,
+  getLoanLimitDetails: GLLD,
   DEFAULT_LIVING_EXPENSE,
   REGIONAL_MIN_LIVING_COST_115,
   JUDICIAL_LIVING_MULTIPLIER,
@@ -913,15 +914,96 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：18 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人、收支赤字否決）', () => {
+test('源碼：19 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人、收支赤字否決、DBR 22倍否決）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 18,
+    (vf.match(/vetoes\.push/g) || []).length === 19,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
+  );
+});
+test('月薪 3 萬申請 70 萬純信用借款 → 觸發第 19 條 DBR 22 倍否決', () => {
+  const i = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 700000,
+    collateral: '0',
+    shares: 50000,
+  };
+  const v = ARV(i).vetoes;
+  assert(
+    v.some((x) => x.includes('22 倍')),
+    '未觸發 22 倍否決，got:' + v.join(';')
+  );
+});
+test('月薪 3 萬申請 50 萬純信用借款但已有外部無擔保負債 20 萬 → 合計 70 萬觸發 DBR 22 倍否決', () => {
+  const i = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 5000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 500000,
+    collateral: '0',
+    shares: 50000,
+    additionalLoans: [{ monthly: 0, balance: 200000, years: 0, rate: 0 }],
+  };
+  const v = ARV(i).vetoes;
+  assert(
+    v.some((x) => x.includes('22 倍')),
+    '未觸發 22 倍否決'
+  );
+});
+test('不動產擔保與足額股金借款不受 DBR 22 倍限制', () => {
+  const i1 = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 2000000,
+    collateral: '10',
+    appraisalValue: 5000000,
+    mortgageAmount: 2400000,
+    collateralZone: 'other',
+    houseAge: 10,
+    appraisalAge: 2,
+    shares: 50000,
+  };
+  const v1 = ARV(i1).vetoes;
+  assert(
+    !v1.some((x) => x.includes('22 倍')),
+    '不動產擔保不應觸發 DBR 22 否決'
+  );
+
+  const i2 = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 1000000,
+    collateral: '12',
+    shares: 1000000,
+  };
+  const v2 = ARV(i2).vetoes;
+  assert(
+    !v2.some((x) => x.includes('22 倍')),
+    '足額股金借款不應觸發 DBR 22 否決'
   );
 });
 test('第三人擔保品無保證人 → 否決（辦法第 14 條）', () => {
@@ -1336,6 +1418,48 @@ test('不動產上限=1000萬', () => {
 test('股金內借款上限=股金（與規則⑤一致）', () => {
   const i = { collateral: '12', shares: 200000, internalBalance: 0, age: 40 };
   assert(ALC(i, 10_000_000) === 200_000, 'got:' + ALC(i, 10_000_000));
+});
+test('月薪 3 萬無擔保放款：受評級 DBR 倍數階梯約束 (A級 20倍/60萬, B級 15倍/45萬, C級 12倍/36萬, D級 8倍/24萬)', () => {
+  const base = {
+    collateral: '0',
+    shares: 200000,
+    internalBalance: 0,
+    age: 40,
+    income: 30000,
+  };
+  assert(
+    ALC(base, 10_000_000, 'A') === 600000,
+    'A 級應為 60 萬，got:' + ALC(base, 10_000_000, 'A')
+  );
+  assert(
+    ALC(base, 10_000_000, 'B') === 450000,
+    'B 級應為 45 萬，got:' + ALC(base, 10_000_000, 'B')
+  );
+  assert(
+    ALC(base, 10_000_000, 'C') === 360000,
+    'C 級應為 36 萬，got:' + ALC(base, 10_000_000, 'C')
+  );
+  assert(
+    ALC(base, 10_000_000, 'D') === 240000,
+    'D 級應為 24 萬，got:' + ALC(base, 10_000_000, 'D')
+  );
+});
+test('getLoanLimitDetails：正確辨識 DBR 瓶頸與限制原因', () => {
+  const i = {
+    collateral: '0',
+    shares: 50000,
+    internalBalance: 0,
+    existingDebt: 0,
+    internalMonthly: 0,
+    age: 35,
+    income: 30000,
+    years: 5,
+    ratePercent: 3,
+  };
+  const d = GLLD(i, 800000, 'B');
+  assert(d.finalLimit === 450000, 'B 級額度應為 45 萬');
+  assert(d.primaryLimiter === 'dbr_grade_cap', '主要限制因子應為 DBR');
+  assert(d.limiterText.includes('15 倍'), '應包含 15 倍說明');
 });
 
 console.log('\n── 債權保障封頂 (1) ──');

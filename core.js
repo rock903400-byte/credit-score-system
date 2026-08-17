@@ -26,6 +26,8 @@ const GUARANTOR_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 const GUARANTOR_TYPE_WEIGHT = { member: 1.0, non_member: 0.7 };
 const GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS = { A: 0.6, B: 0.5, C: 0.4, D: 0.3 };
+const DBR_HARD_CEILING = 22; // 金管會個人無擔保負債上限 22 倍
+const GRADE_DBR_LIMITS = { A: 20, B: 15, C: 12, D: 8, E: 0 }; // 各評等無擔保授信月薪倍數階梯
 
 // 擔保放款 LTV 上限（擔保放款辦法第 10、10-1 條）
 const LTV_RATIOS = {
@@ -593,6 +595,50 @@ function applyRegulatoryVetoes(input) {
     );
   }
 
+  // ⑲ [金管會/銀行法規範] DBR 22 倍無擔保負債硬性否決 (DBR 22 Veto)
+  let unsecuredProposedLoan = 0;
+  if (input.collateral === '10') {
+    const appraisal = input.appraisalValue || 0;
+    const zone = input.collateralZone || 'other';
+    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
+    unsecuredProposedLoan = Math.max(
+      0,
+      input.proposedLoan - Math.floor(appraisal * ltv)
+    );
+  } else if (input.collateral === '12') {
+    unsecuredProposedLoan = 0; // 足額股金質借，實質無擔保曝險為 0
+  } else if (input.collateral === '5') {
+    unsecuredProposedLoan = Math.max(
+      0,
+      input.proposedLoan - (input.shares || 0)
+    );
+  } else {
+    unsecuredProposedLoan = input.proposedLoan;
+  }
+
+  const extBalance = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.balance || 0),
+    0
+  );
+  // 本社未足額質借之負債餘額
+  const internalUnsecuredBalance = Math.max(
+    0,
+    (input.internalBalance || 0) -
+      (input.collateral === '12' ? input.shares || 0 : 0)
+  );
+  const totalExistingUnsecuredDebt =
+    (input.existingDebt || 0) + internalUnsecuredBalance + extBalance;
+  const totalPostUnsecuredDebt =
+    unsecuredProposedLoan + totalExistingUnsecuredDebt;
+  const maxDbrAllowed = (input.income || 0) * DBR_HARD_CEILING;
+
+  if (input.income > 0 && totalPostUnsecuredDebt > maxDbrAllowed) {
+    const dbrRatio = (totalPostUnsecuredDebt / input.income).toFixed(1);
+    vetoes.push(
+      `無擔保負債總額（本次無擔保借款 ${Math.round(unsecuredProposedLoan).toLocaleString('zh-TW')} 元 ＋ 現有負債 ${Math.round(totalExistingUnsecuredDebt).toLocaleString('zh-TW')} 元 ＝ ${Math.round(totalPostUnsecuredDebt).toLocaleString('zh-TW')} 元）達月收入（${input.income.toLocaleString('zh-TW')} 元）之 ${dbrRatio} 倍，超過法定 22 倍上限（${Math.round(maxDbrAllowed).toLocaleString('zh-TW')} 元），不予核貸`
+    );
+  }
+
   return { vetoes, newLoanMonthlyPmt, postLoanDti, cashFlow };
 }
 
@@ -696,7 +742,7 @@ function computeConsolidationScenario(input) {
   };
 }
 
-function applyLegalCeiling(input, maxLoanLimit) {
+function applyLegalCeiling(input, maxLoanLimit, grade) {
   let ceiling;
   if (input.collateral === '10') {
     const appraisal = input.appraisalValue || 0;
@@ -706,13 +752,153 @@ function applyLegalCeiling(input, maxLoanLimit) {
   } else if (input.collateral === '12') {
     ceiling = Math.min(NATURAL_PERSON_CAP, input.shares);
   } else {
-    ceiling = input.shares + CREDIT_FLOOR_PER_SHARE;
+    // 無擔保放款：章程上限 (股金 + 100 萬) 與 DBR 評級倍數天花板取小
+    const dbrMultiplier =
+      input.income && grade && GRADE_DBR_LIMITS[grade] !== undefined
+        ? GRADE_DBR_LIMITS[grade]
+        : DBR_HARD_CEILING;
+    const extBalance = (input.additionalLoans || []).reduce(
+      (sum, l) => sum + (l.balance || 0),
+      0
+    );
+    const internalUnsecured = Math.max(
+      0,
+      (input.internalBalance || 0) -
+        (input.collateral === '5' ? input.shares || 0 : 0)
+    );
+    const totalExistingUnsecured =
+      (input.existingDebt || 0) + internalUnsecured + extBalance;
+    const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
+
+    let dbrCap = Infinity;
+    if (input.income > 0) {
+      const netDbrUnsecuredAvailable = Math.max(
+        0,
+        input.income * dbrMultiplier - totalExistingUnsecured
+      );
+      dbrCap = netDbrUnsecuredAvailable + securedSharesPart;
+    }
+    const bylawCap = (input.shares || 0) + CREDIT_FLOOR_PER_SHARE;
+    ceiling = Math.min(bylawCap, dbrCap);
   }
   let limit = Math.min(maxLoanLimit, ceiling);
   if (input.age < 18) {
     limit = Math.min(limit, Math.max(0, input.shares - input.internalBalance));
   }
   return limit;
+}
+
+// 取得核貸額度受限因子與各維度天花板明細
+function getLoanLimitDetails(input, maxLoanLimit, grade) {
+  const finalLimit = applyLegalCeiling(input, maxLoanLimit, grade);
+  const extMonthly = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.monthly || 0),
+    0
+  );
+  const totalExistingMonthly =
+    (input.existingDebt || 0) + (input.internalMonthly || 0) + extMonthly;
+  const maxPmtByDti =
+    (input.income || 0) * (GRADE_DTI_LIMITS[grade] || 0.6) -
+    totalExistingMonthly;
+  const cashFlow = computeCashFlow(input, 0);
+  const maxPmtByCashflow =
+    cashFlow.totalLivingExpenses > 0
+      ? (input.income || 0) -
+        totalExistingMonthly -
+        cashFlow.totalLivingExpenses
+      : Infinity;
+
+  const r = (input.ratePercent || 0) / 100 / 12;
+  const n = (input.years || 0) * 12;
+  const factor = r === 0 ? 1 / n : 1 / n + r;
+  const pmtCap = factor > 0 ? Math.max(0, maxPmtByDti / factor) : 0;
+  const cashflowCap =
+    factor > 0 && maxPmtByCashflow !== Infinity
+      ? Math.max(0, maxPmtByCashflow / factor)
+      : Infinity;
+
+  const dbrMultiplier =
+    grade && GRADE_DBR_LIMITS[grade] !== undefined
+      ? GRADE_DBR_LIMITS[grade]
+      : DBR_HARD_CEILING;
+  const extBalance = (input.additionalLoans || []).reduce(
+    (sum, l) => sum + (l.balance || 0),
+    0
+  );
+  const internalUnsecured = Math.max(
+    0,
+    (input.internalBalance || 0) -
+      (input.collateral === '5' ? input.shares || 0 : 0)
+  );
+  const totalExistingUnsecured =
+    (input.existingDebt || 0) + internalUnsecured + extBalance;
+  const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
+  const dbrCap =
+    input.income > 0
+      ? Math.max(0, input.income * dbrMultiplier - totalExistingUnsecured) +
+        securedSharesPart
+      : Infinity;
+  const bylawCap = (input.shares || 0) + CREDIT_FLOOR_PER_SHARE;
+
+  let primaryLimiter = 'dti_pmt';
+  let limiterText = `受限於 ${grade} 級 DTI 負債比上限（${Math.round(
+    (GRADE_DTI_LIMITS[grade] || 0.6) * 100
+  )}%）`;
+
+  if (input.collateral === '10') {
+    const appraisal = input.appraisalValue || 0;
+    const zone = input.collateralZone || 'other';
+    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
+    const appraisalCap = Math.min(
+      NATURAL_PERSON_CAP,
+      Math.floor(appraisal * ltv)
+    );
+    if (finalLimit === appraisalCap && appraisalCap < pmtCap) {
+      primaryLimiter = 'appraisal_ltv';
+      limiterText = `受限於擔保品鑑估乘數上限（${(ltv * 100).toFixed(
+        0
+      )}% / ${appraisalCap.toLocaleString('zh-TW')} 元）`;
+    }
+  } else if (input.collateral === '12') {
+    if (finalLimit === input.shares) {
+      primaryLimiter = 'shares';
+      limiterText = `受限於足額股金餘額上限（${input.shares.toLocaleString(
+        'zh-TW'
+      )} 元）`;
+    }
+  } else {
+    if (finalLimit === dbrCap && dbrCap < pmtCap && dbrCap <= bylawCap) {
+      primaryLimiter = 'dbr_grade_cap';
+      limiterText = `受限於 ${grade} 級無擔保月薪倍數上限（${dbrMultiplier} 倍 / ${Math.round(
+        dbrCap
+      ).toLocaleString('zh-TW')} 元）`;
+    } else if (
+      finalLimit === cashflowCap &&
+      cashflowCap < pmtCap &&
+      cashflowCap < dbrCap
+    ) {
+      primaryLimiter = 'living_expense';
+      limiterText = `受限於生活支出扣除後之現金流月付上限（${Math.round(
+        cashflowCap
+      ).toLocaleString('zh-TW')} 元）`;
+    } else if (finalLimit === bylawCap && bylawCap < pmtCap) {
+      primaryLimiter = 'bylaw_cap';
+      limiterText = `受限於互助社章程無擔保上限（股金＋100 萬 / ${bylawCap.toLocaleString(
+        'zh-TW'
+      )} 元）`;
+    }
+  }
+
+  return {
+    finalLimit,
+    primaryLimiter,
+    limiterText,
+    dbrMultiplier,
+    dbrCap,
+    bylawCap,
+    pmtCap,
+    cashflowCap,
+  };
 }
 
 // ============================================================

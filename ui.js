@@ -1206,6 +1206,44 @@ function renderVerdictBar(result) {
     govEl.innerHTML = `法定送審層級：<span class="gov-tag ${badgeClass}">${escapeHtml(gov.tag)}</span>（${escapeHtml(gov.authority)}）<br><small style="color: #64748b; font-size: 0.9em; display: inline-block; margin-top: 4px;">${escapeHtml(gov.text)}</small>`;
   }
 
+  // 額度受限原因標籤
+  const reasonEl = $('verdictLimitReason');
+  if (reasonEl) {
+    if (
+      result.limitDetails &&
+      result.limitDetails.limiterText &&
+      !isVetoed &&
+      grade !== 'E'
+    ) {
+      let dbrNotice = '';
+      if (
+        result.limitDetails.dbrMultiplier &&
+        (result.input.collateral === '0' || result.input.collateral === '5')
+      ) {
+        const totalUnsecured = Math.round(
+          result.maxLoanLimit +
+            (result.input.existingDebt || 0) +
+            (result.input.internalBalance || 0)
+        );
+        const dbrRatio =
+          result.input.income > 0
+            ? (totalUnsecured / result.input.income).toFixed(1)
+            : '0';
+        dbrNotice = ` ｜ 無擔保總負債約 ${dbrRatio} 倍月薪（法定 22 倍以內）`;
+      }
+      let html = `💡 <strong>【額度受限因子】</strong>${escapeHtml(
+        result.limitDetails.limiterText
+      )}${escapeHtml(dbrNotice)}`;
+      if (grade === 'D') {
+        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依規鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
+      }
+      reasonEl.innerHTML = html;
+      reasonEl.style.display = 'block';
+    } else {
+      reasonEl.style.display = 'none';
+    }
+  }
+
   // 未確認提醒：9 個評分下拉若還維持系統預設值，分數會偏樂觀
   const untouched = getUntouchedSelects();
   const note = $('verdictUnconfirmed');
@@ -2063,6 +2101,41 @@ function renderPrintReport(result) {
     pGovEl.innerHTML = `<strong>法定送審核決層級：</strong>【${escapeHtml(gov.tag)}】（權責單位：${escapeHtml(gov.authority)}）<br><span style="color:#444; font-size:12px; display:inline-block; margin-top:3px;">${escapeHtml(gov.text)}</span>`;
   }
 
+  const pLimitReasonEl = $('p_limit_reason');
+  if (pLimitReasonEl) {
+    if (
+      result.limitDetails &&
+      result.limitDetails.limiterText &&
+      !isVetoed &&
+      grade !== 'E'
+    ) {
+      let dbrNotice = '';
+      if (
+        result.limitDetails.dbrMultiplier &&
+        (input.collateral === '0' || input.collateral === '5')
+      ) {
+        const totalUnsecured = Math.round(
+          maxLoanLimit +
+            (input.existingDebt || 0) +
+            (input.internalBalance || 0)
+        );
+        const dbrRatio =
+          input.income > 0 ? (totalUnsecured / input.income).toFixed(1) : '0';
+        dbrNotice = ` ｜ 無擔保總負債約 ${dbrRatio} 倍月薪（法定 22 倍以內）`;
+      }
+      let html = `<strong>【核貸額度受限因子】</strong>${escapeHtml(
+        result.limitDetails.limiterText
+      )}${escapeHtml(dbrNotice)}`;
+      if (grade === 'D') {
+        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依規鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
+      }
+      pLimitReasonEl.innerHTML = html;
+      pLimitReasonEl.style.display = 'block';
+    } else {
+      pLimitReasonEl.style.display = 'none';
+    }
+  }
+
   $('p_grade2').innerText = grade;
   $('p_maxdti2').innerText = maxDti * 100;
 
@@ -2197,9 +2270,10 @@ function calculateLoan() {
     // 等級
     const { grade, maxDti } = determineGrade(scoreDetail.total, isVetoed);
 
-    // 可貸額度（[FIX 1.1] 用 PMT 公式反推）
+    // 可貸額度（[FIX 1.1] 用 PMT 公式反推 + 三維天花板交叉取最小值）
     let maxLoanLimit = computeMaxLoan(input, maxDti);
-    maxLoanLimit = applyLegalCeiling(input, maxLoanLimit);
+    const limitDetails = getLoanLimitDetails(input, maxLoanLimit, grade);
+    maxLoanLimit = limitDetails.finalLimit;
 
     // 衍生變數
     const ageAtMaturity = input.age + input.years;
@@ -2246,6 +2320,7 @@ function calculateLoan() {
       grade,
       maxDti,
       maxLoanLimit,
+      limitDetails,
       newLoanMonthlyPmt,
       postLoanDti,
       totalExposure,

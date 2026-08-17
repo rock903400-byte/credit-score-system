@@ -62,7 +62,7 @@
 
 ## Business rules
 
-- 17 veto rules in `applyRegulatoryVetoes`: age >75 (硬否決), 7-year (must be real-estate), 30-year max for secured, LTV caps, 120% mortgage registration (⑩-1), collateral='12' amount cap, 第三人擔保品保證人檢核 (⑩-4), JCIC `veto`, purpose `veto`, etc. See `rationale.html` for the bug history.
+- 19 veto rules in `applyRegulatoryVetoes`: age >75 (硬否決), 7-year (must be real-estate), 30-year max for secured, LTV caps, 120% mortgage registration (⑩-1), collateral='12' amount cap, 第三人擔保品保證人檢核 (⑩-4), JCIC `veto`, purpose `veto`, ⑱ 收支赤字否決, ⑲ 金管會 DBR 22 倍無擔保負債上限否決等。See `rationale.html` for the bug history.
 - Age penalties use **strict** `>`:
   - `maturity > 75` → hard veto (in `applyRegulatoryVetoes`).
   - `maturity > 70` → –10.
@@ -70,7 +70,8 @@
 - Credit ceiling (`applyLegalCeiling`):
   - `collateral='10'` (足額不動產抵押) → `min(10 M, appraisal × LTV)`.
   - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
-  - otherwise → `shares + 1 M`.
+  - otherwise → `min(shares + 1 M, income × grade_dbr_multiplier - existing_debt + secured_shares_part)`.
+- 無擔保授信 DBR 階梯：A 級 20 倍、B 級 15 倍、C 級 12 倍、D 級 8 倍月薪（D 級強化提示保證人徵提）。
 - Default `<option>` for `#collateral` is `'12'`. If `proposedLoan > shares`, set to `'5'` or `'10'` to avoid silent veto.
 - Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 + LTV bonus 3 would otherwise exceed 100). 不動產抵押（`collateral='10'`）另依 LTV（loan/appraisal）加成：≤50% ＋3、≤70% ＋2、其餘/無鑑價 ＋0。`computeScore` 回傳 `protectionBreakdown` 供 UI 顯示構成（擔保/LTV/保證人/DSR）。注意 `test.js` 的 `coherent()` 兜底鑑價為 `loan×1.3` 而非固定 500 萬——若改用固定大額兜底，小額貸款 LTV 會掉到加成區間、A 級分布暴增。
 - `pmt()` is the simplified **first-period** formula: `principal/months + principal × (rate/100/12)`. Not the standard amortizing PMT — `computeMaxLoan` does the real math separately.

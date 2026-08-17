@@ -1014,4 +1014,47 @@ test.describe('場景 13-18：實務進階', () => {
 
     console.log(`  → 入社年資與儲蓄習慣連動禁用與自動降階驗證通過`);
   });
+
+  test('㉗ 月薪 3 萬無擔保放款：70 萬觸發 DBR 22 倍否決，50 萬受限於評級倍數並顯示受限原因', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1. 月薪 3 萬、申請 70 萬純信用貸款（無擔保）
+    await fillForm(page, {
+      income: 30000,
+      age: 35,
+      loan: 700000,
+      years: 5,
+      rate: 3,
+      shares: 50000,
+    });
+    await page.locator('#collateral').selectOption('0'); // 純信用借款
+    await page.locator('#btnCalc').click();
+
+    // 驗證觸發第 19 條 DBR 22 倍否決
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('不予核貸');
+    expect(status).toContain('22 倍');
+    console.log(`  → 70 萬無擔保借款成功觸發 DBR 22 倍法規否決`);
+
+    // 2. 調降申請金額至 50 萬（符合 22 倍法定上限 66 萬以內）
+    await page.locator('#loan').fill('500000');
+    await page.locator('#btnCalc').click();
+
+    await expect(page.locator('#resultCard')).toBeVisible();
+    const limitText = await page.locator('#resLimit').innerText();
+    const limitVal = parseInt(limitText.replace(/,/g, '')) || 0;
+    // A 級 20 倍上限為 60 萬，額度應在 60 萬以內
+    expect(limitVal).toBeLessThanOrEqual(600000);
+
+    // 驗證額度受限原因提示已正確呈現
+    const reasonText = await page.locator('#verdictLimitReason').innerText();
+    expect(reasonText).toContain('額度受限因子');
+    console.log(
+      `  → 50 萬無擔保借款核貸額度成功受控且顯示受限因子：${reasonText.slice(0, 50)}...`
+    );
+  });
 });
