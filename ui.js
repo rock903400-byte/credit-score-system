@@ -232,6 +232,7 @@ function parseInputs() {
     income: parseAmount('income'),
     age: parseInt($('age').value) || 0,
     existingDebt: parseAmount('existing_debt'),
+    externalUnsecuredDebt: parseAmount('external_unsecured_debt'),
     internalMonthly: parseAmount('internal_monthly'),
     internalBalance: parseAmount('internal_balance'),
     proposedLoan: parseAmount('loan'),
@@ -631,8 +632,7 @@ function renderGuarantorRows(count) {
       '> 債務不詳（未查證）' +
       '</label>' +
       '<small style="color: var(--text-muted); display:block; margin-top:4px;">' +
-      '勾選後該保證人不會納入保證人 債務比率(DSR)評分，' +
-      '並於報表註記「債務未查證」。' +
+      '勾選後無法查核資力，人數權重折半認列（社員 0.5/非社員 0.35），且不計入保證人 DSR 評分。' +
       '</small>' +
       '</div>' +
       '<div class="form-group">' +
@@ -656,8 +656,6 @@ function renderGuarantorRows(count) {
 }
 
 // 加權保證人數即時回饋（與 core.js GUARANTOR_TYPE_WEIGHT + GUARANTOR_SCORE_TABLE 同邏輯）
-const G_WEIGHT = { member: 1.0, non_member: 0.7 };
-const G_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 function updateGuarantorWeightHint() {
   const el = $('guarantorWeightHint');
   if (!el) return;
@@ -669,31 +667,47 @@ function updateGuarantorWeightHint() {
   let weighted = 0;
   let m = 0;
   let nm = 0;
+  let unknownCount = 0;
+  let highDsrCount = 0;
+
   rows.forEach((row) => {
     const t = row.querySelector('.g-type')?.value || 'non_member';
-    if (t === 'member') {
-      weighted += G_WEIGHT.member;
-      m++;
+    const isMember = t === 'member';
+    const baseW = isMember
+      ? GUARANTOR_TYPE_WEIGHT.member
+      : GUARANTOR_TYPE_WEIGHT.non_member;
+    const isUnknown = !!row.querySelector('.g-unknown')?.checked;
+    const inc = parseFloat(row.querySelector('.g-income')?.value) || 0;
+    const dbt = parseFloat(row.querySelector('.g-debt')?.value) || 0;
+
+    if (isMember) m++;
+    else nm++;
+
+    if (isUnknown) {
+      unknownCount++;
+      weighted += baseW * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
+    } else if (inc > 0) {
+      const gDsr = dbt / inc;
+      if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
+        highDsrCount++;
+      } else {
+        weighted += baseW;
+      }
     } else {
-      weighted += G_WEIGHT.non_member;
-      nm++;
+      weighted += baseW;
     }
   });
-  const effective = Math.round(weighted);
-  const score = G_SCORE_TABLE[effective] || 0;
+
+  const effective = Math.min(MAX_GUARANTORS, Math.round(weighted));
+  const score = GUARANTOR_SCORE_TABLE[effective] || 0;
   const parts = [];
   if (m > 0) parts.push(`${m} 社員`);
   if (nm > 0) parts.push(`${nm} 非社員`);
-  let unknownCount = 0;
-  rows.forEach((row) => {
-    const cb = row.querySelector('.g-unknown');
-    if (cb && cb.checked) unknownCount++;
-  });
-  let suffix = '';
-  if (unknownCount > 0) {
-    suffix = `（${unknownCount} 位不詳，不納入保證人債務比率(DSR)）`;
-  }
-  el.innerText = `${parts.join(' + ')} → 加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分${suffix}`;
+  const notes = [];
+  if (highDsrCount > 0) notes.push(`${highDsrCount} 位負債過高(DSR≥65%)排除`);
+  if (unknownCount > 0) notes.push(`${unknownCount} 位不詳折半`);
+  const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
+  el.innerText = `${parts.join(' + ')} → 有效加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分${suffix}`;
 }
 
 function bindGuarantorPreviews() {
@@ -703,18 +717,30 @@ function bindGuarantorPreviews() {
     const typeSelect = row.querySelector('.g-type');
     const incomePreview = row.querySelector('.g-income-preview');
     const debtPreview = row.querySelector('.g-debt-preview');
+    const updateDebt = () => {
+      const inc = parseFloat(incomeInput.value) || 0;
+      const dbt = parseFloat(debtInput.value) || 0;
+      if (inc > 0 && dbt > 0) {
+        const dsrPct = ((dbt / inc) * 100).toFixed(1);
+        if (dbt / inc >= GUARANTOR_HIGH_DSR_THRESHOLD) {
+          debtPreview.innerHTML = `${formatAmount(dbt)} <span style="color:#d32f2f; font-size:0.85em; font-weight:bold;">⚠️ 負債比 ${dsrPct}% 過高排除</span>`;
+        } else {
+          debtPreview.innerText = `${formatAmount(dbt)} (DSR ${dsrPct}%)`;
+        }
+      } else {
+        debtPreview.innerText = formatAmount(dbt);
+      }
+      updateGuarantorWeightHint();
+    };
     const updateIncome = () => {
       incomePreview.innerText = formatAmount(
         parseFloat(incomeInput.value) || 0
       );
-    };
-    const updateDebt = () => {
-      debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0);
+      updateDebt();
     };
     const updateType = () => {
       const isMember = typeSelect.value === 'member';
       const debtInput = row.querySelector('.g-debt');
-      const debtPreview = row.querySelector('.g-debt-preview');
       const unknownCb = row.querySelector('.g-unknown');
       // 社員／非社員皆可手填債務月付；社員可填其在本社既有債務，非社員可填其社外債務
       // 債務不詳時維持 disabled（草稿還原後 bindGuarantorPreviews 呼叫此函式會被覆蓋）
@@ -722,7 +748,7 @@ function bindGuarantorPreviews() {
       debtInput.placeholder = isMember
         ? '該社員在本社的既有債務月付'
         : '該保證人之社外債務月付';
-      debtPreview.innerText = formatAmount(parseFloat(debtInput.value) || 0);
+      updateDebt();
     };
     incomeInput.addEventListener('input', updateIncome);
     debtInput.addEventListener('input', updateDebt);
@@ -1170,28 +1196,35 @@ function animateScore(targetScore) {
 // 結論條（A/B/C 三級分流純屬顯示，額度一律採系統原始輸出）
 // ============================================================
 
-// 系統 A~E 五級 → 社內作業三級。對應《社員信用評級落地評估》第二節映射表。
+// 系統 A~E 五級對應作業流程說明
 const TRIAGE_MAP = {
-  A: { tag: 'A 級', text: '快速審核核貸流程，額度較具彈性' },
+  A: { tag: 'A 級', text: '快速審核核貸流程，常規追蹤' },
   B: { tag: 'B 級', text: '標準對保審核流程，定期追蹤還款紀錄' },
-  C: { tag: 'B 級', text: '標準對保審核流程，定期追蹤還款紀錄' },
+  C: { tag: 'C 級', text: '加強審查對保流程，需徵提保證人或密切追蹤還款能力' },
   D: {
-    tag: 'C 級',
-    text: '嚴謹對保、補強連帶保證人或實體擔保品，並經第二位審核人覆核簽章',
+    tag: 'D 級',
+    text: '嚴謹對保審核，強制徵提連帶保證人或實體擔保品，並經第二位審核人覆核',
   },
   E: {
-    tag: 'C 級',
-    text: '嚴謹對保、補強連帶保證人或實體擔保品，並經第二位審核人覆核簽章',
+    tag: 'E 級',
+    text: '原則不予核貸；若屬爭議案件依章程第 28 條提送理事會審議',
   },
 };
 const TRIAGE_VETOED = {
-  tag: 'C 級',
-  text: '案件已遭否決，一律列入 C 級優先列管；如仍要送件須經第二位審核人覆核簽章',
+  tag: '否決列管',
+  text: '案件已遭否決，一律列入否決專案列管；若屬爭議案件依章程第 28 條提送理事會審議',
 };
 
 function renderVerdictBar(result) {
-  const { grade, scoreDetail, maxLoanLimit, postLoanDti, maxDti, isVetoed } =
-    result;
+  const {
+    grade,
+    scoreDetail,
+    maxLoanLimit,
+    postLoanDti,
+    maxDti,
+    isVetoed,
+    newLoanMonthlyPmt,
+  } = result;
   const bar = $('verdictBar');
   if (!bar) return;
 
@@ -1201,7 +1234,17 @@ function renderVerdictBar(result) {
     Math.max(0, Math.min(100, scoreDetail.total))
   );
   $('resLimit').innerText = Math.round(maxLoanLimit).toLocaleString('zh-TW');
-  $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
+  if ($('resMonthlyPmt')) {
+    $('resMonthlyPmt').innerText = Math.round(
+      newLoanMonthlyPmt || 0
+    ).toLocaleString('zh-TW');
+  }
+  const effIncome = getEffectiveIncome(result.input);
+  if (effIncome > 0 && isFinite(postLoanDti)) {
+    $('resTotalDti').innerText = (postLoanDti * 100).toFixed(1);
+  } else {
+    $('resTotalDti').innerText = '—';
+  }
   $('resMaxDtiTxt').innerText = maxDti * 100;
 
   bar.classList.remove('verdict-pass', 'verdict-warn', 'verdict-fail');
@@ -1470,10 +1513,12 @@ function renderDashboard(result) {
   }
 
   // 進度條（[FIX 5.4] 顏色相對 DTI；[FIX 5.5] DTI>100% 溢出提示）
-  const fillWidthPercent = Math.min(postLoanDti * 100, 100);
+  const effInc = getEffectiveIncome(input);
+  const validDti = isFinite(postLoanDti) && effInc > 0;
+  const fillWidthPercent = validDti ? Math.min(postLoanDti * 100, 100) : 0;
   const progressFill = $('progressFill');
   progressFill.style.width = fillWidthPercent + '%';
-  if (maxDti <= 0) {
+  if (maxDti <= 0 || !validDti) {
     progressFill.style.backgroundColor = '#f44336';
   } else {
     const ratio = postLoanDti / maxDti;
@@ -1491,7 +1536,7 @@ function renderDashboard(result) {
   }
   // [FIX 5.5] DTI > 100% 顯示溢出警示
   const overflowBadge = $('dtiOverflowBadge');
-  if (postLoanDti > 1.0) {
+  if (validDti && postLoanDti > 1.0) {
     overflowBadge.style.display = 'inline-block';
     overflowBadge.innerText = `超 ${(postLoanDti * 100 - 100).toFixed(1)}% 點`;
   } else {
@@ -1527,10 +1572,10 @@ function renderDashboard(result) {
     const suggested = result.suggestedLoan;
     let html = '';
     if (suggested.general > 0) {
-      html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+      html += `一般增貸額度：${formatAmount(suggested.general)} (首期月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (suggested.consolidation > 0 && input.consolidationMode) {
-      html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+      html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (首期月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (html) {
       $('suggestedLoanText').innerHTML = html;
@@ -1919,9 +1964,22 @@ function renderPrintReport(result) {
         ? '專職幹部 / 職員'
         : '一般社員';
   if ($('p_borrower_role')) $('p_borrower_role').innerText = roleText;
-  $('p_income').innerText = input.income.toLocaleString('zh-TW') + ' 元';
+  const effIncome = getEffectiveIncome(input);
+  const haircut =
+    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+      : 1.0;
+  const incomeStr =
+    haircut < 1.0
+      ? `${input.income.toLocaleString('zh-TW')} 元（實質認列：${Math.round(effIncome).toLocaleString('zh-TW')} 元 / 折數 ${(haircut * 100).toFixed(0)}%）`
+      : `${input.income.toLocaleString('zh-TW')} 元`;
+  $('p_income').innerText = incomeStr;
   $('p_existing').innerText =
-    input.existingDebt.toLocaleString('zh-TW') + ' 元';
+    (input.existingDebt || 0).toLocaleString('zh-TW') + ' 元';
+  if ($('p_external_unsecured')) {
+    $('p_external_unsecured').innerText =
+      (input.externalUnsecuredDebt || 0).toLocaleString('zh-TW') + ' 元';
+  }
   const extLoans = input.additionalLoans || [];
   const extMonthlySumP = extLoans.reduce((s, l) => s + (l.monthly || 0), 0);
   const extBalanceSumP = extLoans.reduce((s, l) => s + (l.balance || 0), 0);
@@ -1931,8 +1989,11 @@ function renderPrintReport(result) {
       : '';
   $('p_internal').innerText =
     `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${extNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
+  const pmtFormatted = Math.round(result.newLoanMonthlyPmt || 0).toLocaleString(
+    'zh-TW'
+  );
   $('p_loan_details').innerText =
-    `${input.proposedLoan.toLocaleString('zh-TW')} 元 / ${input.years} 年 / ${input.ratePercent}% （借款人現齡 ${input.age} 歲，還款到期年齡 ${ageAtMaturity} 歲）`;
+    `${input.proposedLoan.toLocaleString('zh-TW')} 元 / ${input.years} 年 / ${input.ratePercent}%（首期月付 ${pmtFormatted} 元，本金均等逐月遞減；借款人現齡 ${input.age} 歲，還款到期年齡 ${ageAtMaturity} 歲）`;
   $('p_shares_info').innerText =
     input.shares > 0
       ? `${input.shares.toLocaleString('zh-TW')} 元 / 倍數 ${shareMult.toFixed(1)} 倍`
@@ -2053,39 +2114,73 @@ function renderPrintReport(result) {
   $('p_collateral').innerText = selText('collateral');
   if (input.guarantors && input.guarantors.length > 0) {
     let html =
-      '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>月收入</th><th>既有債務月付</th><th>債務比率(DSR)</th></tr>';
+      '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>類型與權重</th><th>月收入</th><th>既有債務月付</th><th>債務比率(DSR)</th><th>有效性審定</th></tr>';
     let unknownCount = 0;
+    let highDsrCount = 0;
     input.guarantors.forEach((g) => {
       const isUnknown = !!g.unknown;
-      if (isUnknown) unknownCount++;
-      const dsrCell = isUnknown
-        ? '— <span style="color:#d32f2f;">(債務未查證)</span>'
-        : g.income > 0
-          ? ((g.debt / g.income) * 100).toFixed(1) + '%'
-          : '—';
+      const isMember = g.type === 'member';
+      const baseW = isMember
+        ? GUARANTOR_TYPE_WEIGHT.member
+        : GUARANTOR_TYPE_WEIGHT.non_member;
+      let finalW = baseW;
+      let dsrCell = '—';
+      let statusCell = `有效採計（加權 ${finalW.toFixed(1)}）`;
+
+      if (isUnknown) {
+        unknownCount++;
+        finalW = baseW * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
+        dsrCell = '— <span style="color:#d32f2f;">(債務未查證)</span>';
+        statusCell = `<span style="color:#d32f2f;">未查證（權重折半 ${finalW.toFixed(2)}）</span>`;
+      } else if (g.income > 0) {
+        const gDsr = (g.debt || 0) / g.income;
+        dsrCell = (g.debt || 0) > 0 ? (gDsr * 100).toFixed(1) + '%' : '0.0%';
+        if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
+          highDsrCount++;
+          finalW = 0;
+          statusCell =
+            '<span style="color:#d32f2f; font-weight:bold;">高負債排除（不計加分）</span>';
+        } else {
+          statusCell = `有效採計（加權 ${finalW.toFixed(1)}）`;
+        }
+      }
+
       const debtCell = isUnknown
         ? '<span style="color:#d32f2f;">未查證</span>'
-        : g.debt.toLocaleString('zh-TW') + ' 元';
+        : (g.debt || 0).toLocaleString('zh-TW') + ' 元';
       html +=
         '<tr><td>' +
         (escapeHtml(g.name) || '—') +
         (isUnknown ? ' <span style="color:#d32f2f;">(債務未查證)</span>' : '') +
         '</td><td>' +
-        g.income.toLocaleString('zh-TW') +
+        (isMember ? '社員 (1.0)' : '非社員 (0.7)') +
+        '</td><td>' +
+        (g.income || 0).toLocaleString('zh-TW') +
         ' 元</td><td>' +
         debtCell +
         '</td><td>' +
         dsrCell +
+        '</td><td>' +
+        statusCell +
         '</td></tr>';
     });
     html += '</table>';
+    const notes = [];
+    if (highDsrCount > 0) {
+      notes.push(
+        `共 ${highDsrCount} 位保證人個人負債比達 65% 以上（高負債），依風控規範排除有效保證人加分；`
+      );
+    }
     if (unknownCount > 0) {
+      notes.push(
+        `共 ${unknownCount} 位保證人未揭露既有債務，人數權重已折半認列且排除 DSR 加分，實際核貸時請另覓佐證或要求保證人提供債務證明；`
+      );
+    }
+    if (notes.length > 0) {
       html +=
         '<div style="margin-top:6px; padding:6px; background:#fff3e0; border-left:3px solid #ff9800; font-size:12px;">' +
-        '註：共 ' +
-        unknownCount +
-        ' 位保證人未揭露既有債務，已自保證人債務比率(DSR)計算排除；' +
-        '實際核貸時請另覓佐證或要求保證人提供債務證明。' +
+        '<strong>保證人審定附註：</strong>' +
+        notes.join('<br>') +
         '</div>';
     }
     $('p_guarantor_print').innerHTML = html;
@@ -2165,10 +2260,10 @@ function renderPrintReport(result) {
     const suggested = result.suggestedLoan;
     let html = '';
     if (suggested.general > 0) {
-      html += `一般增貸額度：${formatAmount(suggested.general)} (月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+      html += `一般增貸額度：${formatAmount(suggested.general)} (首期月付約 ${pmt(suggested.general, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (suggested.consolidation > 0 && input.consolidationMode) {
-      html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
+      html += `整併現有貸款後可貸額度：${formatAmount(suggested.consolidation)} (首期月付約 ${pmt(suggested.consolidation, input.ratePercent, input.years).toFixed(0)} 元)<br>`;
     }
     if (html) {
       $('p_suggested_loan').innerHTML = html;
@@ -2386,6 +2481,7 @@ const FORM_DRAFT_FIELDS = [
   'income',
   'age',
   'existing_debt',
+  'external_unsecured_debt',
   'internal_monthly',
   'internal_balance',
   'loan',
@@ -2727,6 +2823,7 @@ const SAMPLE_CASE = {
   income: '50000',
   age: '40',
   existing_debt: '5000',
+  external_unsecured_debt: '0',
   internal_monthly: '0',
   internal_balance: '0',
   loan: '300000',
@@ -2753,6 +2850,7 @@ const SAMPLE_CASE = {
 // 保證人又計入 protectionScore，示範案件每次結果都不一樣。
 const SAMPLE_RESET = {
   borrowerRole: 'member',
+  external_unsecured_debt: '0',
   appraisalValue: '',
   mortgageAmount: '',
   collateralKind: 'building',
@@ -2837,6 +2935,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const moneyFields = [
     'income',
     'existing_debt',
+    'external_unsecured_debt',
     'internal_monthly',
     'internal_balance',
     'loan',
@@ -2844,13 +2943,39 @@ document.addEventListener('DOMContentLoaded', () => {
     'livingExpense',
     'dependentExpense',
   ];
+  const updateIncomePreview = () => {
+    const input = $('income');
+    const preview = $('preview_income');
+    if (!input || !preview) return;
+    const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
+    const stabEl = $('incomeStability');
+    const stabVal = stabEl ? stabEl.value : '9';
+    const haircut = INCOME_STABILITY_HAIRCUT[stabVal] ?? 1.0;
+    if (val > 0 && haircut < 1.0) {
+      const eff = Math.round(val * haircut);
+      preview.innerText = `${formatAmount(val)}（實質認列：${formatAmount(eff)} / ${(haircut * 100).toFixed(0)}%）`;
+    } else {
+      preview.innerText = formatAmount(val);
+    }
+  };
+
   moneyFields.forEach((id) => {
     const input = $(id);
     const preview = $('preview_' + id);
     if (!input) return;
     const update = () => {
-      const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
-      if (preview) preview.innerText = formatAmount(val);
+      if (id === 'income') {
+        updateIncomePreview();
+      } else if (id === 'livingExpense' || id === 'dependentExpense') {
+        const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
+        if (preview) {
+          preview.innerText =
+            val > 0 ? val.toLocaleString('zh-TW') + ' 元' : '';
+        }
+      } else {
+        const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
+        if (preview) preview.innerText = formatAmount(val);
+      }
     };
     input.addEventListener('input', update);
     input.addEventListener('input', () => formatAmountInput(input));
@@ -2876,6 +3001,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   });
+
+  const incomeStabilityEl = $('incomeStability');
+  if (incomeStabilityEl) {
+    incomeStabilityEl.addEventListener('change', () => {
+      updateIncomePreview();
+    });
+  }
 
   // 生活地區與 1.2 倍勾選變更
   const livingRegionEl = $('livingRegion');

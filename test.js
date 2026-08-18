@@ -55,6 +55,10 @@ const {
   determineGovernanceRouting: DGR,
   computeCashFlow: CCF,
   getLoanLimitDetails: GLLD,
+  getEffectiveIncome: GEI,
+  INCOME_STABILITY_HAIRCUT,
+  GUARANTOR_HIGH_DSR_THRESHOLD,
+  GUARANTOR_UNKNOWN_WEIGHT_RATIO,
   DEFAULT_LIVING_EXPENSE,
   REGIONAL_MIN_LIVING_COST_115,
   JUDICIAL_LIVING_MULTIPLIER,
@@ -307,7 +311,7 @@ test('不良借款人 < 60', () => {
   };
   assert(CS(inp).total < 60, 'got:' + CS(inp).total);
 });
-test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () => {
+test('保證人全部不詳：guarantorDsrScore=0且人數權重折半認列', () => {
   const inp = {
     income: 60000,
     age: 40,
@@ -316,7 +320,7 @@ test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () =>
     existingDebt: 0,
     internalMonthly: 0,
     proposedLoan: 300000,
-    incomeStability: 6,
+    incomeStability: 9,
     tenure: 4,
     interaction: 7,
     jcic: '10',
@@ -334,15 +338,18 @@ test('保證人全部不詳：guarantorDsrScore=0（不計入滿分 5）', () =>
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
-  // guarantorDsrScore: 0 (全部不詳,validDsrs 空)
-  // rawProtectionScore = 12 + 6 + 0 = 18 → ×0.8 = 14.4 → round → 14
-  assert(CS(inp).protectionScore === 14, 'got:' + CS(inp).protectionScore);
+  // 債務不詳折半加權: 1.0*0.5 + 0.7*0.5 + 1.0*0.5 = 0.5 + 0.35 + 0.5 = 1.35 → round 1 → +3
+  // guarantorDsrScore: 0 (全部不詳, validDsrs 空)
+  // rawProtectionScore = 12 (collateral) + 3 (guarantor) + 0 (dsr) = 15 → ×0.8 = 12
+  assert(CS(inp).protectionScore === 12, 'got:' + CS(inp).protectionScore);
 });
-test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () => {
-  // 三位非社員保證人，加權 0.7×3=2.1→round 2 → +6 保障基礎
-  // 揭露者 debt=40000, income=40000 → DSR=1.0 → +1（最壞情況）
-  // 不詳 2 位被排除
+test('保證人混合（2 不詳 + 1 正常揭露）：正常揭露計入 DSR，不詳者折半', () => {
+  // A (member, unknown): 0.5
+  // B (non_member, debt=10000, income=50000 -> DSR=0.2 < 0.3): 0.7, DSR +5
+  // C (member, unknown): 0.5
+  // 有效加權 = 0.5 + 0.7 + 0.5 = 1.7 → round 2 → +5
+  // DSR = 0.2 < 0.3 → +5
+  // raw = 12 + 5 + 5 = 22 → ×0.8 = 17.6 → round → 18
   const inp = {
     income: 60000,
     age: 40,
@@ -351,7 +358,7 @@ test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () 
     existingDebt: 0,
     internalMonthly: 0,
     proposedLoan: 300000,
-    incomeStability: 6,
+    incomeStability: 9,
     tenure: 4,
     interaction: 7,
     jcic: '10',
@@ -367,18 +374,57 @@ test('保證人混合（2 不詳 + 1 揭露）：只採計揭露者的 DSR', () 
       { name: 'A', income: 50000, debt: 0, type: 'member', unknown: true },
       {
         name: 'B',
-        income: 40000,
-        debt: 40000,
+        income: 50000,
+        debt: 10000,
         type: 'non_member',
         unknown: false,
       },
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  // 加權: 1.0 + 0.7 + 1.0 = 2.7 → round 3 → +6 (新表)
-  // DSR: 只看 B, max = 40000/40000 = 1.0 → +1
-  // rawProtectionScore = 12 + 6 + 1 = 19 → ×0.8 = 15.2 → round → 15
-  assert(CS(inp).protectionScore === 15, 'got:' + CS(inp).protectionScore);
+  assert(CS(inp).protectionScore === 18, 'got:' + CS(inp).protectionScore);
+});
+test('高負債保證人過濾：DSR >= 65% 排除人數與 DSR 加分', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 300000,
+    incomeStability: 9,
+    tenure: 4,
+    interaction: 7,
+    jcic: '10',
+    membership: 3,
+    collateral: '10',
+    guarantorCount: 1,
+    purpose: '10',
+    career: 4,
+    participation: 3,
+    internalBalance: 0,
+    shares: 100000,
+    guarantors: [
+      {
+        name: '高負債保人',
+        income: 50000,
+        debt: 35000, // DSR = 70% >= 65%
+        type: 'member',
+        unknown: false,
+      },
+    ],
+  };
+  const res = CS(inp);
+  // 加權人數 = 0 → guarantorScore = 0
+  // validDsrs 空 → guarantorDsrScore = 0
+  // rawProtectionScore = 12 + 0 + 0 = 12 → ×0.8 = 9.6 → 10
+  assert(res.protectionScore === 10, 'got:' + res.protectionScore);
+  assert(res.protectionBreakdown.guarantor === 0, 'guarantor should be 0');
+  assert(
+    res.protectionBreakdown.guarantorDsr === 0,
+    'guarantorDsr should be 0'
+  );
 });
 test('年齡罰分 65-70 到期 = -5', () => {
   const inp = {
@@ -638,7 +684,7 @@ console.log('\n── DSR 給分級距（每 5% 一檔） (13) ──');
       existingDebt: dsr * 100000,
       internalMonthly: 0,
       proposedLoan: 200000,
-      incomeStability: 6,
+      incomeStability: 9,
       tenure: 4,
       interaction: 10,
       jcic: '10',
@@ -1834,6 +1880,286 @@ test('validateInputsByField：生活支出欄位錯誤訊息分組', () => {
   );
 });
 
+console.log('\n── 所得認列折成 (Haircut) 與保證人資力過濾 (6) ──');
+
+test('getEffectiveIncome：依據收入型態折算實質有效月收入', () => {
+  assert(GEI({ income: 60000, incomeStability: 9 }) === 60000, '9: 100%');
+  assert(GEI({ income: 60000, incomeStability: 6 }) === 51000, '6: 85%');
+  assert(GEI({ income: 60000, incomeStability: 3 }) === 42000, '3: 70%');
+  assert(GEI({ income: 60000, incomeStability: 1 }) === 30000, '1: 50%');
+  assert(GEI({ income: 0, incomeStability: 9 }) === 0, '0 income');
+});
+
+test('所得折成連動 DBR 22 倍否決線：申報月薪 4 萬現金收入（實質 2 萬）申請 50 萬觸發否決', () => {
+  const inp = {
+    income: 40000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 500000,
+    incomeStability: 1, // 現金收入 50% 折成 → 實質月入 20,000 元 → DBR 22 上限 440,000 元
+    tenure: 4,
+    interaction: 10,
+    jcic: '10',
+    membership: 5,
+    collateral: '0',
+    shares: 50000,
+  };
+  const res = ARV(inp);
+  assert(
+    res.vetoes.some((v) => v.includes('22 倍上限') || v.includes('DBR')),
+    '應觸發 DBR 22 否決，got: ' + res.vetoes.join('; ')
+  );
+});
+
+test('所得折成連動 70% 負債比否決線：非固定收入受實質負債比約束', () => {
+  // 申報 50000，佣金計酬 70% → 實質 35000
+  // 月付 25000 → 25000 / 35000 = 71.4% > 70% → 否決
+  // 若未折成 25000 / 50000 = 50% 本應通過
+  const inp = {
+    income: 50000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 10000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 800000, // 月付約 15333 + 10000 = 25333
+    incomeStability: 3, // 70% → 35000
+    tenure: 4,
+    interaction: 10,
+    jcic: '10',
+    membership: 5,
+    collateral: '10',
+    appraisalValue: 2000000,
+    mortgageAmount: 1000000,
+    shares: 100000,
+  };
+  const res = ARV(inp);
+  assert(
+    res.vetoes.some((v) => v.includes('70.0%') || v.includes('總負債比')),
+    '應觸發 70% 總負債比否決，got: ' + res.vetoes.join('; ')
+  );
+});
+
+test('所得折成連動可貸額度天花板：折數越低額度越保守', () => {
+  const base = {
+    income: 60000,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    livingExpense: 17750,
+    dependents: 0,
+    incomeStability: 9, // 100%
+  };
+  const limit100 = CML(base, 0.5);
+  const limit85 = CML({ ...base, incomeStability: 6 }, 0.5); // 85%
+  const limit70 = CML({ ...base, incomeStability: 3 }, 0.5); // 70%
+  const limit50 = CML({ ...base, incomeStability: 1 }, 0.5); // 50%
+
+  assert(
+    limit100 > limit85 && limit85 > limit70 && limit70 > limit50,
+    `額度應隨折成遞減: 100%=${limit100}, 85%=${limit85}, 70%=${limit70}, 50%=${limit50}`
+  );
+});
+
+test('保證人資力過濾：高負債 (DSR >= 65%) 排除加分，合格者正常加分', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 300000,
+    incomeStability: 9,
+    tenure: 4,
+    interaction: 10,
+    jcic: '10',
+    membership: 5,
+    collateral: '10',
+    guarantorCount: 2,
+    purpose: '10',
+    career: 6,
+    participation: 4,
+    internalBalance: 0,
+    shares: 100000,
+    guarantors: [
+      {
+        name: '優良社員保人',
+        income: 60000,
+        debt: 10000, // DSR = 16.7% < 30% → DSR +5
+        type: 'member', // weight 1.0
+        unknown: false,
+      },
+      {
+        name: '高負債保人',
+        income: 40000,
+        debt: 30000, // DSR = 75% >= 65% → 排除 (weight 0)
+        type: 'member',
+        unknown: false,
+      },
+    ],
+  };
+  const res = CS(inp);
+  // 有效人數 = 1.0 (高負債排除) → guarantorScore = 3
+  // validDsrs: [10000/60000=0.167] → guarantorDsrScore = 5
+  // rawProtectionScore = 12 + 3 + 5 = 20 → ×0.8 = 16
+  assert(res.protectionScore === 16, 'got:' + res.protectionScore);
+  assert(
+    res.protectionBreakdown.guarantor === 3,
+    'guarantor score should be 3'
+  );
+  assert(
+    res.protectionBreakdown.guarantorDsr === 5,
+    'guarantor DSR score should be 5'
+  );
+});
+
+test('保證人債務不詳：權重折半認列且 DSR 給 0 分', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    proposedLoan: 300000,
+    incomeStability: 9,
+    tenure: 4,
+    interaction: 10,
+    jcic: '10',
+    membership: 5,
+    collateral: '10',
+    guarantorCount: 2,
+    purpose: '10',
+    career: 6,
+    participation: 4,
+    internalBalance: 0,
+    shares: 100000,
+    guarantors: [
+      {
+        name: '不詳社員保人1',
+        income: 50000,
+        debt: 0,
+        type: 'member',
+        unknown: true,
+      },
+      {
+        name: '不詳社員保人2',
+        income: 50000,
+        debt: 0,
+        type: 'member',
+        unknown: true,
+      },
+    ],
+  };
+  const res = CS(inp);
+  // 兩位社員不詳: 1.0*0.5 + 1.0*0.5 = 1.0 → round 1 → guarantorScore = 3
+  // DSR = 0
+  // raw = 12 + 3 + 0 = 15 → ×0.8 = 12
+  assert(res.protectionScore === 12, 'got:' + res.protectionScore);
+  assert(
+    res.protectionBreakdown.guarantor === 3,
+    'guarantor score should be 3'
+  );
+  assert(
+    res.protectionBreakdown.guarantorDsr === 0,
+    'guarantor DSR score should be 0'
+  );
+});
+
+console.log('\n── 授信優化與防呆測試 (4) ──');
+test('社外無擔保負債總餘額獨立計算：月薪 3 萬申貸 30 萬＋社外餘額 40 萬（月付 8000）合計 70 萬觸發 DBR 22 否決', () => {
+  const inp = {
+    income: 30000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 8000,
+    externalUnsecuredDebt: 400000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 300000,
+    collateral: '0',
+    shares: 50000,
+  };
+  const res = ARV(inp);
+  assert(
+    res.vetoes.some((v) => v.includes('22 倍') || v.includes('無擔保負債總額')),
+    '應觸發 DBR 22 否決，got: ' + res.vetoes.join('; ')
+  );
+});
+
+test('送審核決層級文字簡明無重複字樣', () => {
+  const committeeGov = DGR(
+    {
+      borrowerRole: 'member',
+      proposedLoan: 500000,
+      shares: 100000,
+      collateral: '5',
+    },
+    { isVetoed: false }
+  );
+  assert(
+    committeeGov.authority === '出席委員全數通過',
+    'got:' + committeeGov.authority
+  );
+
+  const boardSpecialGov = DGR(
+    {
+      borrowerRole: 'board',
+      proposedLoan: 500000,
+      shares: 100000,
+      collateral: '5',
+    },
+    { isVetoed: false }
+  );
+  assert(
+    boardSpecialGov.authority === '須 2/3 出席理事同意',
+    'got:' + boardSpecialGov.authority
+  );
+
+  const staffGov = DGR(
+    {
+      borrowerRole: 'member',
+      proposedLoan: 100000,
+      shares: 200000,
+      collateral: '12',
+    },
+    { isVetoed: false }
+  );
+  assert(
+    staffGov.authority === '專職核放・10 日內追認',
+    'got:' + staffGov.authority
+  );
+});
+
+test('pmt() 基礎防呆：利率 0% 能正常計算首期均攤', () => {
+  const pmtZeroRate = PMT(300000, 0, 5);
+  assert(pmtZeroRate === 5000, 'got:' + pmtZeroRate);
+});
+
+test('驗證器阻擋社外無擔保負債總餘額為負值', () => {
+  const errs = VI({
+    income: 50000,
+    age: 30,
+    years: 5,
+    proposedLoan: 100000,
+    externalUnsecuredDebt: -1000,
+  });
+  assert(
+    errs.some(
+      (e) => e.includes('externalUnsecuredDebt') || e.includes('不可為負值')
+    ),
+    'got:' + errs.join('; ')
+  );
+});
+
 // ============================================================
 // 100-人分布迴歸測試：coherent 輸入快照
 // 偵測日後微調公式時分布劇烈漂移（A 級從 30% 掉到 5% 等）
@@ -2099,14 +2425,14 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
   const passed = results.filter((r) => r.grade !== 'E' && r.veto === 0).length;
 
   // 合理區間（小幅漂移通過，劇烈漂移才失敗）
-  // 對齊 simulate_100_coherent.js 實測分布（允許 ±10 隨機漂移）
+  // 對齊 simulate_100_coherent.js 實測分布（允許 ±10 隨機漂移，考量非固定所得折成後之風控收緊）
   const RANGE = {
     A: [0, 10], // 0–10%
     B: [20, 40], // 20–40%
     C: [15, 30], // 15–30%
     D: [5, 20], // 5–20%
     E: [20, 40], // 20–40%
-    veto: [10, 25], // 10–25%
+    veto: [10, 35], // 10–35% (含非固定收入折成風控)
     passed: [55, 80], // 55–80%
   };
   const inRange = (n, [lo, hi]) => n >= lo && n <= hi;

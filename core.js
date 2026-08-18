@@ -24,10 +24,30 @@ const MAX_SECURED_YEARS = 30;
 const MAX_GUARANTORS = 5;
 const GUARANTOR_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 const GUARANTOR_TYPE_WEIGHT = { member: 1.0, non_member: 0.7 };
+const GUARANTOR_HIGH_DSR_THRESHOLD = 0.65; // 保證人個人 DSR >= 65% 判定為高負債，排除加分
+const GUARANTOR_UNKNOWN_WEIGHT_RATIO = 0.5; // 債務不詳保證人人數權重折減 50%
 const GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS = { A: 0.6, B: 0.5, C: 0.4, D: 0.3 };
 const DBR_HARD_CEILING = 22; // 金管會個人無擔保負債上限 22 倍
 const GRADE_DBR_LIMITS = { A: 20, B: 15, C: 12, D: 8, E: 0 }; // 各評等無擔保授信月薪倍數階梯
+
+// 收入型態認列折數（Haircut）
+const INCOME_STABILITY_HAIRCUT = {
+  9: 1.0, // 固定月薪（薪轉/扣繳可查證）：100%
+  6: 0.85, // 固定底薪＋業績獎金：85%
+  3: 0.7, // 以佣金／計酬為主：70%
+  1: 0.5, // 現金收入為主（無帳載）：50%
+};
+
+// 取得實質有效月收入（經收入型態折成）
+function getEffectiveIncome(input) {
+  if (!input || !input.income || input.income <= 0) return 0;
+  const factor =
+    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+      : 1.0;
+  return input.income * factor;
+}
 
 // 擔保放款 LTV 上限（擔保放款辦法第 10、10-1 條）
 const LTV_RATIOS = {
@@ -143,13 +163,20 @@ function computeCashFlow(input, newLoanMonthlyPmt = 0) {
     (input.existingDebt || 0) + (input.internalMonthly || 0) + extMonthly;
   const totalMonthlyPayment = totalExistingDebt + (newLoanMonthlyPmt || 0);
 
+  const effectiveIncome = getEffectiveIncome(input);
+  const rawIncome = input.income || 0;
+  const haircutRatio =
+    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+      : 1.0;
+
   const netSurplusPreLoan =
-    (input.income || 0) - totalExistingDebt - totalLivingExpenses;
+    effectiveIncome - totalExistingDebt - totalLivingExpenses;
   const netSurplusPostLoan =
-    (input.income || 0) - totalMonthlyPayment - totalLivingExpenses;
+    effectiveIncome - totalMonthlyPayment - totalLivingExpenses;
   const totalBurdenRatio =
-    input.income > 0
-      ? (totalMonthlyPayment + totalLivingExpenses) / input.income
+    effectiveIncome > 0
+      ? (totalMonthlyPayment + totalLivingExpenses) / effectiveIncome
       : Infinity;
 
   return {
@@ -162,6 +189,9 @@ function computeCashFlow(input, newLoanMonthlyPmt = 0) {
     netSurplusPreLoan,
     netSurplusPostLoan,
     totalBurdenRatio,
+    effectiveIncome,
+    rawIncome,
+    haircutRatio,
   };
 }
 
@@ -178,6 +208,7 @@ function validateInputs(input) {
     'income',
     'age',
     'existingDebt',
+    'externalUnsecuredDebt',
     'internalMonthly',
     'internalBalance',
     'proposedLoan',
@@ -241,7 +272,13 @@ function validateInputsByField(input) {
   if (input.income <= 0) setErr('income', '月收入須大於 0');
   if (input.years <= 0) setErr('years', '貸款年限須大於 0');
   if (input.proposedLoan <= 0) setErr('loan', '申請金額須大於 0');
-  if (input.existingDebt < 0) setErr('existing_debt', '社外債務不可為負值');
+  if (input.existingDebt < 0) setErr('existing_debt', '社外月付不可為負值');
+  if (
+    input.externalUnsecuredDebt !== undefined &&
+    input.externalUnsecuredDebt < 0
+  ) {
+    setErr('external_unsecured_debt', '社外無擔保債務總餘額不可為負值');
+  }
   if (input.internalMonthly < 0)
     setErr('internal_monthly', '本社月付不可為負值');
   if (input.internalBalance < 0)
@@ -306,15 +343,25 @@ function computeScore(input) {
       protectionScore: 0,
       purposeScore: 0,
       perspectiveScore: 0,
+      effectiveIncome: 0,
+      rawIncome: input.income || 0,
+      haircutRatio:
+        INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+          ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+          : 1.0,
     };
   }
-  // [FIX 1.6] DSR 含社外 + 本社月付（含整併模式下的所有額外既有貸款）
+  const effectiveIncome = getEffectiveIncome(input);
+  // [FIX 1.6] DSR 含社外 + 本社月付（含整併模式下的所有額外既有貸款），分母採用實質有效月收入
   const extMonthly = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.monthly || 0),
     0
   );
   const baselineDsr =
-    (input.existingDebt + input.internalMonthly + extMonthly) / input.income;
+    effectiveIncome > 0
+      ? (input.existingDebt + input.internalMonthly + extMonthly) /
+        effectiveIncome
+      : Infinity;
   let dsrScore = 0;
   for (const [limit, score] of DSR_SCORE_TIERS) {
     if (baselineDsr < limit) {
@@ -327,16 +374,52 @@ function computeScore(input) {
   const jcicScore = input.jcic === 'veto' ? 0 : parseInt(input.jcic) || 0;
   const peopleScore = input.interaction + jcicScore + input.membership;
 
-  // Guarantor DSR score — take worst DSR among all guarantors
+  // Guarantor DSR & Effective Count evaluation (含高負債排除與債務不詳折半)
   let guarantorDsrScore = 0;
+  let effectiveGuarantorCount = 0;
+  const evaluatedGuarantors = [];
+  const validDsrs = [];
+
   if (
     input.guarantorCount > 0 &&
     input.guarantors &&
     input.guarantors.length > 0
   ) {
-    const validDsrs = input.guarantors
-      .filter((g) => g.income > 0 && !g.unknown)
-      .map((g) => g.debt / g.income);
+    input.guarantors.forEach((g) => {
+      const baseWeight = GUARANTOR_TYPE_WEIGHT[g.type] || 1.0;
+      let finalWeight = 0;
+      let isHighDsr = false;
+      const isUnknown = Boolean(g.unknown);
+      let gDsr = null;
+
+      if (isUnknown) {
+        // 債務不詳：無法查核實質資力，人數權重減半認列；DSR 不納入計分
+        finalWeight = baseWeight * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
+      } else if (g.income > 0) {
+        gDsr = (g.debt || 0) / g.income;
+        if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
+          // 負債過高（DSR >= 65%）：無實質代償能力，加權歸 0，不計入有效人數與 DSR 加分
+          isHighDsr = true;
+          finalWeight = 0;
+        } else {
+          finalWeight = baseWeight;
+          validDsrs.push(gDsr);
+        }
+      }
+
+      effectiveGuarantorCount += finalWeight;
+      evaluatedGuarantors.push({
+        name: g.name,
+        type: g.type,
+        income: g.income,
+        debt: g.debt,
+        unknown: isUnknown,
+        dsr: gDsr,
+        isHighDsr,
+        weight: finalWeight,
+      });
+    });
+
     if (validDsrs.length > 0) {
       const maxDsr = Math.max(...validDsrs);
       if (maxDsr < 0.3) guarantorDsrScore = 5;
@@ -346,16 +429,12 @@ function computeScore(input) {
   }
 
   // Protection (20%) — 擔保 12 + 保證人(加權) 8 + 保證人DSR 5 + LTV覆蓋 3 = 28 理論值 → ×0.8 正規化到 20 滿分
-  let effectiveGuarantorCount = 0;
-  if (input.guarantors && input.guarantors.length > 0) {
-    input.guarantors.forEach((g) => {
-      const weight = GUARANTOR_TYPE_WEIGHT[g.type] || 1.0;
-      effectiveGuarantorCount += weight;
-    });
-  }
-  effectiveGuarantorCount = Math.round(effectiveGuarantorCount);
+  const roundedGuarantorCount = Math.min(
+    MAX_GUARANTORS,
+    Math.round(effectiveGuarantorCount)
+  );
   const collateralScore = COLLATERAL_SCORE[input.collateral] || 0;
-  const guarantorScore = GUARANTOR_SCORE_TABLE[effectiveGuarantorCount] || 0;
+  const guarantorScore = GUARANTOR_SCORE_TABLE[roundedGuarantorCount] || 0;
   // 擔保覆蓋加成：不動產抵押依 LTV（貸款/鑑價）加成——價值越足、保障越高
   let ltvBonus = 0;
   if (input.collateral === '10') {
@@ -395,9 +474,17 @@ function computeScore(input) {
       ltvBonus,
       guarantor: guarantorScore,
       guarantorDsr: guarantorDsrScore,
+      effectiveGuarantorCount,
+      evaluatedGuarantors,
     },
     purposeScore,
     perspectiveScore,
+    effectiveIncome,
+    rawIncome: input.income,
+    haircutRatio:
+      INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+        ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+        : 1.0,
     total: Math.max(
       0,
       Math.min(
@@ -421,6 +508,7 @@ function computeScore(input) {
 function applyRegulatoryVetoes(input) {
   const vetoes = [];
   const ageAtMaturity = input.age + input.years;
+  const effectiveIncome = getEffectiveIncome(input);
 
   // [FIX 1.1] 月付金改用本金平均攤還法
   const newLoanMonthlyPmt = pmt(
@@ -434,12 +522,12 @@ function applyRegulatoryVetoes(input) {
     0
   );
   const postLoanDti =
-    input.income > 0
+    effectiveIncome > 0
       ? (input.existingDebt +
           input.internalMonthly +
           extMonthlyVeto +
           newLoanMonthlyPmt) /
-        input.income
+        effectiveIncome
       : Infinity;
 
   // [FIX] 70% DTI 否決紅線
@@ -586,12 +674,16 @@ function applyRegulatoryVetoes(input) {
     }
   }
 
-  // ⑱ [115年授信規範] 收支赤字否決 (Cashflow Deficit Veto)：核貸後總支出 > 月收入（每月淨餘額 < 0）
+  // ⑱ [115年授信規範] 收支赤字否決 (Cashflow Deficit Veto)：核貸後總支出 > 實質月收入（每月淨餘額 < 0）
   const cashFlow = computeCashFlow(input, newLoanMonthlyPmt);
   if (cashFlow.totalLivingExpenses > 0 && cashFlow.netSurplusPostLoan < 0) {
     const deficit = Math.abs(Math.round(cashFlow.netSurplusPostLoan));
+    const incomeDisplay =
+      effectiveIncome !== input.income
+        ? `實質月收入 ${Math.round(effectiveIncome).toLocaleString('zh-TW')} 元（申報 ${input.income.toLocaleString('zh-TW')} 元）`
+        : `月收入 ${input.income.toLocaleString('zh-TW')} 元`;
     vetoes.push(
-      `核貸後每月總支出（總月付 ${Math.round(cashFlow.totalMonthlyPayment).toLocaleString('zh-TW')} 元 ＋ 生活支出 ${Math.round(cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元 ＝ ${Math.round(cashFlow.totalMonthlyPayment + cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元）超過月收入（${input.income.toLocaleString('zh-TW')} 元），每月收支赤字 ${deficit.toLocaleString('zh-TW')} 元，不予核貸`
+      `核貸後每月總支出（總月付 ${Math.round(cashFlow.totalMonthlyPayment).toLocaleString('zh-TW')} 元 ＋ 生活支出 ${Math.round(cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元 ＝ ${Math.round(cashFlow.totalMonthlyPayment + cashFlow.totalLivingExpenses).toLocaleString('zh-TW')} 元）超過${incomeDisplay}，每月收支赤字 ${deficit.toLocaleString('zh-TW')} 元，不予核貸`
     );
   }
 
@@ -626,16 +718,25 @@ function applyRegulatoryVetoes(input) {
     (input.internalBalance || 0) -
       (input.collateral === '12' ? input.shares || 0 : 0)
   );
+  // 社外無擔保負債總餘額：優先取 externalUnsecuredDebt（存量），未填時回退 existingDebt
+  const extUnsecuredBalance =
+    input.externalUnsecuredDebt !== undefined
+      ? input.externalUnsecuredDebt
+      : input.existingDebt || 0;
   const totalExistingUnsecuredDebt =
-    (input.existingDebt || 0) + internalUnsecuredBalance + extBalance;
+    extUnsecuredBalance + internalUnsecuredBalance + extBalance;
   const totalPostUnsecuredDebt =
     unsecuredProposedLoan + totalExistingUnsecuredDebt;
-  const maxDbrAllowed = (input.income || 0) * DBR_HARD_CEILING;
+  const maxDbrAllowed = effectiveIncome * DBR_HARD_CEILING;
 
-  if (input.income > 0 && totalPostUnsecuredDebt > maxDbrAllowed) {
-    const dbrRatio = (totalPostUnsecuredDebt / input.income).toFixed(1);
+  if (effectiveIncome > 0 && totalPostUnsecuredDebt > maxDbrAllowed) {
+    const dbrRatio = (totalPostUnsecuredDebt / effectiveIncome).toFixed(1);
+    const incomeDisplay =
+      effectiveIncome !== input.income
+        ? `實質月收入 ${Math.round(effectiveIncome).toLocaleString('zh-TW')} 元（申報 ${input.income.toLocaleString('zh-TW')} 元）`
+        : `月收入 ${input.income.toLocaleString('zh-TW')} 元`;
     vetoes.push(
-      `無擔保負債總額（本次無擔保借款 ${Math.round(unsecuredProposedLoan).toLocaleString('zh-TW')} 元 ＋ 現有負債 ${Math.round(totalExistingUnsecuredDebt).toLocaleString('zh-TW')} 元 ＝ ${Math.round(totalPostUnsecuredDebt).toLocaleString('zh-TW')} 元）達月收入（${input.income.toLocaleString('zh-TW')} 元）之 ${dbrRatio} 倍，超過法定 22 倍上限（${Math.round(maxDbrAllowed).toLocaleString('zh-TW')} 元），不予核貸`
+      `無擔保負債總額（本次無擔保借款 ${Math.round(unsecuredProposedLoan).toLocaleString('zh-TW')} 元 ＋ 現有負債 ${Math.round(totalExistingUnsecuredDebt).toLocaleString('zh-TW')} 元 ＝ ${Math.round(totalPostUnsecuredDebt).toLocaleString('zh-TW')} 元）達${incomeDisplay}之 ${dbrRatio} 倍，超過法定 22 倍上限（${Math.round(maxDbrAllowed).toLocaleString('zh-TW')} 元），不予核貸`
     );
   }
 
@@ -657,17 +758,18 @@ function determineGrade(score, isVetoed) {
 
 function computeMaxLoan(input, maxDti) {
   if (maxDti <= 0) return 0;
+  const effectiveIncome = getEffectiveIncome(input);
   const extMonthly = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.monthly || 0),
     0
   );
   const totalExisting = input.existingDebt + input.internalMonthly + extMonthly;
-  const maxPmtByDti = input.income * maxDti - totalExisting;
+  const maxPmtByDti = effectiveIncome * maxDti - totalExisting;
 
   const cashFlow = computeCashFlow(input, 0);
   const maxPmtByCashflow =
     cashFlow.totalLivingExpenses > 0
-      ? input.income - totalExisting - cashFlow.totalLivingExpenses
+      ? effectiveIncome - totalExisting - cashFlow.totalLivingExpenses
       : Infinity;
 
   const maxAvailablePmt = Math.min(maxPmtByDti, Math.max(0, maxPmtByCashflow));
@@ -682,17 +784,18 @@ function computeMaxLoan(input, maxDti) {
 // 整併模式下所有額外既有貸款（additionalLoans）皆計入既有月付與既有餘額
 function computeSuggestedAdditionalLoan(input, maxDti) {
   if (maxDti <= 0) return { general: 0, consolidation: 0 };
+  const effectiveIncome = getEffectiveIncome(input);
   const ext = input.additionalLoans || [];
   const extMonthly = ext.reduce((sum, l) => sum + (l.monthly || 0), 0);
   const extBalance = ext.reduce((sum, l) => sum + (l.balance || 0), 0);
   const totalExistingMonthly =
     input.existingDebt + input.internalMonthly + extMonthly;
 
-  const maxPmtByDti = input.income * maxDti - totalExistingMonthly;
+  const maxPmtByDti = effectiveIncome * maxDti - totalExistingMonthly;
   const cashFlow = computeCashFlow(input, 0);
   const maxPmtByCashflow =
     cashFlow.totalLivingExpenses > 0
-      ? input.income - totalExistingMonthly - cashFlow.totalLivingExpenses
+      ? effectiveIncome - totalExistingMonthly - cashFlow.totalLivingExpenses
       : Infinity;
   const maxAvailablePmt = Math.min(maxPmtByDti, Math.max(0, maxPmtByCashflow));
 
@@ -744,6 +847,7 @@ function computeConsolidationScenario(input) {
 
 function applyLegalCeiling(input, maxLoanLimit, grade) {
   let ceiling;
+  const effectiveIncome = getEffectiveIncome(input);
   if (input.collateral === '10') {
     const appraisal = input.appraisalValue || 0;
     const zone = input.collateralZone || 'other';
@@ -754,7 +858,7 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
   } else {
     // 無擔保放款：章程上限 (股金 + 100 萬) 與 DBR 評級倍數天花板取小
     const dbrMultiplier =
-      input.income && grade && GRADE_DBR_LIMITS[grade] !== undefined
+      effectiveIncome && grade && GRADE_DBR_LIMITS[grade] !== undefined
         ? GRADE_DBR_LIMITS[grade]
         : DBR_HARD_CEILING;
     const extBalance = (input.additionalLoans || []).reduce(
@@ -766,15 +870,19 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
       (input.internalBalance || 0) -
         (input.collateral === '5' ? input.shares || 0 : 0)
     );
+    const extUnsecured =
+      input.externalUnsecuredDebt !== undefined
+        ? input.externalUnsecuredDebt
+        : input.existingDebt || 0;
     const totalExistingUnsecured =
-      (input.existingDebt || 0) + internalUnsecured + extBalance;
+      extUnsecured + internalUnsecured + extBalance;
     const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
 
     let dbrCap = Infinity;
-    if (input.income > 0) {
+    if (effectiveIncome > 0) {
       const netDbrUnsecuredAvailable = Math.max(
         0,
-        input.income * dbrMultiplier - totalExistingUnsecured
+        effectiveIncome * dbrMultiplier - totalExistingUnsecured
       );
       dbrCap = netDbrUnsecuredAvailable + securedSharesPart;
     }
@@ -791,6 +899,11 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
 // 取得核貸額度受限因子與各維度天花板明細
 function getLoanLimitDetails(input, maxLoanLimit, grade) {
   const finalLimit = applyLegalCeiling(input, maxLoanLimit, grade);
+  const effectiveIncome = getEffectiveIncome(input);
+  const haircutRatio =
+    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
+      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
+      : 1.0;
   const extMonthly = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.monthly || 0),
     0
@@ -798,14 +911,11 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
   const totalExistingMonthly =
     (input.existingDebt || 0) + (input.internalMonthly || 0) + extMonthly;
   const maxPmtByDti =
-    (input.income || 0) * (GRADE_DTI_LIMITS[grade] || 0.6) -
-    totalExistingMonthly;
+    effectiveIncome * (GRADE_DTI_LIMITS[grade] || 0.6) - totalExistingMonthly;
   const cashFlow = computeCashFlow(input, 0);
   const maxPmtByCashflow =
     cashFlow.totalLivingExpenses > 0
-      ? (input.income || 0) -
-        totalExistingMonthly -
-        cashFlow.totalLivingExpenses
+      ? effectiveIncome - totalExistingMonthly - cashFlow.totalLivingExpenses
       : Infinity;
 
   const r = (input.ratePercent || 0) / 100 / 12;
@@ -830,12 +940,15 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
     (input.internalBalance || 0) -
       (input.collateral === '5' ? input.shares || 0 : 0)
   );
-  const totalExistingUnsecured =
-    (input.existingDebt || 0) + internalUnsecured + extBalance;
+  const extUnsecured =
+    input.externalUnsecuredDebt !== undefined
+      ? input.externalUnsecuredDebt
+      : input.existingDebt || 0;
+  const totalExistingUnsecured = extUnsecured + internalUnsecured + extBalance;
   const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
   const dbrCap =
-    input.income > 0
-      ? Math.max(0, input.income * dbrMultiplier - totalExistingUnsecured) +
+    effectiveIncome > 0
+      ? Math.max(0, effectiveIncome * dbrMultiplier - totalExistingUnsecured) +
         securedSharesPart
       : Infinity;
   const bylawCap = (input.shares || 0) + CREDIT_FLOOR_PER_SHARE;
@@ -898,6 +1011,9 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
     bylawCap,
     pmtCap,
     cashflowCap,
+    effectiveIncome,
+    rawIncome: input.income || 0,
+    haircutRatio,
   };
 }
 
@@ -936,7 +1052,7 @@ function determineGovernanceRouting(input, result) {
     return {
       level: 'board_special',
       tag: '理事會特別決議',
-      authority: '理事會（須 2/3 出席理事同意）',
+      authority: '須 2/3 出席理事同意',
       text: '理事、監事或職員申請無擔保借款超過股金，經放款委員會初審後，須送交理事會經三分之二出席理事同意後始得貸放。本人、配偶及二親等內親屬應迴避審查與對保（要點第 9 條）。',
       requiresBoardSpecialMajority: true,
     };
@@ -947,7 +1063,7 @@ function determineGovernanceRouting(input, result) {
     return {
       level: 'board_general',
       tag: '理事會決議',
-      authority: '放款委員會初審 → 理事會決議',
+      authority: '放款會初審後送理事會決議',
       text: '社員申請擔保借款應經放款委員會先行初審後，提交理事會作最後決議。',
       requiresBoardSpecialMajority: false,
     };
@@ -958,7 +1074,7 @@ function determineGovernanceRouting(input, result) {
     return {
       level: 'staff_delegated',
       tag: '專職授權核放',
-      authority: '專職人員核放（10 日內送放款會追認）',
+      authority: '專職核放・10 日內追認',
       text: '無擔保借款於社員股金內得由理事會授權專職人員或社務助理核放，並於 10 日內提交放款委員會追認。',
       requiresBoardSpecialMajority: false,
     };
@@ -968,7 +1084,7 @@ function determineGovernanceRouting(input, result) {
   return {
     level: 'committee',
     tag: '放款委員會審查',
-    authority: '放款委員會（全數通過）',
+    authority: '出席委員全數通過',
     text: '放款委員會審核放款應有過半數委員出席並須出席委員全數通過方可批准。',
     requiresBoardSpecialMajority: false,
   };

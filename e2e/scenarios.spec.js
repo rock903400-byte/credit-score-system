@@ -1057,4 +1057,129 @@ test.describe('場景 13-18：實務進階', () => {
       `  → 50 萬無擔保借款核貸額度成功受控且顯示受限因子：${reasonText.slice(0, 50)}...`
     );
   });
+
+  test('㉘ 所得認列折成（Effective Income Haircut）：折成即時預覽與連動 DBR 22 否決', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1. 輸入月收入 60,000，切換為「以佣金／計酬為主 (70% 認列)」
+    await fillForm(page, {
+      income: 60000,
+      age: 35,
+      loan: 1000000,
+      years: 5,
+      rate: 3,
+      shares: 50000,
+    });
+    await page.locator('#incomeStability').selectOption('3'); // 70%
+    const preview = await page.locator('#preview_income').innerText();
+    expect(preview).toContain('實質認列：4.2 萬元');
+    expect(preview).toContain('70%');
+    console.log(`  → 所得折成即時預覽正確顯示：${preview}`);
+
+    // 2. 純信用借款 100 萬，實質月入 42,000 × 22 = 924,000 < 1,000,000 → 觸發 DBR 22 否決
+    // （若未折成 60,000 × 22 = 1,320,000 > 1,000,000 本不應觸發 DBR 22 否決）
+    await page.locator('#collateral').selectOption('0');
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('不予核貸');
+    expect(status).toContain('22 倍');
+    console.log(`  → 折成後實質所得成功連動 DBR 22 倍法定否決線`);
+  });
+
+  test('㉙ 保證人高負債 (DSR ≥ 65%) 即時排除與審定提示', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1 位社員保證人，月收 50,000，債務 35,000 (DSR 70% ≥ 65%)
+    await page.locator('#guarantor_count').selectOption('1');
+    const row = page.locator('.guarantor-row').first();
+    await row.locator('.g-name').fill('高負債保人');
+    await row.locator('.g-income').fill('50000');
+    await row.locator('.g-debt').fill('35000');
+
+    // 驗證輸入時即時排除提示
+    const debtPreview = await row.locator('.g-debt-preview').innerText();
+    expect(debtPreview).toContain('過高排除');
+    const weightHint = await page.locator('#guarantorWeightHint').innerText();
+    expect(weightHint).toContain('負債過高');
+    expect(weightHint).toContain('有效加權 0.0 人');
+    console.log(`  → 即時加權回饋正確標記高負債排除：${weightHint}`);
+
+    // 填寫其餘資料並計算
+    await fillForm(page, {
+      income: 60000,
+      age: 40,
+      loan: 300000,
+      years: 5,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#btnCalc').click();
+
+    // 驗證列印報表顯示高負債排除
+    const printText = await page.locator('#p_guarantor_print').innerText();
+    expect(printText).toContain('高負債排除');
+    console.log(`  → 列印報表成功載明「高負債排除」審定明細`);
+  });
+
+  test('㉚ 社外無擔保負債總餘額欄位輸入、草稿保存與 DBR 22 否決連動', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 1. 填寫基本資料：月收入 40,000（DBR 22 上限 88 萬），申貸 30 萬信貸
+    // 社外債務月繳 6,000 元，社外無擔保負債總餘額 60 萬（合計無擔保 90 萬 > 88 萬）
+    await fillForm(page, {
+      income: 40000,
+      age: 35,
+      loan: 300000,
+      years: 5,
+      rate: 3,
+      shares: 50000,
+    });
+    await page.locator('#collateral').selectOption('0');
+    await page.locator('#existing_debt').fill('6000');
+    await page.locator('#external_unsecured_debt').fill('600000');
+    await page.waitForTimeout(150);
+
+    // 2. 驗證草稿保存
+    await page.reload();
+    await expect(page.locator('#external_unsecured_debt')).toHaveValue(
+      '600,000'
+    );
+    console.log('  → 社外無擔保負債總餘額草稿保存與千分位還原成功');
+
+    // 3. 執行試算，驗證觸發 DBR 22 倍否決
+    await page.locator('#btnCalc').click();
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('不予核貸');
+    expect(status).toContain('22 倍');
+    console.log('  → 社外無擔保負債總餘額成功觸發 DBR 22 倍否決');
+  });
+
+  test('㉛ 評等等級與建議作業流程說明對齊（C 級評等顯示 C 級流程）', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 載入範例案件
+    await page.locator('#btnSampleCase').click();
+    await page.waitForTimeout(100);
+    await page.locator('#btnCalc').click();
+
+    const grade = await page.locator('#resGrade').innerText();
+    const triage = await page.locator('#verdictTriage').innerText();
+    expect(triage).toContain(`${grade} 級`);
+    console.log(`  → 評等結果 (${grade} 級) 與建議流程標籤精準對齊：${triage}`);
+  });
 });

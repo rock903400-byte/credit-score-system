@@ -129,8 +129,8 @@ test.describe('結論條 — 一眼看到結論', () => {
     await expect(page.locator('#resGrade')).toHaveText(/[A-E]/);
     await expect(page.locator('#resLimit')).toBeVisible();
     await expect(page.locator('#resTotalDti')).toBeVisible();
-    // 三級分流（A/B/C）純顯示，對應社內對保程序
-    await expect(page.locator('#verdictTriage')).toContainText(/[ABC] 級/);
+    // 作業流程分流（A~E 級 / 否決列管）純顯示，對應社內作業程序
+    await expect(page.locator('#verdictTriage')).toContainText(/[A-E] 級/);
     await expect(page.locator('#verdictTriage')).toContainText('建議流程');
   });
 
@@ -156,14 +156,14 @@ test.describe('結論條 — 一眼看到結論', () => {
     await expect(note).toContainText('維持系統預設值');
   });
 
-  test('否決案件 → 結論條為 fail 樣式且分流為 C 級', async ({ page }) => {
+  test('否決案件 → 結論條為 fail 樣式且流程為否決列管', async ({ page }) => {
     await fillRequired(page);
     await page.locator('#jcic').selectOption('veto');
     await page.locator('#btnCalc').click();
 
     await expect(page.locator('#verdictBar')).toHaveClass(/verdict-fail/);
     await expect(page.locator('#verdictText')).toHaveText('不予核貸');
-    await expect(page.locator('#verdictTriage')).toContainText('C 級');
+    await expect(page.locator('#verdictTriage')).toContainText('否決列管');
   });
 });
 

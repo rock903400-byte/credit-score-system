@@ -139,7 +139,7 @@
                 <label for="existing_debt"
                   >社外債務每月應繳總額 (元)<br />
                   <small style="color: var(--text-muted); font-weight: normal"
-                    >(銀行房貸、車貸、信貸、信用卡分期等)</small
+                    >(銀行房貸、車貸、信貸、信用卡分期等每月月付)</small
                   >
                 </label>
                 <input
@@ -151,6 +151,35 @@
                   min="0"
                 />
                 <span class="input-preview" id="preview_existing_debt"></span>
+                <span class="error-msg"></span>
+              </div>
+              <div class="form-group">
+                <label for="external_unsecured_debt"
+                  >社外無擔保債務總餘額 (元)
+                  <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
+                    >ⓘ
+                    <span class="tooltip-text"
+                      >依聯徵中心（JCIC）個人無擔保借款（信貸、信用卡循環/分期等）實際未償餘額填寫，用於計算金管會
+                      DBR 22 倍法定負債上限與無擔保額度天花板。</span
+                    >
+                  </span>
+                  <br />
+                  <small style="color: var(--text-muted); font-weight: normal"
+                    >(信貸與信用卡等無擔保餘額總和；若無填 0)</small
+                  >
+                </label>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="external_unsecured_debt"
+                  class="highlight-input"
+                  placeholder="0"
+                  min="0"
+                />
+                <span
+                  class="input-preview"
+                  id="preview_external_unsecured_debt"
+                ></span>
                 <span class="error-msg"></span>
               </div>
               <div class="form-group">
@@ -347,12 +376,26 @@
               </div>
 
               <div class="form-group">
-                <label for="incomeStability">收入型態</label>
+                <label for="incomeStability">
+                  收入型態與認列折數
+                  <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
+                    >ⓘ<span class="tooltip-text"
+                      >非固定薪資依風控折數認列實質月收入，用於計算 DTI、DBR 22
+                      及可貸額度</span
+                    ></span
+                  >
+                </label>
                 <select id="incomeStability">
-                  <option value="9">固定月薪（薪轉帳戶、扣繳可查證）</option>
-                  <option value="6">固定底薪＋業績獎金</option>
-                  <option value="3">以佣金／計酬為主（收入起伏大）</option>
-                  <option value="1">現金收入為主（無帳載證明）</option>
+                  <option value="9">
+                    固定月薪（薪轉/扣繳可查證，認列 100%）
+                  </option>
+                  <option value="6">固定底薪＋業績獎金（認列 85%）</option>
+                  <option value="3">
+                    以佣金／計酬為主（起伏大，認列 70%）
+                  </option>
+                  <option value="1">
+                    現金收入為主（無帳載證明，認列 50%）
+                  </option>
                 </select>
               </div>
               <div class="form-group">
@@ -740,6 +783,13 @@
                 </span>
               </div>
               <div class="verdict-figure">
+                <span class="verdict-figure-label">本筆申貸首期月付</span>
+                <span class="verdict-figure-value">
+                  NT$ <span id="resMonthlyPmt">0</span>
+                  <span class="verdict-figure-sub">（本金均等・逐月遞減）</span>
+                </span>
+              </div>
+              <div class="verdict-figure">
                 <span class="verdict-figure-label">核貸後每月負債比</span>
                 <span class="verdict-figure-value">
                   <span id="resTotalDti"></span>%
@@ -1068,10 +1118,16 @@
             <tr>
               <th>
                 社外債務每月應繳額<br /><small
-                  >(房貸、車貸、信貸、卡債等)</small
+                  >(房貸、車貸、信貸、卡債等月付)</small
                 >
               </th>
               <td id="p_existing"></td>
+            </tr>
+            <tr>
+              <th>
+                社外無擔保債務總餘額<br /><small>(信貸、信用卡循環餘額)</small>
+              </th>
+              <td id="p_external_unsecured">0 元</td>
             </tr>
             <tr>
               <th>本社現有貸款<br /><small>(月應繳額 / 餘額)</small></th>
