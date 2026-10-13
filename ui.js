@@ -1250,27 +1250,11 @@ function renderVerdictBar(result) {
       !isVetoed &&
       grade !== 'E'
     ) {
-      let dbrNotice = '';
-      if (
-        result.limitDetails.dbrMultiplier &&
-        (result.input.collateral === '0' || result.input.collateral === '5')
-      ) {
-        const totalUnsecured = Math.round(
-          result.maxLoanLimit +
-            (result.input.existingDebt || 0) +
-            (result.input.internalBalance || 0)
-        );
-        const dbrRatio =
-          result.input.income > 0
-            ? (totalUnsecured / result.input.income).toFixed(1)
-            : '0';
-        dbrNotice = ` ｜ 無擔保總負債約 ${dbrRatio} 倍月薪（法定 22 倍以內）`;
-      }
       let html = `💡 <strong>【額度受限因子】</strong>${escapeHtml(
         result.limitDetails.limiterText
-      )}${escapeHtml(dbrNotice)}`;
+      )}`;
       if (grade === 'D') {
-        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依規鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
+        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依評等鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
       }
       reasonEl.innerHTML = html;
       reasonEl.style.display = 'block';
@@ -1469,19 +1453,14 @@ function renderDashboard(result) {
   // 狀態訊息（[FIX 1.3] 否決清單以 <ul> 累積呈現）
   const statusEl = $('resStatus');
   statusEl.className = 'status-msg';
+  // 判定文字只在 calculateLoan 算一次（statusText / sealType），這裡只加圖示
   if (isVetoed) {
     statusEl.innerHTML = `🚫 系統判定：不予核貸<ul class="veto-list">${vetoes.map((v) => `<li>${v}</li>`).join('')}</ul>`;
-    statusEl.classList.add('status-fail');
-  } else if (grade === 'E') {
-    statusEl.innerHTML = '⚠️ 評分不足 60 分，請專職/幹部審慎評估';
-    statusEl.classList.add('status-fail');
-  } else if (postLoanDti > maxDti) {
-    statusEl.innerHTML = `❌ 額度超限：預計月負擔 (${(postLoanDti * 100).toFixed(1)}%) 超過本級上限 (${(maxDti * 100).toFixed(0)}%)`;
-    statusEl.classList.add('status-warn');
   } else {
-    statusEl.innerHTML = '✅ 信用良好且負擔合理，評分供專職/幹部裁量參考';
-    statusEl.classList.add('status-pass');
+    const icon = { fail: '⚠️', warn: '❌', pass: '✅' }[result.sealType];
+    statusEl.innerHTML = `${icon} ${escapeHtml(statusText)}`;
   }
+  statusEl.classList.add(`status-${result.sealType}`);
 
   // 進度條（[FIX 5.4] 顏色相對 DTI；[FIX 5.5] DTI>100% 溢出提示）
   const effInc = getEffectiveIncome(input);
@@ -2187,25 +2166,11 @@ function renderPrintReport(result) {
       !isVetoed &&
       grade !== 'E'
     ) {
-      let dbrNotice = '';
-      if (
-        result.limitDetails.dbrMultiplier &&
-        (input.collateral === '0' || input.collateral === '5')
-      ) {
-        const totalUnsecured = Math.round(
-          maxLoanLimit +
-            (input.existingDebt || 0) +
-            (input.internalBalance || 0)
-        );
-        const dbrRatio =
-          input.income > 0 ? (totalUnsecured / input.income).toFixed(1) : '0';
-        dbrNotice = ` ｜ 無擔保總負債約 ${dbrRatio} 倍月薪（法定 22 倍以內）`;
-      }
       let html = `<strong>【核貸額度受限因子】</strong>${escapeHtml(
         result.limitDetails.limiterText
-      )}${escapeHtml(dbrNotice)}`;
+      )}`;
       if (grade === 'D') {
-        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依規鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
+        html += `<br><span style="color:#c62828; font-weight:600; margin-top:4px; display:inline-block;">⚠️ 【風險防護提示】借款人評等為 D 級（加強審查），無擔保授信已依評等鎖定於 8 倍月薪上限內，建議徵提連帶保證人或專案送放款委員會照會覆審。</span>`;
       }
       pLimitReasonEl.innerHTML = html;
       pLimitReasonEl.style.display = 'block';
@@ -2386,6 +2351,11 @@ function calculateLoan() {
       sealType = 'fail';
     } else if (postLoanDti > maxDti) {
       statusText = `額度超限：預計月負擔 (${(postLoanDti * 100).toFixed(1)}%) 超過本級上限 (${(maxDti * 100).toFixed(0)}%)`;
+      sealText = '額度超限';
+      sealType = 'warn';
+    } else if (input.proposedLoan > Math.round(maxLoanLimit)) {
+      // 月負擔未超限，但申貸超過可貸額度（章程上限、評級月薪倍數上限等）——不可顯示「負擔合理」
+      statusText = `額度超限：申貸 ${input.proposedLoan.toLocaleString('zh-TW')} 元，超過可貸額度 ${Math.round(maxLoanLimit).toLocaleString('zh-TW')} 元，請調降申貸金額或補強擔保`;
       sealText = '額度超限';
       sealType = 'warn';
     } else {

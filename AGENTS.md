@@ -72,7 +72,9 @@
 
 ## Business rules
 
-- 19 veto rules in `applyRegulatoryVetoes`: age >75 (硬否決), 7-year (must be real-estate), 30-year max for secured, LTV caps, 120% mortgage registration (⑩-1), collateral='12' amount cap, 第三人擔保品保證人檢核 (⑩-4), JCIC `veto`, purpose `veto`, ⑱ 收支赤字否決, ⑲ 金管會 DBR 22 倍無擔保負債上限否決等。See `rationale.html` for the bug history.
+- 18 veto rules in `applyRegulatoryVetoes`: age >75 (硬否決), 7-year (must be real-estate), 30-year max for secured, LTV caps, 120% mortgage registration (⑩-1), collateral='12' amount cap, 第三人擔保品保證人檢核 (⑩-4), JCIC `veto`, purpose `veto`, ⑱ 收支赤字否決等。See `rationale.html` for the bug history.
+- **金管會 DBR 22 倍不適用儲蓄互助社**（那是對銀行的規範）。v2.9 已移除原 ⑲ 否決與所有「法定 22 倍」字樣——不要加回，也不要在 UI／報表把任何倍數寫成「法定」。無擔保負債存量由 `GRADE_DBR_LIMITS` 評級月薪倍數上限（A20/B15/C12/D8，扣既有無擔保餘額）控管，最高 20 倍本來就比 22 倍嚴格。
+- **申貸超過可貸額度要標示「額度超限」**：`calculateLoan()` 的判定順序是 否決 → E 級 → 月負擔超限 → `proposedLoan > round(maxLoanLimit)` → 評分完成。少了第四步時，月負擔未超限但超過倍數／章程上限的案件會顯示「✅ 負擔合理」。判定文字只在 `calculateLoan()` 算一次（`statusText`/`sealType`），`renderDashboard()` 只加圖示，不要再寫第二份。守護：E2E ㉜。
 - Age penalties use **strict** `>`:
   - `maturity > 75` → hard veto (in `applyRegulatoryVetoes`).
   - `maturity > 70` → –10.
@@ -81,8 +83,8 @@
   - `collateral='10'` (足額不動產抵押) → `min(10 M, appraisal × LTV)`.
   - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
   - otherwise → `min(shares + 1 M, effective_income × grade_dbr_multiplier - existing_unsecured_balance + secured_shares_part)`.
-- **社外無擔保負債總餘額** `externalUnsecuredDebt`（`#external_unsecured_debt`，存量）用於 DBR 22 倍否決與無擔保天花板；未帶視同 0。`existingDebt` 是**社外月付**，只進 DSR/DTI，絕不可當餘額使用。`simulate_*.js` 產生器帶 `0 ~ income×25` 以涵蓋 22 倍線兩側。
-- **收入型態折數** `INCOME_STABILITY_HAIRCUT`（9→100%、6→85%、3→70%、1→50%，取用一律走 `getHaircutRatio()`）：`getEffectiveIncome()` 的折後收入**只**用於 70% 否決線、收支、DBR 22 倍與額度。**評分的 DSR 分用申報收入**——收入品質已由 stability 子項扣分，改用折後收入會讓同一件事扣兩次分（現金收入社員曾因此 C→D、額度只剩固定月薪者的 27%）。守護：`test.js`「收入型態在評分只扣一次」。
+- **社外無擔保負債總餘額** `externalUnsecuredDebt`（`#external_unsecured_debt`，存量）用於無擔保月薪倍數上限；未帶視同 0。`existingDebt` 是**社外月付**，只進 DSR/DTI，絕不可當餘額使用。`simulate_*.js` 產生器帶 `0 ~ income×25` 以涵蓋各評等倍數上限兩側。
+- **收入型態折數** `INCOME_STABILITY_HAIRCUT`（9→100%、6→85%、3→70%、1→50%，取用一律走 `getHaircutRatio()`）：`getEffectiveIncome()` 的折後收入**只**用於 70% 否決線、收支與額度（含月薪倍數上限）。**評分的 DSR 分用申報收入**——收入品質已由 stability 子項扣分，改用折後收入會讓同一件事扣兩次分（現金收入社員曾因此 C→D、額度只剩固定月薪者的 27%）。守護：`test.js`「收入型態在評分只扣一次」。
 - 無擔保授信 DBR 階梯：A 級 20 倍、B 級 15 倍、C 級 12 倍、D 級 8 倍月薪（D 級強化提示保證人徵提）。
 - Default `<option>` for `#collateral` is `'12'`. If `proposedLoan > shares`, set to `'5'` or `'10'` to avoid silent veto.
 - Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 + LTV bonus 3 would otherwise exceed 100). 不動產抵押（`collateral='10'`）另依 LTV（loan/appraisal）加成：≤50% ＋3、≤70% ＋2、其餘/無鑑價 ＋0。`computeScore` 回傳 `protectionBreakdown` 供 UI 顯示構成（擔保/LTV/保證人/DSR）。注意 `test.js` 的 `coherent()` 兜底鑑價為 `loan×1.3` 而非固定 500 萬——若改用固定大額兜底，小額貸款 LTV 會掉到加成區間、A 級分布暴增。

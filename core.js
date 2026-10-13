@@ -28,8 +28,9 @@ const GUARANTOR_HIGH_DSR_THRESHOLD = 0.65; // 保證人個人 DSR >= 65% 判定�
 const GUARANTOR_UNKNOWN_WEIGHT_RATIO = 0.5; // 債務不詳保證人：人數加分折半（見 evaluateGuarantors）
 const GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS = { A: 0.6, B: 0.5, C: 0.4, D: 0.3 };
-const DBR_HARD_CEILING = 22; // 金管會個人無擔保負債上限 22 倍
-const GRADE_DBR_LIMITS = { A: 20, B: 15, C: 12, D: 8, E: 0 }; // 各評等無擔保授信月薪倍數階梯
+// 本社無擔保授信月薪倍數上限（依評等；扣除既有無擔保餘額後為可貸上限）。
+// 注意：金管會 DBR 22 倍是對銀行的規範，不適用儲蓄互助社，不要加回成否決或寫成「法定」。
+const GRADE_DBR_LIMITS = { A: 20, B: 15, C: 12, D: 8, E: 0 };
 
 // 收入型態認列折數（Haircut）
 const INCOME_STABILITY_HAIRCUT = {
@@ -44,7 +45,7 @@ function getHaircutRatio(input) {
   return INCOME_STABILITY_HAIRCUT[input.incomeStability] ?? 1.0;
 }
 
-// 取得實質有效月收入（經收入型態折成）。只用於否決線、DBR、收支與額度；
+// 取得實質有效月收入（經收入型態折成）。只用於否決線、收支與額度（含無擔保月薪倍數上限）；
 // 評分的 DSR 分用申報收入——收入品質已由 stability 子項反映，不重複扣分
 function getEffectiveIncome(input) {
   if (!input || !input.income || input.income <= 0) return 0;
@@ -706,55 +707,9 @@ function applyRegulatoryVetoes(input) {
     );
   }
 
-  // ⑲ [金管會/銀行法規範] DBR 22 倍無擔保負債硬性否決 (DBR 22 Veto)
-  let unsecuredProposedLoan = 0;
-  if (input.collateral === '10') {
-    const appraisal = input.appraisalValue || 0;
-    const zone = input.collateralZone || 'other';
-    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
-    unsecuredProposedLoan = Math.max(
-      0,
-      input.proposedLoan - Math.floor(appraisal * ltv)
-    );
-  } else if (input.collateral === '12') {
-    unsecuredProposedLoan = 0; // 足額股金質借，實質無擔保曝險為 0
-  } else if (input.collateral === '5') {
-    unsecuredProposedLoan = Math.max(
-      0,
-      input.proposedLoan - (input.shares || 0)
-    );
-  } else {
-    unsecuredProposedLoan = input.proposedLoan;
-  }
-
-  const extBalance = (input.additionalLoans || []).reduce(
-    (sum, l) => sum + (l.balance || 0),
-    0
-  );
-  // 本社未足額質借之負債餘額
-  const internalUnsecuredBalance = Math.max(
-    0,
-    (input.internalBalance || 0) -
-      (input.collateral === '12' ? input.shares || 0 : 0)
-  );
-  // 社外無擔保負債總餘額（存量）；未填視同 0——existingDebt 是月付，不可拿來當餘額
-  const extUnsecuredBalance = input.externalUnsecuredDebt || 0;
-  const totalExistingUnsecuredDebt =
-    extUnsecuredBalance + internalUnsecuredBalance + extBalance;
-  const totalPostUnsecuredDebt =
-    unsecuredProposedLoan + totalExistingUnsecuredDebt;
-  const maxDbrAllowed = effectiveIncome * DBR_HARD_CEILING;
-
-  if (effectiveIncome > 0 && totalPostUnsecuredDebt > maxDbrAllowed) {
-    const dbrRatio = (totalPostUnsecuredDebt / effectiveIncome).toFixed(1);
-    const incomeDisplay =
-      effectiveIncome !== input.income
-        ? `實質月收入 ${Math.round(effectiveIncome).toLocaleString('zh-TW')} 元（申報 ${input.income.toLocaleString('zh-TW')} 元）`
-        : `月收入 ${input.income.toLocaleString('zh-TW')} 元`;
-    vetoes.push(
-      `無擔保負債總額（本次無擔保借款 ${Math.round(unsecuredProposedLoan).toLocaleString('zh-TW')} 元 ＋ 現有負債 ${Math.round(totalExistingUnsecuredDebt).toLocaleString('zh-TW')} 元 ＝ ${Math.round(totalPostUnsecuredDebt).toLocaleString('zh-TW')} 元）達${incomeDisplay}之 ${dbrRatio} 倍，超過法定 22 倍上限（${Math.round(maxDbrAllowed).toLocaleString('zh-TW')} 元），不予核貸`
-    );
-  }
+  // 原 ⑲ DBR 22 倍否決已移除：那是金管會對銀行的規範，不適用儲蓄互助社。
+  // 無擔保負債存量改由 applyLegalCeiling 的評級月薪倍數上限（最高 20 倍）控管，
+  // 超過時顯示「額度超限」而非否決。
 
   return { vetoes, newLoanMonthlyPmt, postLoanDti, cashFlow };
 }
@@ -872,11 +827,8 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
   } else if (input.collateral === '12') {
     ceiling = Math.min(NATURAL_PERSON_CAP, input.shares);
   } else {
-    // 無擔保放款：章程上限 (股金 + 100 萬) 與 DBR 評級倍數天花板取小
-    const dbrMultiplier =
-      effectiveIncome && grade && GRADE_DBR_LIMITS[grade] !== undefined
-        ? GRADE_DBR_LIMITS[grade]
-        : DBR_HARD_CEILING;
+    // 無擔保放款：章程上限 (股金 + 100 萬) 與評級月薪倍數上限取小（未給評等時用最寬的 A 級）
+    const dbrMultiplier = GRADE_DBR_LIMITS[grade] ?? GRADE_DBR_LIMITS.A;
     const extBalance = (input.additionalLoans || []).reduce(
       (sum, l) => sum + (l.balance || 0),
       0
@@ -936,10 +888,7 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
       ? Math.max(0, maxPmtByCashflow / factor)
       : Infinity;
 
-  const dbrMultiplier =
-    grade && GRADE_DBR_LIMITS[grade] !== undefined
-      ? GRADE_DBR_LIMITS[grade]
-      : DBR_HARD_CEILING;
+  const dbrMultiplier = GRADE_DBR_LIMITS[grade] ?? GRADE_DBR_LIMITS.A;
   const extBalance = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.balance || 0),
     0

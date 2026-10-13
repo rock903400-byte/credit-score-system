@@ -1015,50 +1015,47 @@ test.describe('場景 13-18：實務進階', () => {
     console.log(`  → 入社年資與儲蓄習慣連動禁用與自動降階驗證通過`);
   });
 
-  test('㉗ 月薪 3 萬無擔保放款：70 萬觸發 DBR 22 倍否決，50 萬受限於評級倍數並顯示受限原因', async ({
+  test('㉗ 月薪 3 萬無擔保放款：70 萬超過評級倍數上限 → 顯示「額度超限」而非 ✅（DBR 22 倍不適用儲互社，不否決）', async ({
     page,
   }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
 
-    // 1. 月薪 3 萬、申請 70 萬純信用貸款（無擔保）
+    // 月薪 3 萬、申請 70 萬純信用貸款（無擔保）；評級倍數最高 A 級 20 倍 = 60 萬
+    // 用 7 年期：5 年期首期月付 13,417 + 預設生活費 17,750 > 3 萬，會先觸發收支赤字否決
     await fillForm(page, {
       income: 30000,
       age: 35,
       loan: 700000,
-      years: 5,
+      years: 7,
       rate: 3,
       shares: 50000,
     });
     await page.locator('#collateral').selectOption('0'); // 純信用借款
     await page.locator('#btnCalc').click();
 
-    // 驗證觸發第 19 條 DBR 22 倍否決
-    const status = await page.locator('#resStatus').innerText();
-    expect(status).toContain('不予核貸');
-    expect(status).toContain('22 倍');
-    console.log(`  → 70 萬無擔保借款成功觸發 DBR 22 倍法規否決`);
-
-    // 2. 調降申請金額至 50 萬（符合 22 倍法定上限 66 萬以內）
-    await page.locator('#loan').fill('500000');
-    await page.locator('#btnCalc').click();
-
     await expect(page.locator('#resultCard')).toBeVisible();
     const limitText = await page.locator('#resLimit').innerText();
     const limitVal = parseInt(limitText.replace(/,/g, '')) || 0;
-    // A 級 20 倍上限為 60 萬，額度應在 60 萬以內
     expect(limitVal).toBeLessThanOrEqual(600000);
 
-    // 驗證額度受限原因提示已正確呈現
+    // 申貸超過可貸額度：不可顯示「評分完成 / ✅ 負擔合理」，也不可引用不適用的 22 倍法規
+    await expect(page.locator('#verdictText')).toHaveText('額度超限');
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('超過可貸額度');
+    expect(status).not.toContain('不予核貸');
+    expect(status).not.toContain('22 倍');
+
     const reasonText = await page.locator('#verdictLimitReason').innerText();
     expect(reasonText).toContain('額度受限因子');
+    expect(reasonText).not.toContain('法定');
     console.log(
-      `  → 50 萬無擔保借款核貸額度成功受控且顯示受限因子：${reasonText.slice(0, 50)}...`
+      `  → 70 萬超過可貸額度 ${limitText} 元，正確標示額度超限：${status}`
     );
   });
 
-  test('㉘ 所得認列折成（Effective Income Haircut）：折成即時預覽與連動 DBR 22 否決', async ({
+  test('㉘ 所得認列折成（Effective Income Haircut）：折成即時預覽與連動無擔保額度上限', async ({
     page,
   }) => {
     await page.goto('/');
@@ -1080,15 +1077,16 @@ test.describe('場景 13-18：實務進階', () => {
     expect(preview).toContain('70%');
     console.log(`  → 所得折成即時預覽正確顯示：${preview}`);
 
-    // 2. 純信用借款 100 萬，實質月入 42,000 × 22 = 924,000 < 1,000,000 → 觸發 DBR 22 否決
-    // （若未折成 60,000 × 22 = 1,320,000 > 1,000,000 本不應觸發 DBR 22 否決）
+    // 2. 純信用借款 100 萬：額度上限以實質月入 42,000 計，最高 A 級 20 倍 = 840,000 < 1,000,000
+    // （若未折成 60,000 × 20 = 1,200,000，100 萬本可全額）
     await page.locator('#collateral').selectOption('0');
     await page.locator('#btnCalc').click();
 
-    const status = await page.locator('#resStatus').innerText();
-    expect(status).toContain('不予核貸');
-    expect(status).toContain('22 倍');
-    console.log(`  → 折成後實質所得成功連動 DBR 22 倍法定否決線`);
+    const limitText = await page.locator('#resLimit').innerText();
+    const limitVal = parseInt(limitText.replace(/,/g, '')) || 0;
+    expect(limitVal).toBeLessThanOrEqual(840000);
+    await expect(page.locator('#verdictText')).toHaveText('額度超限');
+    console.log(`  → 折成後實質所得連動無擔保額度上限：可貸 ${limitText} 元`);
   });
 
   test('㉙ 保證人高負債 (DSR ≥ 65%) 即時排除與審定提示', async ({ page }) => {
@@ -1130,15 +1128,16 @@ test.describe('場景 13-18：實務進階', () => {
     console.log(`  → 列印報表成功載明「高負債排除」審定明細`);
   });
 
-  test('㉚ 社外無擔保負債總餘額欄位輸入、草稿保存與 DBR 22 否決連動', async ({
+  test('㉚ 社外無擔保負債總餘額欄位輸入、草稿保存與無擔保額度上限連動', async ({
     page,
   }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
 
-    // 1. 填寫基本資料：月收入 40,000（DBR 22 上限 88 萬），申貸 30 萬信貸
-    // 社外債務月繳 6,000 元，社外無擔保負債總餘額 60 萬（合計無擔保 90 萬 > 88 萬）
+    // 1. 填寫基本資料：月收入 40,000，申貸 30 萬信貸
+    // 社外債務月繳 6,000 元，社外無擔保負債總餘額 60 萬
+    // → 最高 A 級 20 倍 80 萬 − 60 萬 = 可貸至多 20 萬 < 申貸 30 萬
     await fillForm(page, {
       income: 40000,
       age: 35,
@@ -1159,12 +1158,13 @@ test.describe('場景 13-18：實務進階', () => {
     );
     console.log('  → 社外無擔保負債總餘額草稿保存與千分位還原成功');
 
-    // 3. 執行試算，驗證觸發 DBR 22 倍否決
+    // 3. 執行試算，驗證社外餘額扣減可貸額度並標示額度超限
     await page.locator('#btnCalc').click();
-    const status = await page.locator('#resStatus').innerText();
-    expect(status).toContain('不予核貸');
-    expect(status).toContain('22 倍');
-    console.log('  → 社外無擔保負債總餘額成功觸發 DBR 22 倍否決');
+    const limitText = await page.locator('#resLimit').innerText();
+    const limitVal = parseInt(limitText.replace(/,/g, '')) || 0;
+    expect(limitVal).toBeLessThanOrEqual(200000);
+    await expect(page.locator('#verdictText')).toHaveText('額度超限');
+    console.log(`  → 社外無擔保負債總餘額扣減可貸額度：可貸 ${limitText} 元`);
   });
 
   test('㉛ 評等等級與建議作業流程說明對齊（C 級評等顯示 C 級流程）', async ({
@@ -1183,5 +1183,36 @@ test.describe('場景 13-18：實務進階', () => {
     const triage = await page.locator('#verdictTriage').innerText();
     expect(triage).toContain(`${grade} 級`);
     console.log(`  → 評等結果 (${grade} 級) 與建議流程標籤精準對齊：${triage}`);
+  });
+
+  test('㉜ 申貸超過可貸額度（但月負擔未超限）→ 必須標示額度超限，不可顯示 ✅', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    // 月收 4 萬、社外無擔保餘額 20 萬、申貸 60 萬 7 年：月負擔僅約 22%，
+    // 但無擔保額度上限（評級倍數 × 月收 − 既有餘額）低於 60 萬
+    await fillForm(page, {
+      income: 40000,
+      age: 40,
+      loan: 600000,
+      years: 7,
+      rate: 3,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('0');
+    await page.locator('#external_unsecured_debt').fill('200000');
+    await page.locator('#btnCalc').click();
+
+    const limitText = await page.locator('#resLimit').innerText();
+    const limitVal = parseInt(limitText.replace(/,/g, '')) || 0;
+    expect(limitVal).toBeLessThan(600000);
+    await expect(page.locator('#verdictText')).toHaveText('額度超限');
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('超過可貸額度');
+    expect(status).not.toContain('✅');
+    console.log(`  → 申貸 60 萬 > 可貸 ${limitText} 元，正確標示：${status}`);
   });
 });

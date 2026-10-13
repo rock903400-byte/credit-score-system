@@ -959,18 +959,18 @@ test('擔保品12 >7年 不觸發此規則（由規則④處理）', () => {
     '不應觸發12規則，got:' + v.join(';')
   );
 });
-test('源碼：19 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人、收支赤字否決、DBR 22倍否決）', () => {
+test('源碼：18 條否決規則（含擔保品12、年限30年、擔保放款新規則、土地上限、抵押權120%、第三人保證人、收支赤字否決；DBR 22 倍不適用儲互社已移除）', () => {
   const src = fs.readFileSync(__dirname + '/core.js', 'utf8');
   const vf = src.substring(
     src.indexOf('function applyRegulatoryVetoes'),
     src.indexOf('function determineGrade')
   );
   assert(
-    (vf.match(/vetoes\.push/g) || []).length === 19,
+    (vf.match(/vetoes\.push/g) || []).length === 18,
     'got:' + (vf.match(/vetoes\.push/g) || []).length
   );
 });
-test('月薪 3 萬申請 70 萬純信用借款 → 觸發第 19 條 DBR 22 倍否決', () => {
+test('月薪 3 萬申請 70 萬純信用借款 → 不否決（DBR 22 倍不適用儲互社），額度受評級倍數上限約束', () => {
   const i = {
     income: 30000,
     age: 35,
@@ -984,12 +984,11 @@ test('月薪 3 萬申請 70 萬純信用借款 → 觸發第 19 條 DBR 22 倍�
     shares: 50000,
   };
   const v = ARV(i).vetoes;
-  assert(
-    v.some((x) => x.includes('22 倍')),
-    '未觸發 22 倍否決，got:' + v.join(';')
-  );
+  assert(v.length === 0, '不應否決，got:' + v.join(';'));
+  // A 級 20 倍 × 3 萬 = 60 萬 < 申貸 70 萬 → 由「額度超限」提示處理，不是否決
+  assert(ALC(i, Infinity, 'A') === 600000, 'got:' + ALC(i, Infinity, 'A'));
 });
-test('月薪 3 萬申請 50 萬純信用借款但已有外部無擔保負債 20 萬 → 合計 70 萬觸發 DBR 22 倍否決', () => {
+test('月薪 3 萬、整併貸款餘額 20 萬 → A 級可貸 40 萬（20 倍扣除既有無擔保餘額），不否決', () => {
   const i = {
     income: 30000,
     age: 35,
@@ -1004,12 +1003,10 @@ test('月薪 3 萬申請 50 萬純信用借款但已有外部無擔保負債 20 
     additionalLoans: [{ monthly: 0, balance: 200000, years: 0, rate: 0 }],
   };
   const v = ARV(i).vetoes;
-  assert(
-    v.some((x) => x.includes('22 倍')),
-    '未觸發 22 倍否決'
-  );
+  assert(v.length === 0, '不應否決，got:' + v.join(';'));
+  assert(ALC(i, Infinity, 'A') === 400000, 'got:' + ALC(i, Infinity, 'A'));
 });
-test('不動產擔保與足額股金借款不受 DBR 22 倍限制', () => {
+test('不動產擔保與足額股金借款不受無擔保月薪倍數上限約束', () => {
   const i1 = {
     income: 30000,
     age: 35,
@@ -1027,10 +1024,9 @@ test('不動產擔保與足額股金借款不受 DBR 22 倍限制', () => {
     appraisalAge: 2,
     shares: 50000,
   };
-  const v1 = ARV(i1).vetoes;
   assert(
-    !v1.some((x) => x.includes('22 倍')),
-    '不動產擔保不應觸發 DBR 22 否決'
+    ALC(i1, Infinity, 'D') === ALC(i1, Infinity, 'A'),
+    '不動產擔保額度不應隨評級倍數改變'
   );
 
   const i2 = {
@@ -1045,10 +1041,9 @@ test('不動產擔保與足額股金借款不受 DBR 22 倍限制', () => {
     collateral: '12',
     shares: 1000000,
   };
-  const v2 = ARV(i2).vetoes;
   assert(
-    !v2.some((x) => x.includes('22 倍')),
-    '足額股金借款不應觸發 DBR 22 否決'
+    ALC(i2, Infinity, 'D') === 1000000,
+    '足額股金借款額度應為股金，got:' + ALC(i2, Infinity, 'D')
   );
 });
 test('第三人擔保品無保證人 → 否決（辦法第 14 條）', () => {
@@ -1889,7 +1884,7 @@ test('getEffectiveIncome：依據收入型態折算實質有效月收入', () =>
   assert(GEI({ income: 0, incomeStability: 9 }) === 0, '0 income');
 });
 
-test('所得折成連動 DBR 22 倍否決線：申報月薪 4 萬現金收入（實質 2 萬）申請 50 萬觸發否決', () => {
+test('所得折成連動無擔保月薪倍數上限：申報月薪 4 萬現金收入（實質 2 萬）A 級可貸 40 萬', () => {
   const inp = {
     income: 40000,
     age: 35,
@@ -1899,7 +1894,7 @@ test('所得折成連動 DBR 22 倍否決線：申報月薪 4 萬現金收入（
     internalMonthly: 0,
     internalBalance: 0,
     proposedLoan: 500000,
-    incomeStability: 1, // 現金收入 50% 折成 → 實質月入 20,000 元 → DBR 22 上限 440,000 元
+    incomeStability: 1, // 現金收入 50% 折成 → 實質月入 20,000 元 → A 級 20 倍上限 400,000 元
     tenure: 4,
     interaction: 10,
     jcic: '10',
@@ -1907,11 +1902,10 @@ test('所得折成連動 DBR 22 倍否決線：申報月薪 4 萬現金收入（
     collateral: '0',
     shares: 50000,
   };
-  const res = ARV(inp);
-  assert(
-    res.vetoes.some((v) => v.includes('22 倍上限') || v.includes('DBR')),
-    '應觸發 DBR 22 否決，got: ' + res.vetoes.join('; ')
-  );
+  const cashCap = ALC(inp, Infinity, 'A');
+  const salaryCap = ALC({ ...inp, incomeStability: 9 }, Infinity, 'A');
+  assert(cashCap === 400000, '現金收入 got:' + cashCap);
+  assert(salaryCap === 800000, '固定月薪 got:' + salaryCap);
 });
 
 test('所得折成連動 70% 負債比否決線：非固定收入受實質負債比約束', () => {
@@ -2197,7 +2191,7 @@ test('債務不詳的加分低於任何可接受（負債比 < 65%）的如實�
 });
 
 console.log('\n── 授信優化與防呆測試 (5) ──');
-test('社外無擔保負債總餘額獨立計算：月薪 3 萬申貸 30 萬＋社外餘額 40 萬（月付 8000）合計 70 萬觸發 DBR 22 否決', () => {
+test('社外無擔保負債總餘額獨立計算：月薪 3 萬、社外餘額 40 萬（月付 8000）→ A 級可貸 20 萬，不否決', () => {
   const inp = {
     income: 30000,
     age: 35,
@@ -2212,14 +2206,13 @@ test('社外無擔保負債總餘額獨立計算：月薪 3 萬申貸 30 萬＋�
     shares: 50000,
   };
   const res = ARV(inp);
-  assert(
-    res.vetoes.some((v) => v.includes('22 倍') || v.includes('無擔保負債總額')),
-    '應觸發 DBR 22 否決，got: ' + res.vetoes.join('; ')
-  );
+  assert(res.vetoes.length === 0, '不應否決，got: ' + res.vetoes.join('; '));
+  // 20 倍 × 3 萬 − 社外餘額 40 萬 = 20 萬；社外月付 8000 不得當餘額扣除
+  assert(ALC(inp, Infinity, 'A') === 200000, 'got:' + ALC(inp, Infinity, 'A'));
 });
 
 test('未帶 externalUnsecuredDebt 視同 0，不得拿社外月付當無擔保餘額', () => {
-  // 社外月付 2 萬若被誤當餘額，DBR 天花板會少 2 萬、申貸 109 萬會被 22 倍線否決
+  // 社外月付 2 萬若被誤當餘額，無擔保額度上限會平白少 2 萬
   const inp = {
     income: 50000,
     age: 35,
