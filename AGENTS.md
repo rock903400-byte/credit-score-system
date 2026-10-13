@@ -79,10 +79,14 @@
   - `maturity > 75` → hard veto (in `applyRegulatoryVetoes`).
   - `maturity > 70` → –10.
   - `maturity > 65` → –5.
+- **規則來源是專案根目錄的 `法規彙編.docx`**（`pandoc -t plain` 可讀）。改上限前先查條文：放款實施要點第 2 條（擔保放款＝超過 7 年）、第 4-1 條（無擔保股金＋100 萬／擔保每人 1,000 萬）、擔保放款辦法第 10～12 條（成數、120%、10 年重鑑）。
 - Credit ceiling (`applyLegalCeiling`):
-  - `collateral='10'` (足額不動產抵押) → `min(10 M, appraisal × LTV)`.
-  - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
-  - otherwise → `min(shares + 1 M, effective_income × grade_dbr_multiplier - existing_unsecured_balance + secured_shares_part)`.
+  - `collateral='10'` (足額不動產抵押) → `getSecuredCeilings()`：`min(市價淨值 × getLtvRatio(), 10 M − 本社超過 7 年餘額)`。
+  - `collateral='12'` (足額股金內借款) → `min(shares, getUnsecuredBylawCap())`（屬 7 年以內無擔保：連同本社 7 年以內貸款受股金＋100 萬限制，1,000 萬不適用）. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
+  - otherwise → `min(getUnsecuredBylawCap() = shares + 1 M − 本社 7 年以內餘額, effective_income × grade_dbr_multiplier - existing_unsecured_balance + secured_shares_part)`.
+- **本社既有貸款依期限分擔保／無擔保**：`internalBalance` 仍是本社貸款**總**餘額；`internalSecuredBalance`（`#internal_secured_balance`「其中期限超過 7 年」）是擔保部分。一律透過 `getInternalSecuredBalance()` / `getInternalUnsecuredBalance()` 取用。無擔保部分進 ② 股金＋100 萬與月薪倍數上限；擔保部分進 ③ 每人累計 1,000 萬（只對 `collateral='10'`）。期限剛好 7 年屬無擔保（要點第 2 條是「超過七年」）。
+- **85% 成數要「住宅/商業/文教區」且「鑑價報告 ≤ 1 年」**，一律走 `getLtvRatio()`，不要直接查 `LTV_RATIOS[zone]`。`appraisalAge` 留白時 `parseInputs()` 給 `null`（＝未填，視為逾一年）——不要再 `|| 0`，否則留白會被當成一年內而多貸。`appraisalValue` 是**市價淨值**（已扣土地增值稅），不是鑑定總價。
+- **否決訊息措辭被 UI 比對**：`renderSuggestions()` 用 `veto.includes('無擔保借款總額' | '自然人擔保放款' | '成數(LTV)' | …)` 對應改善建議。改 `applyRegulatoryVetoes` 的訊息文字時要同步改這些比對字串。
 - **社外無擔保負債總餘額** `externalUnsecuredDebt`（`#external_unsecured_debt`，存量）用於無擔保月薪倍數上限；未帶視同 0。`existingDebt` 是**社外月付**，只進 DSR/DTI，絕不可當餘額使用。`simulate_*.js` 產生器帶 `0 ~ income×25` 以涵蓋各評等倍數上限兩側。
 - **收入型態折數** `INCOME_STABILITY_HAIRCUT`（9→100%、6→85%、3→70%、1→50%，取用一律走 `getHaircutRatio()`）：`getEffectiveIncome()` 的折後收入**只**用於 70% 否決線、收支與額度（含月薪倍數上限）。**評分的 DSR 分用申報收入**——收入品質已由 stability 子項扣分，改用折後收入會讓同一件事扣兩次分（現金收入社員曾因此 C→D、額度只剩固定月薪者的 27%）。守護：`test.js`「收入型態在評分只扣一次」。
 - 無擔保授信 DBR 階梯：A 級 20 倍、B 級 15 倍、C 級 12 倍、D 級 8 倍月薪（D 級強化提示保證人徵提）。

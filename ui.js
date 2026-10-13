@@ -235,6 +235,7 @@ function parseInputs() {
     externalUnsecuredDebt: parseAmount('external_unsecured_debt'),
     internalMonthly: parseAmount('internal_monthly'),
     internalBalance: parseAmount('internal_balance'),
+    internalSecuredBalance: parseAmount('internal_secured_balance'),
     proposedLoan: parseAmount('loan'),
     years: parseInt($('years').value) || 0,
     ratePercent: parseFloat($('rate').value) || 0,
@@ -258,7 +259,11 @@ function parseInputs() {
     mortgageAmount: parseAmount('mortgageAmount'),
     collateralZone: $('collateralZone') ? $('collateralZone').value : 'other',
     houseAge: parseInt($('houseAge').value) || 0,
-    appraisalAge: parseInt($('appraisalAge').value) || 0,
+    // 留白＝未填，不可當成 0 年：否則會被當成一年內鑑價而適用 85% 成數
+    appraisalAge:
+      $('appraisalAge').value.trim() === ''
+        ? null
+        : parseInt($('appraisalAge').value) || 0,
     isSelfOccupied: !!($('selfOccupied')?.checked || false),
     guarantorCount: parseInt($('guarantor_count').value) || 0,
     guarantors: readGuarantorRows(),
@@ -372,8 +377,10 @@ function clearAllFieldErrors() {
 const FIELD_ERROR_ID_MAP = {
   income: 'income',
   existing_debt: 'existing_debt',
+  external_unsecured_debt: 'external_unsecured_debt',
   internal_monthly: 'internal_monthly',
   internal_balance: 'internal_balance',
+  internal_secured_balance: 'internal_secured_balance',
   loan: 'loan',
   shares: 'shares',
   years: 'years',
@@ -520,8 +527,10 @@ function getFirstErrorElement(fieldErrors) {
     'dependents',
     'dependentExpense',
     'existing_debt',
+    'external_unsecured_debt',
     'internal_monthly',
     'internal_balance',
+    'internal_secured_balance',
     'appraisalValue',
     'houseAge',
     'appraisalAge',
@@ -1684,14 +1693,12 @@ function renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes) {
             '若要過件，須降低申貸金額或增加借款人月收入，以降低核貸後總負債比至 70% 以下';
         } else if (veto.includes('未成年')) {
           text = '若要過件，未成年借款額度須調降至股金餘額以內';
-        } else if (
-          veto.includes('信用借款總額') ||
-          veto.includes('信用借款法定上限')
-        ) {
+        } else if (veto.includes('無擔保借款總額')) {
           text =
-            '若要過件，信用借款額度須調降至股金 + 100 萬以下，或提供足額不動產擔保';
-        } else if (veto.includes('自然人放款')) {
-          text = '若要過件，申請金額須調降至自然人放款上限（1,000 萬元）以內';
+            '若要過件，本次借款加上本社 7 年以內貸款餘額須在股金 + 100 萬以內，或提供足額不動產擔保';
+        } else if (veto.includes('自然人擔保放款')) {
+          text =
+            '若要過件，本次擔保借款加上本社超過 7 年貸款餘額須在 1,000 萬元以內';
         } else if (veto.includes('不動產抵押為擔保')) {
           text =
             '若要過件，年限超過 7 年須提供足額不動產擔保，或將年限縮減至 7 年以下';
@@ -1714,7 +1721,7 @@ function renderSuggestions(scoreDetail, input, isVetoed, grade, vetoes) {
           text = '若要過件，還款到期年齡不得超過 75 歲，須縮短年限或更換借款人';
         } else if (veto.includes('成數(LTV)')) {
           text =
-            '若要過件，擔保放款金額不得超過鑑估價值之法定成數上限，須調降申貸金額或提高鑑估值';
+            '若要過件，擔保放款金額不得超過市價淨值 × 成數（《擔保放款辦法》第 10 條），須調降申貸金額；住宅/商業/文教區附一年內鑑價報告可適用 85%';
         } else if (veto.includes('屋齡') && veto.includes('年限上限')) {
           text =
             '若要過件，屋齡超過 20 年之擔保放款年限上限為 20 年，須縮短貸款年限';
@@ -1934,8 +1941,12 @@ function renderPrintReport(result) {
     extLoans.length > 0
       ? `／其餘 ${extLoans.length} 筆既有貸款月付合計 ${extMonthlySumP.toLocaleString('zh-TW')} 元、餘額合計 ${extBalanceSumP.toLocaleString('zh-TW')} 元`
       : '';
+  const securedNote =
+    getInternalSecuredBalance(input) > 0
+      ? `，其中超過 7 年（擔保）${getInternalSecuredBalance(input).toLocaleString('zh-TW')} 元`
+      : '';
   $('p_internal').innerText =
-    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${extNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
+    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${securedNote}${extNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
   const pmtFormatted = Math.round(result.newLoanMonthlyPmt || 0).toLocaleString(
     'zh-TW'
   );
@@ -1983,10 +1994,10 @@ function renderPrintReport(result) {
     if (input.collateral === '10') {
       const appraisal = input.appraisalValue || 0;
       const zone = input.collateralZone || 'other';
-      const ltvPct = (LTV_RATIOS[zone] || LTV_RATIOS.other) * 100;
-      const ltvCeiling = Math.floor(
-        appraisal * (LTV_RATIOS[zone] || LTV_RATIOS.other)
-      );
+      const ltvPct = getLtvRatio(input) * 100;
+      const ltvCeiling = Math.floor(appraisal * getLtvRatio(input));
+      const appraisalAgeText =
+        input.appraisalAge == null ? '未填' : `${input.appraisalAge} 年`;
       const zoneText =
         zone === 'residential_commercial_educational'
           ? '住宅/商業/文教區'
@@ -1994,14 +2005,14 @@ function renderPrintReport(result) {
       const kind = input.collateralKind || 'building';
       const ageNote =
         kind === 'land'
-          ? `（土地擔保品 / 鑑價報告 ${input.appraisalAge || 0} 年）`
+          ? `（土地擔保品 / 鑑價報告 ${appraisalAgeText}）`
           : `（屋齡 ${input.houseAge || 0} 年${
               (input.houseAge || 0) <= 20
                 ? input.isSelfOccupied
                   ? '，自用住宅'
                   : '，非自用住宅'
                 : ''
-            } / 鑑價報告 ${input.appraisalAge || 0} 年）`;
+            } / 鑑價報告 ${appraisalAgeText}）`;
       const mortgageNote =
         input.mortgageAmount > 0
           ? ` / 抵押權設定金額 ${input.mortgageAmount.toLocaleString('zh-TW')} 元`
@@ -2011,7 +2022,7 @@ function renderPrintReport(result) {
           ? ' / 擔保品為他人(第三人)名下'
           : '';
       $('p_collateral_detail').innerText =
-        `鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
+        `市價淨值 ${appraisal.toLocaleString('zh-TW')} 元 / ${zoneText} / 貸款成數(LTV) ${ltvPct}% / 上限 ${ltvCeiling.toLocaleString('zh-TW')} 元` +
         ageNote +
         mortgageNote +
         ownerNote;
@@ -2416,6 +2427,7 @@ const FORM_DRAFT_FIELDS = [
   'external_unsecured_debt',
   'internal_monthly',
   'internal_balance',
+  'internal_secured_balance',
   'loan',
   'years',
   'rate',
@@ -2574,8 +2586,10 @@ function loadFormDraft() {
     [
       'income',
       'existing_debt',
+      'external_unsecured_debt',
       'internal_monthly',
       'internal_balance',
+      'internal_secured_balance',
       'loan',
       'shares',
       'appraisalValue',
@@ -2625,6 +2639,7 @@ function resetFormToDefaults() {
     external_unsecured_debt: '',
     internal_monthly: '',
     internal_balance: '',
+    internal_secured_balance: '',
     loan: '',
     years: '',
     rate: '',
@@ -2765,6 +2780,7 @@ const SAMPLE_CASE = {
   external_unsecured_debt: '0',
   internal_monthly: '0',
   internal_balance: '0',
+  internal_secured_balance: '0',
   loan: '300000',
   years: '5',
   rate: '3',
@@ -2835,6 +2851,7 @@ function loadSampleCase() {
     'existing_debt',
     'internal_monthly',
     'internal_balance',
+    'internal_secured_balance',
     'loan',
     'shares',
     'livingExpense',
@@ -2877,6 +2894,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'external_unsecured_debt',
     'internal_monthly',
     'internal_balance',
+    'internal_secured_balance',
     'loan',
     'shares',
     'livingExpense',

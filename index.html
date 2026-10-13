@@ -224,6 +224,35 @@
                 ></span>
                 <span class="error-msg"></span>
               </div>
+              <div class="form-group">
+                <label for="internal_secured_balance"
+                  >其中：期限超過 7 年的貸款餘額 (元)
+                  <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
+                    >ⓘ<span class="tooltip-text"
+                      >放款實施要點第 2
+                      條：擔保放款係指「超過七年至三十年以下」設定抵押權之放款，所以期限超過
+                      7 年的貸款就是擔保放款（房貸）。這部分不佔用「股金＋100
+                      萬」無擔保上限，但計入自然人擔保放款每人 1,000
+                      萬上限（同要點第 4-1 條）。</span
+                    ></span
+                  ><br />
+                  <small style="color: var(--text-muted); font-weight: normal"
+                    >(看本社帳上每筆貸款的期限；沒有就填 0)</small
+                  >
+                </label>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="internal_secured_balance"
+                  placeholder="0"
+                  min="0"
+                />
+                <span
+                  class="input-preview"
+                  id="preview_internal_secured_balance"
+                ></span>
+                <span class="error-msg"></span>
+              </div>
               <div class="form-group form-group-checkbox">
                 <label>
                   <input type="checkbox" id="consolidationMode" />
@@ -514,12 +543,16 @@
                 style="display: none"
               >
                 <label for="appraisalValue">
-                  擔保品鑑估價值 (元)
+                  擔保品市價淨值 (元)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
-                      >依擔保放款辦法第 10 條，放款上限為鑑估價值 ×
-                      貸款成數(LTV) 比率</span
+                      >依擔保放款辦法第 10
+                      條，放款上限為「鑑定總價扣除土地增值稅後之市價淨值」×
+                      貸款成數(LTV)</span
                     ></span
+                  ><br />
+                  <small style="color: var(--text-muted); font-weight: normal"
+                    >(填鑑價報告上的市價淨值，已扣除土地增值稅；不是鑑定總價)</small
                   >
                 </label>
                 <input
@@ -564,13 +597,15 @@
                   都市計畫區分
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
                     >ⓘ<span class="tooltip-text"
-                      >住宅/商業/文教區 貸款成數 85%，其他 70%</span
+                      >擔保放款辦法第 10
+                      條：都市計畫內住宅/商業/文教區且附近一年內鑑價報告者
+                      85%，其他 70%</span
                     ></span
                   >
                 </label>
                 <select id="collateralZone">
                   <option value="residential_commercial_educational">
-                    住宅區、商業區、文教區 (貸款成數 85%)
+                    住宅區、商業區、文教區 (85%，須附一年內鑑價報告)
                   </option>
                   <option value="other" selected>
                     其他區段 (貸款成數 70%)
@@ -634,7 +669,11 @@
                 <label for="appraisalAge">
                   鑑價報告年數 (年)
                   <span class="tooltip-icon" tabindex="0" aria-label="法規說明"
-                    >ⓘ<span class="tooltip-text">逾 10 年須重新鑑價</span></span
+                    >ⓘ<span class="tooltip-text"
+                      >一年內（填 0 或 1）住宅/商業/文教區才適用 85% 成數（第 10
+                      條）；逾 10 年須重新鑑價（第 12
+                      條）。未填視為逾一年。</span
+                    ></span
                   >
                 </label>
                 <input
@@ -1152,7 +1191,7 @@
             <tr id="p_collateral_detail_row" style="display: none">
               <th>
                 擔保品鑑估資訊<br /><small
-                  >(鑑估價值 / 區分 / 貸款成數(LTV)/上限)</small
+                  >(市價淨值 / 區分 / 貸款成數(LTV)/上限)</small
                 >
               </th>
               <td id="p_collateral_detail"></td>

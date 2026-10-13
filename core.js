@@ -52,13 +52,65 @@ function getEffectiveIncome(input) {
   return input.income * getHaircutRatio(input);
 }
 
-// 擔保放款 LTV 上限（擔保放款辦法第 10、10-1 條）
+// 擔保放款 LTV 上限（擔保放款辦法第 10 條；計算基礎為扣除土地增值稅後之市價淨值）
 const LTV_RATIOS = {
-  residential_commercial_educational: 0.85, // 都市計畫住宅區、商業區、文教區
-  other: 0.7, // 其他區段
+  residential_commercial_educational: 0.85, // 都市計畫住宅區、商業區、文教區，且附近一年內鑑價報告
+  other: 0.7, // 其他區段，或鑑價報告逾一年／未填
 };
+const RECENT_APPRAISAL_YEARS = 1; // 適用 85% 須「近一年內」鑑價報告（第 10 條）
 const MORTGAGE_REGISTRATION_RATIO = 1.2; // 抵押權設定 ≥ 放款金額 × 120%（第 11 條）
 const COLLATERAL_REAPPRAISAL_YEARS = 10; // 鑑價報告逾 10 年須重鑑（第 12 條）
+
+// 住宅/商業/文教區但缺一年內鑑價報告——只能適用 70%，UI 據此提示專職補填
+function isZoneAwaitingRecentAppraisal(input) {
+  return (
+    input.collateralZone === 'residential_commercial_educational' &&
+    !(
+      input.appraisalAge != null && input.appraisalAge <= RECENT_APPRAISAL_YEARS
+    )
+  );
+}
+
+function getLtvRatio(input) {
+  return input.collateralZone === 'residential_commercial_educational' &&
+    !isZoneAwaitingRecentAppraisal(input)
+    ? LTV_RATIOS.residential_commercial_educational
+    : LTV_RATIOS.other;
+}
+
+// 本社既有貸款依期限區分：擔保放款係指「超過七年至三十年以下」之放款（放款實施要點第 2 條），其餘為無擔保。
+// 專職只需看帳上期限，不必判斷擔保品性質；期限剛好 7 年者屬無擔保。
+function getInternalSecuredBalance(input) {
+  return Math.min(
+    input.internalSecuredBalance || 0,
+    input.internalBalance || 0
+  );
+}
+
+function getInternalUnsecuredBalance(input) {
+  return (input.internalBalance || 0) - getInternalSecuredBalance(input);
+}
+
+// 自然人無擔保可貸上限：股金 ＋ 100 萬，扣除本社 7 年以內貸款餘額（放款實施要點第 4-1 條第 1 款）
+function getUnsecuredBylawCap(input) {
+  return Math.max(
+    0,
+    (input.shares || 0) +
+      CREDIT_FLOOR_PER_SHARE -
+      getInternalUnsecuredBalance(input)
+  );
+}
+
+// 擔保放款可貸上限：市價淨值 × 成數（擔保放款辦法第 10 條）與
+// 每人累計 1,000 萬扣除本社超過 7 年貸款餘額（放款實施要點第 4-1 條第 3 款）取小
+function getSecuredCeilings(input) {
+  const ltvCap = Math.floor((input.appraisalValue || 0) * getLtvRatio(input));
+  const personCap = Math.max(
+    0,
+    NATURAL_PERSON_CAP - getInternalSecuredBalance(input)
+  );
+  return { ltvCap, personCap, ceiling: Math.min(ltvCap, personCap) };
+}
 
 // 擔保品類型分數對照（依《擔保放款辦法》第 3 條分類）
 // 12 = 足額股金內借款（無 LTV 限制，額度受股金管制，流動性最佳）
@@ -227,6 +279,10 @@ function validateInputs(input) {
       errors.push(`「${f}」不可為負值`);
     }
   }
+  if (input.internalSecuredBalance < 0)
+    errors.push('本社超過 7 年貸款餘額不可為負值');
+  else if (input.internalSecuredBalance > (input.internalBalance || 0))
+    errors.push('本社超過 7 年貸款餘額不可大於本社現有貸款總餘額');
   if (input.ratePercent > 20) errors.push('年利率 > 20% 異常，請確認');
   if (input.years > 50) errors.push('貸款年限過長（> 50 年），請確認');
   // [FIX 2.1] 年齡 <= 0 直接擋下（避免留白 / 負數繞過所有年齡控管）
@@ -283,9 +339,13 @@ function validateInputsByField(input) {
     setErr('internal_monthly', '本社月付不可為負值');
   if (input.internalBalance < 0)
     setErr('internal_balance', '本社餘額不可為負值');
+  if (input.internalSecuredBalance < 0)
+    setErr('internal_secured_balance', '不可為負值');
+  else if (input.internalSecuredBalance > (input.internalBalance || 0))
+    setErr('internal_secured_balance', '不可大於本社現有貸款總餘額');
   if (input.shares < 0) setErr('shares', '股金不可為負值');
   if (input.ratePercent < 0) setErr('rate', '年利率不可為負值');
-  if (input.appraisalValue < 0) setErr('appraisalValue', '鑑估價值不可為負值');
+  if (input.appraisalValue < 0) setErr('appraisalValue', '市價淨值不可為負值');
   if (input.houseAge < 0) setErr('houseAge', '屋齡不可為負值');
   if (input.appraisalAge < 0) setErr('appraisalAge', '鑑價屋齡/年分不可為負值');
   if (input.livingExpense < 0) setErr('livingExpense', '生活支出不可為負值');
@@ -567,22 +627,24 @@ function applyRegulatoryVetoes(input) {
     );
   }
 
-  // ② [FIX 1.4] 信用借款法定上限（含現有本社餘額）
+  // ② 自然人無擔保放款上限：股金結餘 ＋ 100 萬（放款實施要點第 4-1 條第 1 款）
+  //    不動產抵押以外的借款（含股金內借款）都屬 7 年以內無擔保，連同本社 7 年以內貸款合計；
+  //    超過 7 年的房貸屬擔保放款，不佔用此額度
   const creditCeiling = input.shares + CREDIT_FLOOR_PER_SHARE;
-  const totalCreditExposure = input.proposedLoan + input.internalBalance;
-  if (
-    (input.collateral === '0' || input.collateral === '5') &&
-    totalCreditExposure > creditCeiling
-  ) {
+  const internalUnsecured = getInternalUnsecuredBalance(input);
+  const totalCreditExposure = input.proposedLoan + internalUnsecured;
+  if (input.collateral !== '10' && totalCreditExposure > creditCeiling) {
     vetoes.push(
-      `信用借款總額（${totalCreditExposure.toLocaleString('zh-TW')} 元）超過法定上限（股金 ${input.shares.toLocaleString('zh-TW')} 元 ＋ 100 萬 ＝ ${creditCeiling.toLocaleString('zh-TW')} 元）`
+      `無擔保借款總額（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社 7 年以內貸款餘額 ${internalUnsecured.toLocaleString('zh-TW')} 元 ＝ ${totalCreditExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條無擔保上限（股金 ${input.shares.toLocaleString('zh-TW')} 元 ＋ 100 萬 ＝ ${creditCeiling.toLocaleString('zh-TW')} 元）`
     );
   }
 
-  // ③ 自然人放款絕對上限
-  if (input.proposedLoan > NATURAL_PERSON_CAP) {
+  // ③ 自然人擔保放款每人累計上限 1,000 萬（放款實施要點第 4-1 條第 3 款）
+  const internalSecured = getInternalSecuredBalance(input);
+  const totalSecuredExposure = input.proposedLoan + internalSecured;
+  if (input.collateral === '10' && totalSecuredExposure > NATURAL_PERSON_CAP) {
     vetoes.push(
-      `申請金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過自然人放款法定上限 ${(NATURAL_PERSON_CAP / 10000).toLocaleString('zh-TW')} 萬元`
+      `自然人擔保放款累計（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社超過 7 年貸款餘額 ${internalSecured.toLocaleString('zh-TW')} 元 ＝ ${totalSecuredExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條上限 ${(NATURAL_PERSON_CAP / 10000).toLocaleString('zh-TW')} 萬元`
     );
   }
 
@@ -626,16 +688,18 @@ function applyRegulatoryVetoes(input) {
     vetoes.push(`還款到期年齡 ${ageAtMaturity} 歲超過 ${AGE_HARD_VETO} 歲上限`);
   }
 
-  // ⑩ 擔保放款：貸款金額不得超過鑑估價值 × 貸款成數(LTV)上限（辦法第 10、10-1 條）
+  // ⑩ 擔保放款：貸款金額不得超過市價淨值 × 貸款成數(LTV)上限（擔保放款辦法第 10 條）
   if (input.collateral === '10') {
     const appraisal = input.appraisalValue || 0;
-    const zone = input.collateralZone || 'other';
-    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
+    const ltv = getLtvRatio(input);
     const ltvCeiling = Math.floor(appraisal * ltv);
     if (input.proposedLoan > ltvCeiling) {
-      const extraHint = appraisal === 0 ? '（請確認是否未填寫鑑估價值）' : '';
+      let extraHint = '';
+      if (appraisal === 0) extraHint = '（請確認是否未填寫市價淨值）';
+      else if (isZoneAwaitingRecentAppraisal(input))
+        extraHint = '（住宅/商業/文教區須附一年內鑑價報告才適用 85%）';
       vetoes.push(
-        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過鑑估價值 ${appraisal.toLocaleString('zh-TW')} 元 × 貸款成數(LTV) ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元${extraHint}`
+        `擔保放款金額（${input.proposedLoan.toLocaleString('zh-TW')} 元）超過市價淨值 ${appraisal.toLocaleString('zh-TW')} 元 × 貸款成數(LTV) ${(ltv * 100).toFixed(0)}% ＝ ${ltvCeiling.toLocaleString('zh-TW')} 元，不符《擔保放款辦法》第 10 條${extraHint}`
       );
     }
     // ⑩-1 抵押權設定金額 ≥ 放款金額 × 120%（辦法第 11 條）
@@ -820,14 +884,13 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
   let ceiling;
   const effectiveIncome = getEffectiveIncome(input);
   if (input.collateral === '10') {
-    const appraisal = input.appraisalValue || 0;
-    const zone = input.collateralZone || 'other';
-    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
-    ceiling = Math.min(NATURAL_PERSON_CAP, Math.floor(appraisal * ltv));
+    ceiling = getSecuredCeilings(input).ceiling;
   } else if (input.collateral === '12') {
-    ceiling = Math.min(NATURAL_PERSON_CAP, input.shares);
+    // 股金內借款屬 7 年以內無擔保放款：以股金為限，且連同本社 7 年以內貸款不超過股金 ＋ 100 萬
+    // （第 4-1 條第 1 款）；1,000 萬是擔保放款上限，不適用
+    ceiling = Math.min(input.shares, getUnsecuredBylawCap(input));
   } else {
-    // 無擔保放款：章程上限 (股金 + 100 萬) 與評級月薪倍數上限取小（未給評等時用最寬的 A 級）
+    // 無擔保放款：第 4-1 條上限 (股金 + 100 萬 − 本社 7 年以內餘額) 與評級月薪倍數上限取小（未給評等時用最寬的 A 級）
     const dbrMultiplier = GRADE_DBR_LIMITS[grade] ?? GRADE_DBR_LIMITS.A;
     const extBalance = (input.additionalLoans || []).reduce(
       (sum, l) => sum + (l.balance || 0),
@@ -835,7 +898,7 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
     );
     const internalUnsecured = Math.max(
       0,
-      (input.internalBalance || 0) -
+      getInternalUnsecuredBalance(input) -
         (input.collateral === '5' ? input.shares || 0 : 0)
     );
     const totalExistingUnsecured =
@@ -850,8 +913,7 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
       );
       dbrCap = netDbrUnsecuredAvailable + securedSharesPart;
     }
-    const bylawCap = (input.shares || 0) + CREDIT_FLOOR_PER_SHARE;
-    ceiling = Math.min(bylawCap, dbrCap);
+    ceiling = Math.min(getUnsecuredBylawCap(input), dbrCap);
   }
   let limit = Math.min(maxLoanLimit, ceiling);
   if (input.age < 18) {
@@ -895,7 +957,7 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
   );
   const internalUnsecured = Math.max(
     0,
-    (input.internalBalance || 0) -
+    getInternalUnsecuredBalance(input) -
       (input.collateral === '5' ? input.shares || 0 : 0)
   );
   const totalExistingUnsecured =
@@ -906,7 +968,7 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
       ? Math.max(0, effectiveIncome * dbrMultiplier - totalExistingUnsecured) +
         securedSharesPart
       : Infinity;
-  const bylawCap = (input.shares || 0) + CREDIT_FLOOR_PER_SHARE;
+  const bylawCap = getUnsecuredBylawCap(input);
 
   let primaryLimiter = 'dti_pmt';
   let limiterText = `受限於 ${grade} 級 DTI 負債比上限（${Math.round(
@@ -914,21 +976,30 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
   )}%）`;
 
   if (input.collateral === '10') {
-    const appraisal = input.appraisalValue || 0;
-    const zone = input.collateralZone || 'other';
-    const ltv = LTV_RATIOS[zone] || LTV_RATIOS.other;
-    const appraisalCap = Math.min(
-      NATURAL_PERSON_CAP,
-      Math.floor(appraisal * ltv)
-    );
-    if (finalLimit === appraisalCap && appraisalCap < pmtCap) {
-      primaryLimiter = 'appraisal_ltv';
-      limiterText = `受限於擔保品鑑估乘數上限（${(ltv * 100).toFixed(
-        0
-      )}% / ${appraisalCap.toLocaleString('zh-TW')} 元）`;
+    const {
+      ltvCap,
+      personCap,
+      ceiling: securedCap,
+    } = getSecuredCeilings(input);
+    if (finalLimit === securedCap && securedCap < pmtCap) {
+      if (personCap < ltvCap) {
+        primaryLimiter = 'natural_person_cap';
+        limiterText = `受限於自然人擔保放款每人累計 1,000 萬上限（扣除本社超過 7 年貸款餘額後 ${personCap.toLocaleString('zh-TW')} 元）`;
+      } else {
+        primaryLimiter = 'appraisal_ltv';
+        limiterText = `受限於市價淨值 × 貸款成數上限（${(getLtvRatio(input) * 100).toFixed(0)}% / ${ltvCap.toLocaleString('zh-TW')} 元）`;
+        if (isZoneAwaitingRecentAppraisal(input)) {
+          limiterText += '；附一年內鑑價報告可適用 85%';
+        }
+      }
     }
   } else if (input.collateral === '12') {
-    if (finalLimit === input.shares) {
+    if (finalLimit === bylawCap && bylawCap < input.shares) {
+      primaryLimiter = 'bylaw_cap';
+      limiterText = `受限於《放款實施要點》第 4-1 條無擔保上限（股金＋100 萬，扣除本社 7 年以內貸款 / ${bylawCap.toLocaleString(
+        'zh-TW'
+      )} 元）`;
+    } else if (finalLimit === input.shares) {
       primaryLimiter = 'shares';
       limiterText = `受限於足額股金餘額上限（${input.shares.toLocaleString(
         'zh-TW'
@@ -951,7 +1022,7 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
       ).toLocaleString('zh-TW')} 元）`;
     } else if (finalLimit === bylawCap && bylawCap < pmtCap) {
       primaryLimiter = 'bylaw_cap';
-      limiterText = `受限於互助社章程無擔保上限（股金＋100 萬 / ${bylawCap.toLocaleString(
+      limiterText = `受限於《放款實施要點》第 4-1 條無擔保上限（股金＋100 萬，扣除本社 7 年以內貸款 / ${bylawCap.toLocaleString(
         'zh-TW'
       )} 元）`;
     }

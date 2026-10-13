@@ -1215,4 +1215,69 @@ test.describe('場景 13-18：實務進階', () => {
     expect(status).not.toContain('✅');
     console.log(`  → 申貸 60 萬 > 可貸 ${limitText} 元，正確標示：${status}`);
   });
+
+  test('㉝ 本社房貸（超過 7 年）不佔用無擔保上限：房貸 300 萬 + 信貸 10 萬不被第 4-1 條否決', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      income: 60000,
+      age: 40,
+      loan: 100000,
+      years: 5,
+      rate: 3,
+      shares: 200000,
+    });
+    await page.locator('#collateral').selectOption('5');
+    await page.locator('#internal_monthly').fill('15000');
+    await page.locator('#internal_balance').fill('3000000');
+    await page.locator('#internal_secured_balance').fill('3000000');
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).not.toContain('第 4-1 條');
+    expect(status).not.toContain('100 萬');
+    console.log(`  → 本社房貸不佔用無擔保上限：${status.slice(0, 60)}`);
+  });
+
+  test('㉞ 第 10 條：住宅區未填鑑價報告年數 → 只適用 70% 並提示；填一年內 → 85%', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      income: 80000,
+      age: 40,
+      loan: 3000000,
+      years: 20,
+      rate: 2.5,
+      shares: 100000,
+    });
+    await page.locator('#collateral').selectOption('10');
+    await page.locator('#appraisalValue').fill('5000000');
+    await page
+      .locator('#collateralZone')
+      .selectOption('residential_commercial_educational');
+    await page.locator('#houseAge').fill('10');
+    await page.locator('#mortgageAmount').fill('3600000');
+    await page.locator('#btnCalc').click();
+
+    const limitOf = async () =>
+      parseInt(
+        (await page.locator('#resLimit').innerText()).replace(/,/g, '')
+      ) || 0;
+    expect(await limitOf()).toBeLessThanOrEqual(3500000);
+    const reason = await page.locator('#verdictLimitReason').innerText();
+    expect(reason).toContain('一年內鑑價報告');
+
+    await page.locator('#appraisalAge').fill('1');
+    await page.locator('#btnCalc').click();
+    expect(await limitOf()).toBeGreaterThan(3500000);
+    console.log(`  → 一年內鑑價報告才適用 85%：${reason.slice(0, 60)}`);
+  });
 });

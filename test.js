@@ -1451,9 +1451,9 @@ test('不動產上限=1000萬', () => {
     appraisalValue: 10_000_000,
     collateralZone: 'residential_commercial_educational',
     houseAge: 10,
-    appraisalAge: 3,
+    appraisalAge: 1, // 85% 須附一年內鑑價報告（辦法第 10 條）
   };
-  assert(ALC(i, 10_000_000) === 8_500_000);
+  assert(ALC(i, 10_000_000) === 8_500_000, 'got:' + ALC(i, 10_000_000));
 });
 test('股金內借款上限=股金（與規則⑤一致）', () => {
   const i = { collateral: '12', shares: 200000, internalBalance: 0, age: 40 };
@@ -2307,6 +2307,187 @@ test('驗證器阻擋社外無擔保負債總餘額為負值', () => {
 // 偵測日後微調公式時分布劇烈漂移（A 級從 30% 掉到 5% 等）
 // 範圍為「常態合理區間」：小幅漂移通過，劇烈漂移才失敗
 // ============================================================
+console.log('\n── 放款實施要點第 4-1 條與擔保放款辦法第 10 條 (8) ──');
+const LTV_BASE = {
+  income: 80000,
+  age: 40,
+  years: 20,
+  ratePercent: 2.5,
+  existingDebt: 0,
+  internalMonthly: 0,
+  internalBalance: 0,
+  shares: 100000,
+  collateral: '10',
+  collateralKind: 'building',
+  collateralOwner: 'self',
+  isSelfOccupied: true,
+  houseAge: 10,
+  appraisalValue: 5_000_000,
+  collateralZone: 'residential_commercial_educational',
+};
+
+test('第 10 條：85% 成數須「住宅/商業/文教區」且附一年內鑑價報告，否則 70%', () => {
+  const cap = (p) => ALC({ ...LTV_BASE, ...p }, Infinity, 'A');
+  assert(
+    cap({ appraisalAge: 1 }) === 4_250_000,
+    '一年內 got:' + cap({ appraisalAge: 1 })
+  );
+  assert(
+    cap({ appraisalAge: 3 }) === 3_500_000,
+    '3 年 got:' + cap({ appraisalAge: 3 })
+  );
+  assert(cap({}) === 3_500_000, '未填報告年數 got:' + cap({}));
+  assert(
+    cap({ appraisalAge: 1, collateralZone: 'other' }) === 3_500_000,
+    '其他區段 got:' + cap({ appraisalAge: 1, collateralZone: 'other' })
+  );
+});
+
+test('第 10 條：住宅區但鑑價報告 3 年，申貸 400 萬（介於 70%～85%）→ 成數否決並引用條號', () => {
+  const v = ARV({
+    ...LTV_BASE,
+    appraisalAge: 3,
+    proposedLoan: 4_000_000,
+    mortgageAmount: 4_800_000,
+  }).vetoes;
+  assert(
+    v.some((x) => x.includes('成數(LTV)') && x.includes('第 10 條')),
+    'got:' + v.join('; ')
+  );
+});
+
+test('第 4-1 條第 1 款：無擔保上限只計本社 7 年以內貸款；超過 7 年（擔保）的房貸不佔用', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 15000,
+    internalBalance: 3_000_000,
+    internalSecuredBalance: 3_000_000, // 全為超過 7 年的房貸
+    proposedLoan: 100000,
+    shares: 200000,
+    collateral: '5',
+  };
+  const mortgageOnly = ARV(inp).vetoes.filter((x) => x.includes('100 萬'));
+  assert(mortgageOnly.length === 0, '不應否決，got:' + mortgageOnly.join('; '));
+
+  const unsecured = ARV({ ...inp, internalSecuredBalance: 0 }).vetoes;
+  assert(
+    unsecured.some((x) => x.includes('無擔保') && x.includes('第 4-1 條')),
+    '7 年以內餘額仍須計入，got:' + unsecured.join('; ')
+  );
+});
+
+test('第 4-1 條第 3 款：自然人擔保放款 1,000 萬為每人累計（本社超過 7 年餘額 600 萬 + 本次 500 萬 → 否決）', () => {
+  const inp = {
+    ...LTV_BASE,
+    appraisalAge: 1,
+    appraisalValue: 20_000_000,
+    proposedLoan: 5_000_000,
+    mortgageAmount: 6_000_000,
+    internalBalance: 6_000_000,
+    internalSecuredBalance: 6_000_000,
+  };
+  const v = ARV(inp).vetoes;
+  assert(
+    v.some((x) => x.includes('1,000 萬') && x.includes('第 4-1 條')),
+    'got:' + v.join('; ')
+  );
+  const fresh = ARV({
+    ...inp,
+    internalBalance: 0,
+    internalSecuredBalance: 0,
+  }).vetoes;
+  assert(
+    !fresh.some((x) => x.includes('1,000 萬')),
+    '無既有擔保借款不應否決，got:' + fresh.join('; ')
+  );
+});
+
+test('第 4-1 條第 3 款只適用擔保放款：股金 1,000 萬社員無擔保借 1,050 萬，不以 1,000 萬否決', () => {
+  const v = ARV({
+    income: 300000,
+    age: 40,
+    years: 7,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 10_500_000,
+    shares: 10_000_000,
+    collateral: '0',
+  }).vetoes;
+  assert(!v.some((x) => x.includes('1,000 萬')), 'got:' + v.join('; '));
+});
+
+test('無擔保月薪倍數上限不扣本社超過 7 年（擔保）的貸款', () => {
+  const inp = {
+    income: 30000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 3_000_000,
+    internalSecuredBalance: 3_000_000,
+    collateral: '0',
+    shares: 50000,
+  };
+  assert(ALC(inp, Infinity, 'A') === 600000, 'got:' + ALC(inp, Infinity, 'A'));
+});
+
+test('第 4-1 條第 1 款也適用股金內借款：股金 50 萬、本社 7 年以內貸款 120 萬 → 最多借 30 萬', () => {
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 20000,
+    internalBalance: 1_200_000,
+    internalSecuredBalance: 0,
+    proposedLoan: 500_000,
+    shares: 500_000,
+    collateral: '12',
+  };
+  const capped = (p) =>
+    ARV({ ...inp, ...p }).vetoes.filter((x) => x.includes('第 4-1 條'));
+  // 120 + 50 = 170 萬 > 股金 50 ＋ 100 = 150 萬 → 否決
+  assert(capped({}).length === 1, '申請 50 萬應否決');
+  // 120 + 20 = 140 萬 ≤ 150 萬 → 通過
+  assert(capped({ proposedLoan: 200_000 }).length === 0, '申請 20 萬應通過');
+  // 既有 80 萬未超過「100 萬」那一份 → 股金內借款全額可借
+  assert(
+    capped({ internalBalance: 800_000 }).length === 0,
+    '既有 80 萬不應影響'
+  );
+  assert(ALC(inp, Infinity, 'A') === 300_000, 'got:' + ALC(inp, Infinity, 'A'));
+  assert(
+    ALC({ ...inp, internalBalance: 800_000 }, Infinity, 'A') === 500_000,
+    'got:' + ALC({ ...inp, internalBalance: 800_000 }, Infinity, 'A')
+  );
+});
+
+test('本社超過 7 年貸款餘額：不可為負，也不可大於本社貸款總餘額', () => {
+  const base = {
+    income: 50000,
+    age: 30,
+    years: 5,
+    proposedLoan: 100000,
+    internalBalance: 100000,
+  };
+  const has7yErr = (p) => VI({ ...base, ...p }).some((e) => e.includes('7 年'));
+  assert(has7yErr({ internalSecuredBalance: 200000 }), '大於總餘額應報錯');
+  assert(has7yErr({ internalSecuredBalance: -1 }), '負值應報錯');
+  assert(!has7yErr({ internalSecuredBalance: 100000 }), '等於總餘額不應報錯');
+  assert(
+    VIBF({ ...base, internalSecuredBalance: 200000 }).internal_secured_balance,
+    '欄位級驗證應標在 internal_secured_balance'
+  );
+});
+
 console.log('\n── 100-人分布迴歸測試 (1) ──');
 
 test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () => {
@@ -2511,7 +2692,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
       p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
       p.collateralZone = 'residential_commercial_educational';
       p.houseAge = ri(0, 25);
-      p.appraisalAge = ri(0, 8);
+      p.appraisalAge = ri(0, 1); // 住宅區 85% 成數須附一年內鑑價報告（辦法第 10 條）
     }
     // collateral=12 但 loan > shares → 降級
     if (p.collateral === '12' && p.proposedLoan > p.shares) {
@@ -2522,7 +2703,7 @@ test('coherent 100-case 分布快照（A/B/C/D/E/否決在合理區間）', () =
         p.mortgageAmount = Math.max(p.proposedLoan * 1.2, 100_000);
         p.collateralZone = 'residential_commercial_educational';
         p.houseAge = ri(0, 20);
-        p.appraisalAge = ri(0, 8);
+        p.appraisalAge = ri(0, 1);
       }
     }
     return p;
