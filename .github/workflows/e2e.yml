@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'core.js'
       - 'ui.js'
       - 'index.html'
       - 'style.css'
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/e2e.yml'
   pull_request:
     paths:
+      - 'core.js'
       - 'ui.js'
       - 'index.html'
       - 'style.css'

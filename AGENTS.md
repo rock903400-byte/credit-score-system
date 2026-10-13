@@ -111,4 +111,4 @@
 - When a `<select>` is disabled (e.g. `collateral` after `years > 7`), `selectOption()` may timeout; set value via `page.evaluate(() => el.value = '5')`.
 - **Locally the suite is flaky at the default 2 workers on Windows** — a random single test dies with `Test timeout … Tearing down "context"` while chromium is still launching. `--workers=1` runs the whole suite green. CI is unaffected.
 - On failure: screenshot, trace (`.zip`), and video are saved to `test-results/`. View a trace with `npx playwright show-trace <path>`.
-- CI: `e2e.yml` runs Playwright with chromium only, uploads `test-results/` + `playwright-report/` on failure. `deploy.yml` runs unit tests then deploys `main` to GitHub Pages on every push.
+- CI: `e2e.yml` runs Playwright with chromium only — **path-filtered**: it triggers only when `core.js`, `ui.js`, `index.html`, `style.css`, `e2e/**` or test config change (`core.js` was missing until 2026-10; add any new runtime file to the list). Uploads `test-results/` + `playwright-report/` on failure. `deploy.yml` runs unit tests then deploys `main` to GitHub Pages on every push.
