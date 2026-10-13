@@ -1,8 +1,8 @@
 e2e-result.png
 # Playwright 測試產物（截圖、trace、.last-run.json）
 test-results/
-# 內部法規參考文件，勿公開上傳
-Rule-*.docx
+# 內部法規參考文件，勿公開上傳（含 法規彙編.docx；網站會部署整個專案）
+*.docx
 node_modules/
 # 雜湊命名的 session DB（疑似其他專案殘留）
 _db_*.py

@@ -79,7 +79,7 @@
   - `maturity > 75` → hard veto (in `applyRegulatoryVetoes`).
   - `maturity > 70` → –10.
   - `maturity > 65` → –5.
-- **規則來源是專案根目錄的 `法規彙編.docx`**（`pandoc -t plain` 可讀）。改上限前先查條文：放款實施要點第 2 條（擔保放款＝超過 7 年）、第 4-1 條（無擔保股金＋100 萬／擔保每人 1,000 萬）、擔保放款辦法第 10～12 條（成數、120%、10 年重鑑）。
+- **規則來源是專案根目錄的 `法規彙編.docx`**（`pandoc -t plain` 可讀）。**只存在本機，不進 git**（`.gitignore` 擋 `*.docx`）：repo 是公開的，`deploy.yml` 會把整個專案部署到 GitHub Pages，含社內《人事管理辦法》等文件，不可公開。改上限前先查條文：放款實施要點第 2 條（擔保放款＝超過 7 年）、第 4-1 條（無擔保股金＋100 萬／擔保每人 1,000 萬）、擔保放款辦法第 10～12 條（成數、120%、10 年重鑑）。
 - Credit ceiling (`applyLegalCeiling`):
   - `collateral='10'` (足額不動產抵押) → `getSecuredCeilings()`：`min(市價淨值 × getLtvRatio(), 10 M − 本社超過 7 年餘額)`。
   - `collateral='12'` (足額股金內借款) → `min(shares, getUnsecuredBylawCap())`（屬 7 年以內無擔保：連同本社 7 年以內貸款受股金＋100 萬限制，1,000 萬不適用）. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
