@@ -1,5 +1,13 @@
 # 信用評分系統 — AGENTS.md
 
+## Users
+
+儲蓄互助社的專職人員，**不是金融專業**。系統可以內部複雜，但介面要簡單：
+
+- 表單只問可查證的事實；需要專業判斷的事改由系統自動判斷。
+- 即時提示用白話，只給結論與原因（如「保證人加分 +1.5 分（1 位債務不詳，加分打五折）」）；加權、×0.8 等計算細節放在試算明細與列印報表給放款委員會。
+- 新增規則前先問：專職要多填／多判斷什麼？結果改變時能否一句話說明原因？避免欄位之間的隱藏連動（改 A 欄卻讓額度莫名改變）。
+
 ## Run
 
 - Open `index.html` directly, or `npm run serve` → http://localhost:8765 (set `PORT` env to change).
@@ -74,17 +82,19 @@
   - `collateral='12'` (足額股金內借款) → `min(10 M, shares)`. Only valid for `years ≤ 7`; for longer terms, rule ④ (7-year) fires first.
   - otherwise → `min(shares + 1 M, effective_income × grade_dbr_multiplier - existing_unsecured_balance + secured_shares_part)`.
 - **社外無擔保負債總餘額** `externalUnsecuredDebt`（`#external_unsecured_debt`，存量）用於 DBR 22 倍否決與無擔保天花板；未帶視同 0。`existingDebt` 是**社外月付**，只進 DSR/DTI，絕不可當餘額使用。`simulate_*.js` 產生器帶 `0 ~ income×25` 以涵蓋 22 倍線兩側。
-- **收入型態折數** `INCOME_STABILITY_HAIRCUT`（9→100%、6→85%、3→70%、1→50%）：`getEffectiveIncome()` 的實質月收入用於 DSR/DTI、收支、DBR 與額度。`incomeStability` 同時也直接計入評分的 stability 子項。
+- **收入型態折數** `INCOME_STABILITY_HAIRCUT`（9→100%、6→85%、3→70%、1→50%，取用一律走 `getHaircutRatio()`）：`getEffectiveIncome()` 的折後收入**只**用於 70% 否決線、收支、DBR 22 倍與額度。**評分的 DSR 分用申報收入**——收入品質已由 stability 子項扣分，改用折後收入會讓同一件事扣兩次分（現金收入社員曾因此 C→D、額度只剩固定月薪者的 27%）。守護：`test.js`「收入型態在評分只扣一次」。
 - 無擔保授信 DBR 階梯：A 級 20 倍、B 級 15 倍、C 級 12 倍、D 級 8 倍月薪（D 級強化提示保證人徵提）。
 - Default `<option>` for `#collateral` is `'12'`. If `proposedLoan > shares`, set to `'5'` or `'10'` to avoid silent veto.
 - Protection score capped at 20 (collateral 12 + guarantor 9 + guarantor-DSR 5 + LTV bonus 3 would otherwise exceed 100). 不動產抵押（`collateral='10'`）另依 LTV（loan/appraisal）加成：≤50% ＋3、≤70% ＋2、其餘/無鑑價 ＋0。`computeScore` 回傳 `protectionBreakdown` 供 UI 顯示構成（擔保/LTV/保證人/DSR）。注意 `test.js` 的 `coherent()` 兜底鑑價為 `loan×1.3` 而非固定 500 萬——若改用固定大額兜底，小額貸款 LTV 會掉到加成區間、A 級分布暴增。
 - `pmt()` is the simplified **first-period** formula: `principal/months + principal × (rate/100/12)`. Not the standard amortizing PMT — `computeMaxLoan` does the real math separately.
 - Credit scores are written to `localStorage` as a debounced draft under `cu_form_draft`; Report ID sequence uses `cu_seq_YYYYMMDD` keys.
 - **保證人「債務不詳」** (`g.unknown=true`):
-  - 勾選後 `.g-debt` disabled 且清空;**排除**自 `guarantorDsrScore` 計算(只看已揭露者的最壞 DSR;全勾則 +0 中性)。
+  - 勾選後 `.g-debt` disabled 且清空;**排除**自 `guarantorDsrScore` 計算(只看已揭露者;全勾則 +0 中性)。
   - **人數加分折半，打在分數上而非人數上**：`已查證分 + (含不詳者以原權重查表分 − 已查證分) × 0.5`。不可改回「權重 ×0.5 再四捨五入」——1 位不詳社員 0.5 人會被 round 回 1 人（折半無效），1 位不詳非社員 0.35 人則 round 成 0（斷崖）。不詳者分數必介於「無此人」與「已查證」之間，`protectionBreakdown.guarantor` 因此可能是小數（如 1.5、4.5）。
   - 結果區 `#unknownGuarantorWarn` 只在有勾選時顯示;列印報表該列加紅字「債務未查證」+ 表尾註記「請另覓佐證」。
-- **保證人高負債** (個人 DSR ≥ `GUARANTOR_HIGH_DSR_THRESHOLD` 65%)：不計人數，**且保證人 DSR 子項歸 0**。只排除不歸 0 時，負債 66% 的保證人會比 64% 者得分高（被排除後最差 DSR 改由他人決定）。守護：`test.js`「保證人負債比越高，保證人加分只減不增」逐 1% 掃描。
+- **保證人採連帶保證原則**：每位保證人都對全額負責，保障取決於最有能力者，所以 `guarantorDsrScore` 取已揭露者的**最佳**（最低）DSR，不是最差。改回「最差 DSR」會讓多找一位保證人反而扣分（A 10% + B 55% 曾低於 A 單獨）。
+  - 個人 DSR ≥ `GUARANTOR_HIGH_DSR_THRESHOLD` 65%：視同沒有此人（不計人數、不影響 DSR 子項）。
+  - 守護（`test.js`「保證人審定一致性」）：負債比越高只減不增；多一位保證人不會比不加更低分；勾不詳低於任何 < 65% 的如實揭露。已知殘留：把負債 ≥ 65% 的保證人勾成不詳可多 1 分，要消除就得讓不詳完全不加分，刻意不做，交由報表紅字與放款委員會把關。
 
 ## E2E quirks
 

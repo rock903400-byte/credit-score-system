@@ -634,7 +634,7 @@ function renderGuarantorRows(count) {
       '> 債務不詳（未查證）' +
       '</label>' +
       '<small style="color: var(--text-muted); display:block; margin-top:4px;">' +
-      '勾選後無法查核資力，人數加分折半認列，且不計入保證人 DSR 評分。' +
+      '查不到此保證人的負債時勾選：此人加分打五折，報表會註記「債務未查證」。' +
       '</small>' +
       '</div>' +
       '<div class="form-group">' +
@@ -657,7 +657,8 @@ function renderGuarantorRows(count) {
   updateGuarantorWeightHint();
 }
 
-// 加權保證人數即時回饋（直接呼叫 core.js evaluateGuarantors，與評分同一套規則）
+// 保證人加分即時回饋（直接呼叫 core.js evaluateGuarantors，與評分同一套規則）
+// 專職只看結論與原因；人數加權等計算細節留在結果明細與列印報表給放款委員會
 function updateGuarantorWeightHint() {
   const el = $('guarantorWeightHint');
   if (!el) return;
@@ -667,26 +668,17 @@ function updateGuarantorWeightHint() {
     return;
   }
   const ev = evaluateGuarantors(guarantors);
-  const m = guarantors.filter((g) => g.type === 'member').length;
-  const nm = guarantors.length - m;
   const pendingCount = ev.evaluated.filter(
     (g) => !g.unknown && g.dsr === null
   ).length;
-  const parts = [];
-  if (m > 0) parts.push(`${m} 社員`);
-  if (nm > 0) parts.push(`${nm} 非社員`);
-  // 不詳者的加分折半打在分數上，「≈ N 人」的四捨五入說明只在沒有不詳者時成立
-  const rounded =
-    ev.unknownCount === 0
-      ? ` ≈ ${Math.min(MAX_GUARANTORS, Math.round(ev.effectiveCount))} 人`
-      : '';
   const notes = [];
   if (ev.highDsrCount > 0)
-    notes.push(`${ev.highDsrCount} 位負債過高(DSR≥65%)排除`);
-  if (ev.unknownCount > 0) notes.push(`${ev.unknownCount} 位不詳加分折半`);
+    notes.push(`${ev.highDsrCount} 位負債過高（負債比 65% 以上），不計`);
+  if (ev.unknownCount > 0)
+    notes.push(`${ev.unknownCount} 位債務不詳，加分打五折`);
   if (pendingCount > 0) notes.push(`${pendingCount} 位待填月收入`);
-  const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
-  el.innerText = `${parts.join(' + ')} → 有效加權 ${ev.effectiveCount.toFixed(1)} 人${rounded} → 保障項 +${ev.countScore} 分${suffix}`;
+  const suffix = notes.length > 0 ? `（${notes.join('；')}）` : '';
+  el.innerText = `保證人加分 +${ev.countScore + ev.dsrScore} 分${suffix}`;
 }
 
 function bindGuarantorPreviews() {
@@ -1944,10 +1936,7 @@ function renderPrintReport(result) {
         : '一般社員';
   if ($('p_borrower_role')) $('p_borrower_role').innerText = roleText;
   const effIncome = getEffectiveIncome(input);
-  const haircut =
-    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-      : 1.0;
+  const haircut = getHaircutRatio(input);
   const incomeStr =
     haircut < 1.0
       ? `${input.income.toLocaleString('zh-TW')} 元（實質認列：${Math.round(effIncome).toLocaleString('zh-TW')} 元 / 折數 ${(haircut * 100).toFixed(0)}%）`
@@ -2141,7 +2130,7 @@ function renderPrintReport(result) {
     const notes = [];
     if (highDsrCount > 0) {
       notes.push(
-        `共 ${highDsrCount} 位保證人個人負債比達 65% 以上（高負債），依風控規範排除有效保證人加分，保證人 DSR 加分歸 0；`
+        `共 ${highDsrCount} 位保證人個人負債比達 65% 以上（高負債），依風控規範不計入保證人加分；`
       );
     }
     if (unknownCount > 0) {
@@ -2930,7 +2919,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const val = parseFloat(String(input.value).replace(/,/g, '')) || 0;
     const stabEl = $('incomeStability');
     const stabVal = stabEl ? stabEl.value : '9';
-    const haircut = INCOME_STABILITY_HAIRCUT[stabVal] ?? 1.0;
+    const haircut = getHaircutRatio({ incomeStability: stabVal });
     if (val > 0 && haircut < 1.0) {
       const eff = Math.round(val * haircut);
       preview.innerText = `${formatAmount(val)}（實質認列：${formatAmount(eff)} / ${(haircut * 100).toFixed(0)}%）`;

@@ -39,14 +39,16 @@ const INCOME_STABILITY_HAIRCUT = {
   1: 0.5, // 現金收入為主（無帳載）：50%
 };
 
-// 取得實質有效月收入（經收入型態折成）
+// 收入型態認列折數；未知型態不折
+function getHaircutRatio(input) {
+  return INCOME_STABILITY_HAIRCUT[input.incomeStability] ?? 1.0;
+}
+
+// 取得實質有效月收入（經收入型態折成）。只用於否決線、DBR、收支與額度；
+// 評分的 DSR 分用申報收入——收入品質已由 stability 子項反映，不重複扣分
 function getEffectiveIncome(input) {
   if (!input || !input.income || input.income <= 0) return 0;
-  const factor =
-    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-      : 1.0;
-  return input.income * factor;
+  return input.income * getHaircutRatio(input);
 }
 
 // 擔保放款 LTV 上限（擔保放款辦法第 10、10-1 條）
@@ -165,10 +167,7 @@ function computeCashFlow(input, newLoanMonthlyPmt = 0) {
 
   const effectiveIncome = getEffectiveIncome(input);
   const rawIncome = input.income || 0;
-  const haircutRatio =
-    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-      : 1.0;
+  const haircutRatio = getHaircutRatio(input);
 
   const netSurplusPreLoan =
     effectiveIncome - totalExistingDebt - totalLivingExpenses;
@@ -330,9 +329,10 @@ function validateInputsByField(input) {
 // ============================================================
 // 保證人審定（computeScore、即時加權提示、列印報表共用）
 // ============================================================
-// - 負債過高（DSR >= 65%）：無實質代償能力，不計人數，且保證人 DSR 子項歸 0；
-//   若只排除不歸 0，負債 66% 的保證人反而比 64% 者得分高
-// - 債務不詳：無法查核資力，人數加分折半（介於「無此保證人」與「已查證」之間），DSR 不納入計分
+// 保證人皆為連帶保證人，每人都對全額負責，保障取決於「最有能力的那位」：
+// - 保證人 DSR 子項取已揭露者中最低（最好）的 DSR，因此多一位保證人只會加分、不會扣分
+// - 負債過高（DSR >= 65%）：無實質代償能力，視同沒有此人（不計人數、不影響 DSR 子項）
+// - 債務不詳：人數加分折半，DSR 不納入計分——分數介於「沒有此人」與「如實揭露且 < 65%」之間
 function evaluateGuarantors(guarantors) {
   const evaluated = [];
   const validDsrs = [];
@@ -386,12 +386,12 @@ function evaluateGuarantors(guarantors) {
     (scoreByWeight(verifiedWeight + unknownWeight) - verifiedScore) *
       GUARANTOR_UNKNOWN_WEIGHT_RATIO;
 
-  // 保證人 DSR：取已揭露者之最差 DSR；任一人負債過高即歸 0
+  // 保證人 DSR：取已揭露且未排除者之最佳 DSR（連帶保證，最有能力者決定代償保障）
   let dsrScore = 0;
-  if (highDsrCount === 0 && validDsrs.length > 0) {
-    const maxDsr = Math.max(...validDsrs);
-    if (maxDsr < 0.3) dsrScore = 5;
-    else if (maxDsr < 0.5) dsrScore = 3;
+  if (validDsrs.length > 0) {
+    const bestDsr = Math.min(...validDsrs);
+    if (bestDsr < 0.3) dsrScore = 5;
+    else if (bestDsr < 0.5) dsrScore = 3;
     else dsrScore = 1;
   }
 
@@ -424,23 +424,18 @@ function computeScore(input) {
       perspectiveScore: 0,
       effectiveIncome: 0,
       rawIncome: input.income || 0,
-      haircutRatio:
-        INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-          ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-          : 1.0,
+      haircutRatio: getHaircutRatio(input),
     };
   }
   const effectiveIncome = getEffectiveIncome(input);
-  // [FIX 1.6] DSR 含社外 + 本社月付（含整併模式下的所有額外既有貸款），分母採用實質有效月收入
+  // [FIX 1.6] DSR 含社外 + 本社月付（含整併模式下的所有額外既有貸款）
+  // 分母用申報收入：收入品質已由 stability 子項扣分，改用折後收入會對同一件事重複扣分
   const extMonthly = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.monthly || 0),
     0
   );
   const baselineDsr =
-    effectiveIncome > 0
-      ? (input.existingDebt + input.internalMonthly + extMonthly) /
-        effectiveIncome
-      : Infinity;
+    (input.existingDebt + input.internalMonthly + extMonthly) / input.income;
   let dsrScore = 0;
   for (const [limit, score] of DSR_SCORE_TIERS) {
     if (baselineDsr < limit) {
@@ -508,10 +503,7 @@ function computeScore(input) {
     perspectiveScore,
     effectiveIncome,
     rawIncome: input.income,
-    haircutRatio:
-      INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-        ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-        : 1.0,
+    haircutRatio: getHaircutRatio(input),
     total: Math.max(
       0,
       Math.min(
@@ -920,10 +912,7 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
 function getLoanLimitDetails(input, maxLoanLimit, grade) {
   const finalLimit = applyLegalCeiling(input, maxLoanLimit, grade);
   const effectiveIncome = getEffectiveIncome(input);
-  const haircutRatio =
-    INCOME_STABILITY_HAIRCUT[input.incomeStability] !== undefined
-      ? INCOME_STABILITY_HAIRCUT[input.incomeStability]
-      : 1.0;
+  const haircutRatio = getHaircutRatio(input);
   const extMonthly = (input.additionalLoans || []).reduce(
     (sum, l) => sum + (l.monthly || 0),
     0

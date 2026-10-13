@@ -1108,7 +1108,9 @@ test.describe('場景 13-18：實務進階', () => {
     expect(debtPreview).toContain('過高排除');
     const weightHint = await page.locator('#guarantorWeightHint').innerText();
     expect(weightHint).toContain('負債過高');
-    expect(weightHint).toContain('有效加權 0.0 人');
+    expect(weightHint).toContain('保證人加分 +0 分');
+    // 專職看的提示不顯示內部加權計算
+    expect(weightHint).not.toContain('加權');
     console.log(`  → 即時加權回饋正確標記高負債排除：${weightHint}`);
 
     // 填寫其餘資料並計算

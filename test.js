@@ -1879,7 +1879,7 @@ test('validateInputsByField：生活支出欄位錯誤訊息分組', () => {
   );
 });
 
-console.log('\n── 所得認列折成 (Haircut) 與保證人資力過濾 (6) ──');
+console.log('\n── 所得認列折成 (Haircut) 與保證人資力過濾 (7) ──');
 
 test('getEffectiveIncome：依據收入型態折算實質有效月收入', () => {
   assert(GEI({ income: 60000, incomeStability: 9 }) === 60000, '9: 100%');
@@ -1966,7 +1966,39 @@ test('所得折成連動可貸額度天花板：折數越低額度越保守', ()
   );
 });
 
-test('保證人資力過濾：高負債 (DSR >= 65%) 不計人數且保證人 DSR 歸 0', () => {
+test('收入型態在評分只扣一次：DSR 分以申報收入計，折數只影響否決線與額度', () => {
+  // 社外月付 1.5 萬 / 申報 6 萬 = 25%；若 DSR 分改用折後收入（現金 50%）會變 50%，重複扣分
+  const inp = {
+    income: 60000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 15000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 300000,
+    shares: 100000,
+    collateral: '0',
+    tenure: 4,
+    interaction: 10,
+    jcic: '10',
+    membership: 5,
+    purpose: '10',
+    career: 6,
+    participation: 4,
+    guarantorCount: 0,
+    guarantors: [],
+  };
+  const fixed = CS({ ...inp, incomeStability: 9 });
+  const cash = CS({ ...inp, incomeStability: 1 });
+  assert(
+    cash.dsrScore === fixed.dsrScore,
+    `DSR 分 現金收入=${cash.dsrScore}, 固定月薪=${fixed.dsrScore}`
+  );
+  assert(fixed.stability - cash.stability === 8, '收入品質仍由穩定分反映');
+});
+
+test('保證人資力過濾：高負債 (DSR >= 65%) 視同沒有此人，合格者正常加分', () => {
   const inp = {
     income: 60000,
     age: 40,
@@ -2006,16 +2038,16 @@ test('保證人資力過濾：高負債 (DSR >= 65%) 不計人數且保證人 DS
   };
   const res = CS(inp);
   // 有效人數 = 1.0 (高負債排除) → guarantorScore = 3
-  // 有人負債過高 → guarantorDsrScore = 0（若只排除不歸 0，DSR 75% 會比 64% 得分高）
-  // rawProtectionScore = 12 + 3 + 0 = 15 → ×0.8 = 12
-  assert(res.protectionScore === 12, 'got:' + res.protectionScore);
+  // 連帶保證取最佳 DSR：10000/60000 = 0.167 → guarantorDsrScore = 5
+  // rawProtectionScore = 12 + 3 + 5 = 20 → ×0.8 = 16
+  assert(res.protectionScore === 16, 'got:' + res.protectionScore);
   assert(
     res.protectionBreakdown.guarantor === 3,
     'guarantor score should be 3'
   );
   assert(
-    res.protectionBreakdown.guarantorDsr === 0,
-    'guarantor DSR score should be 0'
+    res.protectionBreakdown.guarantorDsr === 5,
+    'guarantor DSR score should be 5'
   );
 });
 
@@ -2072,7 +2104,7 @@ test('保證人債務不詳：人數加分折半認列且 DSR 給 0 分', () => 
   );
 });
 
-console.log('\n── 保證人審定一致性 (2) ──');
+console.log('\n── 保證人審定一致性 (4) ──');
 const G_BASE = {
   income: 60000,
   age: 40,
@@ -2097,6 +2129,24 @@ function guarantorBreakdown(guarantors) {
   return CS({ ...G_BASE, guarantorCount: guarantors.length, guarantors })
     .protectionBreakdown;
 }
+function guarantorPoints(guarantors) {
+  const pb = guarantorBreakdown(guarantors);
+  return pb.guarantor + pb.guarantorDsr;
+}
+const G_A = { name: 'A', income: 50000, debt: 5000, type: 'member' }; // 負債比 10%
+const gB = (pct) => ({
+  name: 'B',
+  income: 50000,
+  debt: 500 * pct,
+  type: 'member',
+});
+const G_UNKNOWN = {
+  name: 'B',
+  income: 50000,
+  debt: 0,
+  type: 'member',
+  unknown: true,
+};
 
 test('單人債務不詳保證人：人數加分介於「無保證人」與「已查證」之間（社員、非社員皆然）', () => {
   ['member', 'non_member'].forEach((type) => {
@@ -2111,18 +2161,39 @@ test('單人債務不詳保證人：人數加分介於「無保證人」與「�
 });
 
 test('保證人負債比越高，保證人加分只減不增（65% 排除線前後不得反轉）', () => {
-  const A = { name: 'A', income: 50000, debt: 5000, type: 'member' };
   let prev = Infinity;
   for (let pct = 0; pct <= 100; pct++) {
-    const B = { name: 'B', income: 50000, debt: 500 * pct, type: 'member' };
-    const pb = guarantorBreakdown([A, B]);
-    const s = pb.guarantor + pb.guarantorDsr;
+    const s = guarantorPoints([G_A, gB(pct)]);
     assert(
       s <= prev,
       `B 負債比 ${pct}% 得 ${s} 分，高於 ${pct - 1}% 的 ${prev} 分`
     );
     prev = s;
   }
+});
+
+test('連帶保證：多一位保證人（不論負債比或債務不詳）不會比不加更低分', () => {
+  const alone = guarantorPoints([G_A]);
+  const extras = [];
+  for (let pct = 0; pct <= 100; pct++) extras.push([`如實 ${pct}%`, gB(pct)]);
+  extras.push(['債務不詳', G_UNKNOWN]);
+  extras.forEach(([label, B]) => {
+    const s = guarantorPoints([G_A, B]);
+    assert(s >= alone, `加上 B（${label}）得 ${s} 分，低於 A 單獨 ${alone} 分`);
+  });
+});
+
+test('債務不詳的加分低於任何可接受（負債比 < 65%）的如實揭露', () => {
+  [[], [G_A]].forEach((others) => {
+    const unknown = guarantorPoints([...others, G_UNKNOWN]);
+    for (let pct = 0; pct < 65; pct++) {
+      const disclosed = guarantorPoints([...others, gB(pct)]);
+      assert(
+        unknown < disclosed,
+        `${others.length ? 'A + ' : ''}B 勾不詳 ${unknown} 分，不低於如實 ${pct}% 的 ${disclosed} 分`
+      );
+    }
+  });
 });
 
 console.log('\n── 授信優化與防呆測試 (5) ──');
