@@ -627,6 +627,12 @@ function applyRegulatoryVetoes(input) {
     );
   }
 
+  // 否決訊息直接告訴專職「依本條還能借多少」，不必自己做減法（其他規則可能更低，故寫「依本條」）
+  const remainingNote = (amount) =>
+    amount > 0
+      ? `，依本條，本次最多可借 ${amount.toLocaleString('zh-TW')} 元`
+      : '，既有貸款已達上限，本次無法再借';
+
   // ② 自然人無擔保放款上限：股金結餘 ＋ 100 萬（放款實施要點第 4-1 條第 1 款）
   //    不動產抵押以外的借款（含股金內借款）都屬 7 年以內無擔保，連同本社 7 年以內貸款合計；
   //    超過 7 年的房貸屬擔保放款，不佔用此額度
@@ -635,7 +641,7 @@ function applyRegulatoryVetoes(input) {
   const totalCreditExposure = input.proposedLoan + internalUnsecured;
   if (input.collateral !== '10' && totalCreditExposure > creditCeiling) {
     vetoes.push(
-      `無擔保借款總額（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社 7 年以內貸款餘額 ${internalUnsecured.toLocaleString('zh-TW')} 元 ＝ ${totalCreditExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條無擔保上限（股金 ${input.shares.toLocaleString('zh-TW')} 元 ＋ 100 萬 ＝ ${creditCeiling.toLocaleString('zh-TW')} 元）`
+      `無擔保借款總額（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社 7 年以內貸款餘額 ${internalUnsecured.toLocaleString('zh-TW')} 元 ＝ ${totalCreditExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條無擔保上限（股金 ${input.shares.toLocaleString('zh-TW')} 元 ＋ 100 萬 ＝ ${creditCeiling.toLocaleString('zh-TW')} 元）${remainingNote(getUnsecuredBylawCap(input))}`
     );
   }
 
@@ -644,7 +650,7 @@ function applyRegulatoryVetoes(input) {
   const totalSecuredExposure = input.proposedLoan + internalSecured;
   if (input.collateral === '10' && totalSecuredExposure > NATURAL_PERSON_CAP) {
     vetoes.push(
-      `自然人擔保放款累計（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社超過 7 年貸款餘額 ${internalSecured.toLocaleString('zh-TW')} 元 ＝ ${totalSecuredExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條上限 ${(NATURAL_PERSON_CAP / 10000).toLocaleString('zh-TW')} 萬元`
+      `自然人擔保放款累計（本次 ${input.proposedLoan.toLocaleString('zh-TW')} 元 ＋ 本社超過 7 年貸款餘額 ${internalSecured.toLocaleString('zh-TW')} 元 ＝ ${totalSecuredExposure.toLocaleString('zh-TW')} 元）超過《放款實施要點》第 4-1 條上限 ${(NATURAL_PERSON_CAP / 10000).toLocaleString('zh-TW')} 萬元${remainingNote(getSecuredCeilings(input).personCap)}`
     );
   }
 

@@ -2378,6 +2378,11 @@ test('第 4-1 條第 1 款：無擔保上限只計本社 7 年以內貸款；超
     unsecured.some((x) => x.includes('無擔保') && x.includes('第 4-1 條')),
     '7 年以內餘額仍須計入，got:' + unsecured.join('; ')
   );
+  // 7 年以內 300 萬已超過上限 120 萬 → 直接告知無法再借，不寫「最多可借 0 元」
+  assert(
+    unsecured.some((x) => x.includes('本次無法再借')),
+    '應告知無法再借，got:' + unsecured.join('; ')
+  );
 });
 
 test('第 4-1 條第 3 款：自然人擔保放款 1,000 萬為每人累計（本社超過 7 年餘額 600 萬 + 本次 500 萬 → 否決）', () => {
@@ -2393,6 +2398,11 @@ test('第 4-1 條第 3 款：自然人擔保放款 1,000 萬為每人累計（�
   const v = ARV(inp).vetoes;
   assert(
     v.some((x) => x.includes('1,000 萬') && x.includes('第 4-1 條')),
+    'got:' + v.join('; ')
+  );
+  // 1,000 萬 − 既有 600 萬 = 本次最多 400 萬
+  assert(
+    v.some((x) => x.includes('依本條，本次最多可借 4,000,000 元')),
     'got:' + v.join('; ')
   );
   const fresh = ARV({
@@ -2456,6 +2466,10 @@ test('第 4-1 條第 1 款也適用股金內借款：股金 50 萬、本社 7 �
     ARV({ ...inp, ...p }).vetoes.filter((x) => x.includes('第 4-1 條'));
   // 120 + 50 = 170 萬 > 股金 50 ＋ 100 = 150 萬 → 否決
   assert(capped({}).length === 1, '申請 50 萬應否決');
+  assert(
+    capped({})[0].includes('依本條，本次最多可借 300,000 元'),
+    '應寫明最多可借 30 萬，got:' + capped({})[0]
+  );
   // 120 + 20 = 140 萬 ≤ 150 萬 → 通過
   assert(capped({ proposedLoan: 200_000 }).length === 0, '申請 20 萬應通過');
   // 既有 80 萬未超過「100 萬」那一份 → 股金內借款全額可借
