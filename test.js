@@ -338,18 +338,17 @@ test('保證人全部不詳：guarantorDsrScore=0且人數權重折半認列', (
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  // 債務不詳折半加權: 1.0*0.5 + 0.7*0.5 + 1.0*0.5 = 0.5 + 0.35 + 0.5 = 1.35 → round 1 → +3
+  // 已查證 0 人 → 0 分；含不詳以原權重 1.0 + 0.7 + 1.0 = 2.7 → round 3 → 6 分
+  // 不詳邊際加分折半：0 + (6 − 0) × 0.5 = 3
   // guarantorDsrScore: 0 (全部不詳, validDsrs 空)
   // rawProtectionScore = 12 (collateral) + 3 (guarantor) + 0 (dsr) = 15 → ×0.8 = 12
   assert(CS(inp).protectionScore === 12, 'got:' + CS(inp).protectionScore);
 });
 test('保證人混合（2 不詳 + 1 正常揭露）：正常揭露計入 DSR，不詳者折半', () => {
-  // A (member, unknown): 0.5
-  // B (non_member, debt=10000, income=50000 -> DSR=0.2 < 0.3): 0.7, DSR +5
-  // C (member, unknown): 0.5
-  // 有效加權 = 0.5 + 0.7 + 0.5 = 1.7 → round 2 → +5
-  // DSR = 0.2 < 0.3 → +5
-  // raw = 12 + 5 + 5 = 22 → ×0.8 = 17.6 → round → 18
+  // B (non_member, debt=10000, income=50000 -> DSR=0.2 < 0.3): 已查證 0.7 → round 1 → 3 分, DSR +5
+  // A、C (member, unknown)：含不詳以原權重 0.7 + 1.0 + 1.0 = 2.7 → round 3 → 6 分
+  // 不詳邊際加分折半：3 + (6 − 3) × 0.5 = 4.5
+  // raw = 12 + 4.5 + 5 = 21.5 → ×0.8 = 17.2 → round → 17
   const inp = {
     income: 60000,
     age: 40,
@@ -382,7 +381,7 @@ test('保證人混合（2 不詳 + 1 正常揭露）：正常揭露計入 DSR，
       { name: 'C', income: 60000, debt: 0, type: 'member', unknown: true },
     ],
   };
-  assert(CS(inp).protectionScore === 18, 'got:' + CS(inp).protectionScore);
+  assert(CS(inp).protectionScore === 17, 'got:' + CS(inp).protectionScore);
 });
 test('高負債保證人過濾：DSR >= 65% 排除人數與 DSR 加分', () => {
   const inp = {
@@ -1967,7 +1966,7 @@ test('所得折成連動可貸額度天花板：折數越低額度越保守', ()
   );
 });
 
-test('保證人資力過濾：高負債 (DSR >= 65%) 排除加分，合格者正常加分', () => {
+test('保證人資力過濾：高負債 (DSR >= 65%) 不計人數且保證人 DSR 歸 0', () => {
   const inp = {
     income: 60000,
     age: 40,
@@ -2007,20 +2006,20 @@ test('保證人資力過濾：高負債 (DSR >= 65%) 排除加分，合格者正
   };
   const res = CS(inp);
   // 有效人數 = 1.0 (高負債排除) → guarantorScore = 3
-  // validDsrs: [10000/60000=0.167] → guarantorDsrScore = 5
-  // rawProtectionScore = 12 + 3 + 5 = 20 → ×0.8 = 16
-  assert(res.protectionScore === 16, 'got:' + res.protectionScore);
+  // 有人負債過高 → guarantorDsrScore = 0（若只排除不歸 0，DSR 75% 會比 64% 得分高）
+  // rawProtectionScore = 12 + 3 + 0 = 15 → ×0.8 = 12
+  assert(res.protectionScore === 12, 'got:' + res.protectionScore);
   assert(
     res.protectionBreakdown.guarantor === 3,
     'guarantor score should be 3'
   );
   assert(
-    res.protectionBreakdown.guarantorDsr === 5,
-    'guarantor DSR score should be 5'
+    res.protectionBreakdown.guarantorDsr === 0,
+    'guarantor DSR score should be 0'
   );
 });
 
-test('保證人債務不詳：權重折半認列且 DSR 給 0 分', () => {
+test('保證人債務不詳：人數加分折半認列且 DSR 給 0 分', () => {
   const inp = {
     income: 60000,
     age: 40,
@@ -2059,13 +2058,13 @@ test('保證人債務不詳：權重折半認列且 DSR 給 0 分', () => {
     ],
   };
   const res = CS(inp);
-  // 兩位社員不詳: 1.0*0.5 + 1.0*0.5 = 1.0 → round 1 → guarantorScore = 3
+  // 兩位社員不詳：以原權重 2.0 人 → 5 分，邊際加分折半 → guarantorScore = 2.5
   // DSR = 0
-  // raw = 12 + 3 + 0 = 15 → ×0.8 = 12
+  // raw = 12 + 2.5 + 0 = 14.5 → ×0.8 = 11.6 → 12
   assert(res.protectionScore === 12, 'got:' + res.protectionScore);
   assert(
-    res.protectionBreakdown.guarantor === 3,
-    'guarantor score should be 3'
+    res.protectionBreakdown.guarantor === 2.5,
+    'guarantor score should be 2.5, got: ' + res.protectionBreakdown.guarantor
   );
   assert(
     res.protectionBreakdown.guarantorDsr === 0,
@@ -2073,7 +2072,60 @@ test('保證人債務不詳：權重折半認列且 DSR 給 0 分', () => {
   );
 });
 
-console.log('\n── 授信優化與防呆測試 (4) ──');
+console.log('\n── 保證人審定一致性 (2) ──');
+const G_BASE = {
+  income: 60000,
+  age: 40,
+  years: 5,
+  ratePercent: 3,
+  existingDebt: 0,
+  internalMonthly: 0,
+  proposedLoan: 300000,
+  incomeStability: 9,
+  tenure: 4,
+  interaction: 10,
+  jcic: '10',
+  membership: 5,
+  collateral: '0',
+  purpose: '10',
+  career: 6,
+  participation: 4,
+  internalBalance: 0,
+  shares: 100000,
+};
+function guarantorBreakdown(guarantors) {
+  return CS({ ...G_BASE, guarantorCount: guarantors.length, guarantors })
+    .protectionBreakdown;
+}
+
+test('單人債務不詳保證人：人數加分介於「無保證人」與「已查證」之間（社員、非社員皆然）', () => {
+  ['member', 'non_member'].forEach((type) => {
+    const g = { name: 'G', income: 50000, debt: 5000, type };
+    const verified = guarantorBreakdown([g]).guarantor;
+    const unknown = guarantorBreakdown([{ ...g, unknown: true }]).guarantor;
+    assert(
+      unknown > 0 && unknown < verified,
+      `${type}: 不詳 ${unknown} 分應介於 0 與已查證 ${verified} 分之間`
+    );
+  });
+});
+
+test('保證人負債比越高，保證人加分只減不增（65% 排除線前後不得反轉）', () => {
+  const A = { name: 'A', income: 50000, debt: 5000, type: 'member' };
+  let prev = Infinity;
+  for (let pct = 0; pct <= 100; pct++) {
+    const B = { name: 'B', income: 50000, debt: 500 * pct, type: 'member' };
+    const pb = guarantorBreakdown([A, B]);
+    const s = pb.guarantor + pb.guarantorDsr;
+    assert(
+      s <= prev,
+      `B 負債比 ${pct}% 得 ${s} 分，高於 ${pct - 1}% 的 ${prev} 分`
+    );
+    prev = s;
+  }
+});
+
+console.log('\n── 授信優化與防呆測試 (5) ──');
 test('社外無擔保負債總餘額獨立計算：月薪 3 萬申貸 30 萬＋社外餘額 40 萬（月付 8000）合計 70 萬觸發 DBR 22 否決', () => {
   const inp = {
     income: 30000,
@@ -2092,6 +2144,32 @@ test('社外無擔保負債總餘額獨立計算：月薪 3 萬申貸 30 萬＋�
   assert(
     res.vetoes.some((v) => v.includes('22 倍') || v.includes('無擔保負債總額')),
     '應觸發 DBR 22 否決，got: ' + res.vetoes.join('; ')
+  );
+});
+
+test('未帶 externalUnsecuredDebt 視同 0，不得拿社外月付當無擔保餘額', () => {
+  // 社外月付 2 萬若被誤當餘額，DBR 天花板會少 2 萬、申貸 109 萬會被 22 倍線否決
+  const inp = {
+    income: 50000,
+    age: 35,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 20000,
+    internalMonthly: 0,
+    internalBalance: 0,
+    proposedLoan: 1090000,
+    collateral: '0',
+    shares: 1500000,
+  };
+  const zero = { ...inp, externalUnsecuredDebt: 0 };
+  const omittedCap = ALC(inp, Infinity, 'A');
+  const zeroCap = ALC(zero, Infinity, 'A');
+  assert(omittedCap === zeroCap, `天花板 未帶=${omittedCap}, 帶 0=${zeroCap}`);
+  const omittedVetoes = ARV(inp).vetoes.join('; ');
+  const zeroVetoes = ARV(zero).vetoes.join('; ');
+  assert(
+    omittedVetoes === zeroVetoes,
+    `否決 未帶=[${omittedVetoes}] 帶 0=[${zeroVetoes}]`
   );
 });
 

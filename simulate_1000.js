@@ -56,6 +56,8 @@ for (let i = 0; i < 1000; i++) {
   const ratePercent = randInt(0, 15);
   const age = randInt(18, 80);
   const existingDebt = randInt(0, Math.floor(income * 0.7));
+  // 社外無擔保餘額（存量），涵蓋 DBR 22 倍線上下兩側
+  const externalUnsecuredDebt = randInt(0, income * 25);
   const internalMonthly = randInt(0, Math.floor(income * 0.3));
   const proposedLoan = randInt(50000, Math.min(10_000_000, income * years * 5));
   const incomeStability = randInt(0, 10);
@@ -132,6 +134,7 @@ for (let i = 0; i < 1000; i++) {
     ratePercent,
     age,
     existingDebt,
+    externalUnsecuredDebt,
     internalMonthly,
     proposedLoan,
     incomeStability,

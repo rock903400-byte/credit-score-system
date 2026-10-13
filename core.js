@@ -25,7 +25,7 @@ const MAX_GUARANTORS = 5;
 const GUARANTOR_SCORE_TABLE = { 0: 0, 1: 3, 2: 5, 3: 6, 4: 7, 5: 8 };
 const GUARANTOR_TYPE_WEIGHT = { member: 1.0, non_member: 0.7 };
 const GUARANTOR_HIGH_DSR_THRESHOLD = 0.65; // 保證人個人 DSR >= 65% 判定為高負債，排除加分
-const GUARANTOR_UNKNOWN_WEIGHT_RATIO = 0.5; // 債務不詳保證人人數權重折減 50%
+const GUARANTOR_UNKNOWN_WEIGHT_RATIO = 0.5; // 債務不詳保證人：人數加分折半（見 evaluateGuarantors）
 const GRADE_THRESHOLDS = { A: 90, B: 80, C: 70, D: 60 };
 const GRADE_DTI_LIMITS = { A: 0.6, B: 0.5, C: 0.4, D: 0.3 };
 const DBR_HARD_CEILING = 22; // 金管會個人無擔保負債上限 22 倍
@@ -328,6 +328,85 @@ function validateInputsByField(input) {
 }
 
 // ============================================================
+// 保證人審定（computeScore、即時加權提示、列印報表共用）
+// ============================================================
+// - 負債過高（DSR >= 65%）：無實質代償能力，不計人數，且保證人 DSR 子項歸 0；
+//   若只排除不歸 0，負債 66% 的保證人反而比 64% 者得分高
+// - 債務不詳：無法查核資力，人數加分折半（介於「無此保證人」與「已查證」之間），DSR 不納入計分
+function evaluateGuarantors(guarantors) {
+  const evaluated = [];
+  const validDsrs = [];
+  let verifiedWeight = 0;
+  let unknownWeight = 0;
+  let highDsrCount = 0;
+  let unknownCount = 0;
+
+  (guarantors || []).forEach((g) => {
+    const baseWeight = GUARANTOR_TYPE_WEIGHT[g.type] || 1.0;
+    const isUnknown = Boolean(g.unknown);
+    let weight = 0;
+    let isHighDsr = false;
+    let gDsr = null;
+
+    if (isUnknown) {
+      unknownCount++;
+      unknownWeight += baseWeight;
+      weight = baseWeight * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
+    } else if (g.income > 0) {
+      gDsr = (g.debt || 0) / g.income;
+      if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
+        isHighDsr = true;
+        highDsrCount++;
+      } else {
+        weight = baseWeight;
+        verifiedWeight += baseWeight;
+        validDsrs.push(gDsr);
+      }
+    }
+
+    evaluated.push({
+      name: g.name,
+      type: g.type,
+      income: g.income,
+      debt: g.debt,
+      unknown: isUnknown,
+      dsr: gDsr,
+      isHighDsr,
+      weight,
+    });
+  });
+
+  // 人數加分：已查證者依加權人數查表；不詳者以原權重查表後，其「邊際加分」折半計入。
+  // 折半須打在分數上：打在人數上時 0.5 人會被四捨五入回 1 人，折半形同無效。
+  const scoreByWeight = (w) =>
+    GUARANTOR_SCORE_TABLE[Math.min(MAX_GUARANTORS, Math.round(w))] || 0;
+  const verifiedScore = scoreByWeight(verifiedWeight);
+  const countScore =
+    verifiedScore +
+    (scoreByWeight(verifiedWeight + unknownWeight) - verifiedScore) *
+      GUARANTOR_UNKNOWN_WEIGHT_RATIO;
+
+  // 保證人 DSR：取已揭露者之最差 DSR；任一人負債過高即歸 0
+  let dsrScore = 0;
+  if (highDsrCount === 0 && validDsrs.length > 0) {
+    const maxDsr = Math.max(...validDsrs);
+    if (maxDsr < 0.3) dsrScore = 5;
+    else if (maxDsr < 0.5) dsrScore = 3;
+    else dsrScore = 1;
+  }
+
+  return {
+    evaluated,
+    effectiveCount:
+      verifiedWeight + unknownWeight * GUARANTOR_UNKNOWN_WEIGHT_RATIO,
+    countScore,
+    dsrScore,
+    highDsrCount,
+    unknownCount,
+  };
+}
+
+// ============================================================
 // 評分計算（含 baseline DSR 含本社長債）
 // ============================================================
 
@@ -374,67 +453,15 @@ function computeScore(input) {
   const jcicScore = input.jcic === 'veto' ? 0 : parseInt(input.jcic) || 0;
   const peopleScore = input.interaction + jcicScore + input.membership;
 
-  // Guarantor DSR & Effective Count evaluation (含高負債排除與債務不詳折半)
-  let guarantorDsrScore = 0;
-  let effectiveGuarantorCount = 0;
-  const evaluatedGuarantors = [];
-  const validDsrs = [];
-
-  if (
-    input.guarantorCount > 0 &&
-    input.guarantors &&
-    input.guarantors.length > 0
-  ) {
-    input.guarantors.forEach((g) => {
-      const baseWeight = GUARANTOR_TYPE_WEIGHT[g.type] || 1.0;
-      let finalWeight = 0;
-      let isHighDsr = false;
-      const isUnknown = Boolean(g.unknown);
-      let gDsr = null;
-
-      if (isUnknown) {
-        // 債務不詳：無法查核實質資力，人數權重減半認列；DSR 不納入計分
-        finalWeight = baseWeight * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
-      } else if (g.income > 0) {
-        gDsr = (g.debt || 0) / g.income;
-        if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
-          // 負債過高（DSR >= 65%）：無實質代償能力，加權歸 0，不計入有效人數與 DSR 加分
-          isHighDsr = true;
-          finalWeight = 0;
-        } else {
-          finalWeight = baseWeight;
-          validDsrs.push(gDsr);
-        }
-      }
-
-      effectiveGuarantorCount += finalWeight;
-      evaluatedGuarantors.push({
-        name: g.name,
-        type: g.type,
-        income: g.income,
-        debt: g.debt,
-        unknown: isUnknown,
-        dsr: gDsr,
-        isHighDsr,
-        weight: finalWeight,
-      });
-    });
-
-    if (validDsrs.length > 0) {
-      const maxDsr = Math.max(...validDsrs);
-      if (maxDsr < 0.3) guarantorDsrScore = 5;
-      else if (maxDsr < 0.5) guarantorDsrScore = 3;
-      else guarantorDsrScore = 1;
-    }
-  }
+  // 保證人審定（含高負債排除與債務不詳折半）
+  const guarantorEval = evaluateGuarantors(
+    input.guarantorCount > 0 ? input.guarantors : []
+  );
+  const guarantorScore = guarantorEval.countScore;
+  const guarantorDsrScore = guarantorEval.dsrScore;
 
   // Protection (20%) — 擔保 12 + 保證人(加權) 8 + 保證人DSR 5 + LTV覆蓋 3 = 28 理論值 → ×0.8 正規化到 20 滿分
-  const roundedGuarantorCount = Math.min(
-    MAX_GUARANTORS,
-    Math.round(effectiveGuarantorCount)
-  );
   const collateralScore = COLLATERAL_SCORE[input.collateral] || 0;
-  const guarantorScore = GUARANTOR_SCORE_TABLE[roundedGuarantorCount] || 0;
   // 擔保覆蓋加成：不動產抵押依 LTV（貸款/鑑價）加成——價值越足、保障越高
   let ltvBonus = 0;
   if (input.collateral === '10') {
@@ -474,8 +501,8 @@ function computeScore(input) {
       ltvBonus,
       guarantor: guarantorScore,
       guarantorDsr: guarantorDsrScore,
-      effectiveGuarantorCount,
-      evaluatedGuarantors,
+      effectiveGuarantorCount: guarantorEval.effectiveCount,
+      evaluatedGuarantors: guarantorEval.evaluated,
     },
     purposeScore,
     perspectiveScore,
@@ -718,11 +745,8 @@ function applyRegulatoryVetoes(input) {
     (input.internalBalance || 0) -
       (input.collateral === '12' ? input.shares || 0 : 0)
   );
-  // 社外無擔保負債總餘額：優先取 externalUnsecuredDebt（存量），未填時回退 existingDebt
-  const extUnsecuredBalance =
-    input.externalUnsecuredDebt !== undefined
-      ? input.externalUnsecuredDebt
-      : input.existingDebt || 0;
+  // 社外無擔保負債總餘額（存量）；未填視同 0——existingDebt 是月付，不可拿來當餘額
+  const extUnsecuredBalance = input.externalUnsecuredDebt || 0;
   const totalExistingUnsecuredDebt =
     extUnsecuredBalance + internalUnsecuredBalance + extBalance;
   const totalPostUnsecuredDebt =
@@ -870,12 +894,8 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
       (input.internalBalance || 0) -
         (input.collateral === '5' ? input.shares || 0 : 0)
     );
-    const extUnsecured =
-      input.externalUnsecuredDebt !== undefined
-        ? input.externalUnsecuredDebt
-        : input.existingDebt || 0;
     const totalExistingUnsecured =
-      extUnsecured + internalUnsecured + extBalance;
+      (input.externalUnsecuredDebt || 0) + internalUnsecured + extBalance;
     const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
 
     let dbrCap = Infinity;
@@ -940,11 +960,8 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
     (input.internalBalance || 0) -
       (input.collateral === '5' ? input.shares || 0 : 0)
   );
-  const extUnsecured =
-    input.externalUnsecuredDebt !== undefined
-      ? input.externalUnsecuredDebt
-      : input.existingDebt || 0;
-  const totalExistingUnsecured = extUnsecured + internalUnsecured + extBalance;
+  const totalExistingUnsecured =
+    (input.externalUnsecuredDebt || 0) + internalUnsecured + extBalance;
   const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
   const dbrCap =
     effectiveIncome > 0

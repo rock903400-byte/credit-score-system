@@ -46,6 +46,43 @@ test.describe('Draft — 草稿存讀', () => {
     await expect(page.locator('#chipRequiredCount')).toHaveText('0/6');
   });
 
+  test('清除草稿 → 每個草稿欄位都回到預設值（前一案資料不得殘留）', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const snapshot = () =>
+      page.evaluate(() =>
+        Object.fromEntries(
+          FORM_DRAFT_FIELDS.map((id) => [
+            id,
+            document.getElementById(id)?.value ?? null,
+          ])
+        )
+      );
+
+    await page.locator('#clearDraftBtn').click();
+    const defaults = await snapshot();
+
+    // 模擬上一位申請人：每個草稿欄位都改成與預設不同的值
+    await page.evaluate(() => {
+      FORM_DRAFT_FIELDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.tagName === 'SELECT') {
+          const alt = Array.from(el.options).find((o) => o.value !== el.value);
+          if (alt) el.value = alt.value;
+        } else if (el.type === 'date') {
+          el.value = '2020-01-01';
+        } else {
+          el.value = '123456';
+        }
+      });
+    });
+
+    await page.locator('#clearDraftBtn').click();
+    expect(await snapshot()).toEqual(defaults);
+  });
+
   test('整併模式勾選 → 草稿還原後既有貸款列表仍顯示', async ({ page }) => {
     await page.goto('/');
     await page.locator('#consolidationMode').check();

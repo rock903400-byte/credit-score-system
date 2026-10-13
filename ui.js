@@ -261,25 +261,27 @@ function parseInputs() {
     appraisalAge: parseInt($('appraisalAge').value) || 0,
     isSelfOccupied: !!($('selfOccupied')?.checked || false),
     guarantorCount: parseInt($('guarantor_count').value) || 0,
-    guarantors: Array.from(document.querySelectorAll('.guarantor-row')).map(
-      (row) => ({
-        name: row.querySelector('.g-name').value.trim(),
-        income:
-          parseFloat(
-            String(row.querySelector('.g-income').value).replace(/,/g, '')
-          ) || 0,
-        debt:
-          parseFloat(
-            String(row.querySelector('.g-debt').value).replace(/,/g, '')
-          ) || 0,
-        type: row.querySelector('.g-type').value,
-        unknown: row.querySelector('.g-unknown')?.checked || false,
-      })
-    ),
+    guarantors: readGuarantorRows(),
     purpose: $('purpose').value,
     career: parseInt($('career').value) || 0,
     participation: parseInt($('participation').value) || 0,
   };
+}
+
+function readGuarantorRows() {
+  return Array.from(document.querySelectorAll('.guarantor-row')).map((row) => ({
+    name: row.querySelector('.g-name').value.trim(),
+    income:
+      parseFloat(
+        String(row.querySelector('.g-income').value).replace(/,/g, '')
+      ) || 0,
+    debt:
+      parseFloat(
+        String(row.querySelector('.g-debt').value).replace(/,/g, '')
+      ) || 0,
+    type: row.querySelector('.g-type').value,
+    unknown: row.querySelector('.g-unknown')?.checked || false,
+  }));
 }
 
 // ============================================================
@@ -632,7 +634,7 @@ function renderGuarantorRows(count) {
       '> 債務不詳（未查證）' +
       '</label>' +
       '<small style="color: var(--text-muted); display:block; margin-top:4px;">' +
-      '勾選後無法查核資力，人數權重折半認列（社員 0.5/非社員 0.35），且不計入保證人 DSR 評分。' +
+      '勾選後無法查核資力，人數加分折半認列，且不計入保證人 DSR 評分。' +
       '</small>' +
       '</div>' +
       '<div class="form-group">' +
@@ -655,59 +657,36 @@ function renderGuarantorRows(count) {
   updateGuarantorWeightHint();
 }
 
-// 加權保證人數即時回饋（與 core.js GUARANTOR_TYPE_WEIGHT + GUARANTOR_SCORE_TABLE 同邏輯）
+// 加權保證人數即時回饋（直接呼叫 core.js evaluateGuarantors，與評分同一套規則）
 function updateGuarantorWeightHint() {
   const el = $('guarantorWeightHint');
   if (!el) return;
-  const rows = document.querySelectorAll('.guarantor-row');
-  if (rows.length === 0) {
+  const guarantors = readGuarantorRows();
+  if (guarantors.length === 0) {
     el.innerText = '';
     return;
   }
-  let weighted = 0;
-  let m = 0;
-  let nm = 0;
-  let unknownCount = 0;
-  let highDsrCount = 0;
-
-  rows.forEach((row) => {
-    const t = row.querySelector('.g-type')?.value || 'non_member';
-    const isMember = t === 'member';
-    const baseW = isMember
-      ? GUARANTOR_TYPE_WEIGHT.member
-      : GUARANTOR_TYPE_WEIGHT.non_member;
-    const isUnknown = !!row.querySelector('.g-unknown')?.checked;
-    const inc = parseFloat(row.querySelector('.g-income')?.value) || 0;
-    const dbt = parseFloat(row.querySelector('.g-debt')?.value) || 0;
-
-    if (isMember) m++;
-    else nm++;
-
-    if (isUnknown) {
-      unknownCount++;
-      weighted += baseW * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
-    } else if (inc > 0) {
-      const gDsr = dbt / inc;
-      if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
-        highDsrCount++;
-      } else {
-        weighted += baseW;
-      }
-    } else {
-      weighted += baseW;
-    }
-  });
-
-  const effective = Math.min(MAX_GUARANTORS, Math.round(weighted));
-  const score = GUARANTOR_SCORE_TABLE[effective] || 0;
+  const ev = evaluateGuarantors(guarantors);
+  const m = guarantors.filter((g) => g.type === 'member').length;
+  const nm = guarantors.length - m;
+  const pendingCount = ev.evaluated.filter(
+    (g) => !g.unknown && g.dsr === null
+  ).length;
   const parts = [];
   if (m > 0) parts.push(`${m} 社員`);
   if (nm > 0) parts.push(`${nm} 非社員`);
+  // 不詳者的加分折半打在分數上，「≈ N 人」的四捨五入說明只在沒有不詳者時成立
+  const rounded =
+    ev.unknownCount === 0
+      ? ` ≈ ${Math.min(MAX_GUARANTORS, Math.round(ev.effectiveCount))} 人`
+      : '';
   const notes = [];
-  if (highDsrCount > 0) notes.push(`${highDsrCount} 位負債過高(DSR≥65%)排除`);
-  if (unknownCount > 0) notes.push(`${unknownCount} 位不詳折半`);
+  if (ev.highDsrCount > 0)
+    notes.push(`${ev.highDsrCount} 位負債過高(DSR≥65%)排除`);
+  if (ev.unknownCount > 0) notes.push(`${ev.unknownCount} 位不詳加分折半`);
+  if (pendingCount > 0) notes.push(`${pendingCount} 位待填月收入`);
   const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
-  el.innerText = `${parts.join(' + ')} → 有效加權 ${weighted.toFixed(1)} 人 ≈ ${effective} 人 → 保障項 +${score} 分${suffix}`;
+  el.innerText = `${parts.join(' + ')} → 有效加權 ${ev.effectiveCount.toFixed(1)} 人${rounded} → 保障項 +${ev.countScore} 分${suffix}`;
 }
 
 function bindGuarantorPreviews() {
@@ -1193,7 +1172,7 @@ function animateScore(targetScore) {
 }
 
 // ============================================================
-// 結論條（A/B/C 三級分流純屬顯示，額度一律採系統原始輸出）
+// 結論條（A–E 作業流程說明純屬顯示，額度一律採系統原始輸出）
 // ============================================================
 
 // 系統 A~E 五級對應作業流程說明
@@ -2115,34 +2094,26 @@ function renderPrintReport(result) {
   if (input.guarantors && input.guarantors.length > 0) {
     let html =
       '<table class="print-table" style="margin-top:5px;"><tr><th>保證人</th><th>類型與權重</th><th>月收入</th><th>既有債務月付</th><th>債務比率(DSR)</th><th>有效性審定</th></tr>';
-    let unknownCount = 0;
-    let highDsrCount = 0;
-    input.guarantors.forEach((g) => {
-      const isUnknown = !!g.unknown;
+    const { evaluated, unknownCount, highDsrCount } = evaluateGuarantors(
+      input.guarantors
+    );
+    evaluated.forEach((g) => {
+      const isUnknown = g.unknown;
       const isMember = g.type === 'member';
-      const baseW = isMember
-        ? GUARANTOR_TYPE_WEIGHT.member
-        : GUARANTOR_TYPE_WEIGHT.non_member;
-      let finalW = baseW;
       let dsrCell = '—';
-      let statusCell = `有效採計（加權 ${finalW.toFixed(1)}）`;
+      let statusCell;
 
       if (isUnknown) {
-        unknownCount++;
-        finalW = baseW * GUARANTOR_UNKNOWN_WEIGHT_RATIO;
         dsrCell = '— <span style="color:#d32f2f;">(債務未查證)</span>';
-        statusCell = `<span style="color:#d32f2f;">未查證（權重折半 ${finalW.toFixed(2)}）</span>`;
-      } else if (g.income > 0) {
-        const gDsr = (g.debt || 0) / g.income;
-        dsrCell = (g.debt || 0) > 0 ? (gDsr * 100).toFixed(1) + '%' : '0.0%';
-        if (gDsr >= GUARANTOR_HIGH_DSR_THRESHOLD) {
-          highDsrCount++;
-          finalW = 0;
-          statusCell =
-            '<span style="color:#d32f2f; font-weight:bold;">高負債排除（不計加分）</span>';
-        } else {
-          statusCell = `有效採計（加權 ${finalW.toFixed(1)}）`;
-        }
+        statusCell =
+          '<span style="color:#d32f2f;">未查證（人數加分折半）</span>';
+      } else if (g.dsr === null) {
+        statusCell = '未填月收入（不計加分）';
+      } else {
+        dsrCell = (g.dsr * 100).toFixed(1) + '%';
+        statusCell = g.isHighDsr
+          ? '<span style="color:#d32f2f; font-weight:bold;">高負債排除（不計加分）</span>'
+          : `有效採計（加權 ${g.weight.toFixed(1)}）`;
       }
 
       const debtCell = isUnknown
@@ -2153,7 +2124,9 @@ function renderPrintReport(result) {
         (escapeHtml(g.name) || '—') +
         (isUnknown ? ' <span style="color:#d32f2f;">(債務未查證)</span>' : '') +
         '</td><td>' +
-        (isMember ? '社員 (1.0)' : '非社員 (0.7)') +
+        (isMember
+          ? `社員 (${GUARANTOR_TYPE_WEIGHT.member.toFixed(1)})`
+          : `非社員 (${GUARANTOR_TYPE_WEIGHT.non_member.toFixed(1)})`) +
         '</td><td>' +
         (g.income || 0).toLocaleString('zh-TW') +
         ' 元</td><td>' +
@@ -2168,12 +2141,12 @@ function renderPrintReport(result) {
     const notes = [];
     if (highDsrCount > 0) {
       notes.push(
-        `共 ${highDsrCount} 位保證人個人負債比達 65% 以上（高負債），依風控規範排除有效保證人加分；`
+        `共 ${highDsrCount} 位保證人個人負債比達 65% 以上（高負債），依風控規範排除有效保證人加分，保證人 DSR 加分歸 0；`
       );
     }
     if (unknownCount > 0) {
       notes.push(
-        `共 ${unknownCount} 位保證人未揭露既有債務，人數權重已折半認列且排除 DSR 加分，實際核貸時請另覓佐證或要求保證人提供債務證明；`
+        `共 ${unknownCount} 位保證人未揭露既有債務，人數加分已折半認列且排除 DSR 加分，實際核貸時請另覓佐證或要求保證人提供債務證明；`
       );
     }
     if (notes.length > 0) {
@@ -2690,6 +2663,7 @@ function resetFormToDefaults() {
     income: '',
     age: '',
     existing_debt: '',
+    external_unsecured_debt: '',
     internal_monthly: '',
     internal_balance: '',
     loan: '',
@@ -2724,6 +2698,12 @@ function resetFormToDefaults() {
   Object.entries(FACTORY_DEFAULTS).forEach(([id, val]) => {
     const el = $(id);
     if (el) el.value = val;
+  });
+  // 草稿欄位漏列於上表者一律清空，避免前一案資料殘留到下一案（appDate 下方另設為今天）
+  FORM_DRAFT_FIELDS.forEach((id) => {
+    if (id in FACTORY_DEFAULTS) return;
+    const el = $(id);
+    if (el) el.value = '';
   });
 
   // 申請日期預設今天
