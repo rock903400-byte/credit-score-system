@@ -80,15 +80,24 @@ function getLtvRatio(input) {
 
 // 本社既有貸款依期限區分：擔保放款係指「超過七年至三十年以下」之放款（放款實施要點第 2 條），其餘為無擔保。
 // 專職只需看帳上期限，不必判斷擔保品性質；期限剛好 7 年者屬無擔保。
+// 「期限超過 7 年」欄位涵蓋本社所有貸款（主欄位＋整併模式各筆）。整併列表的年限是「剩餘」年限，
+// 無法據以判斷原始期限是否超過 7 年，所以由專職填合計數，不逐筆推算。
+function getInternalTotalBalance(input) {
+  return (
+    (input.internalBalance || 0) +
+    (input.additionalLoans || []).reduce((sum, l) => sum + (l.balance || 0), 0)
+  );
+}
+
 function getInternalSecuredBalance(input) {
   return Math.min(
     input.internalSecuredBalance || 0,
-    input.internalBalance || 0
+    getInternalTotalBalance(input)
   );
 }
 
 function getInternalUnsecuredBalance(input) {
-  return (input.internalBalance || 0) - getInternalSecuredBalance(input);
+  return getInternalTotalBalance(input) - getInternalSecuredBalance(input);
 }
 
 // 自然人無擔保可貸上限：股金 ＋ 100 萬，扣除本社 7 年以內貸款餘額（放款實施要點第 4-1 條第 1 款）
@@ -281,8 +290,10 @@ function validateInputs(input) {
   }
   if (input.internalSecuredBalance < 0)
     errors.push('本社超過 7 年貸款餘額不可為負值');
-  else if (input.internalSecuredBalance > (input.internalBalance || 0))
-    errors.push('本社超過 7 年貸款餘額不可大於本社現有貸款總餘額');
+  else if (input.internalSecuredBalance > getInternalTotalBalance(input))
+    errors.push(
+      '本社超過 7 年貸款餘額不可大於本社貸款總餘額（含整併模式各筆）'
+    );
   if (input.ratePercent > 20) errors.push('年利率 > 20% 異常，請確認');
   if (input.years > 50) errors.push('貸款年限過長（> 50 年），請確認');
   // [FIX 2.1] 年齡 <= 0 直接擋下（避免留白 / 負數繞過所有年齡控管）
@@ -341,8 +352,11 @@ function validateInputsByField(input) {
     setErr('internal_balance', '本社餘額不可為負值');
   if (input.internalSecuredBalance < 0)
     setErr('internal_secured_balance', '不可為負值');
-  else if (input.internalSecuredBalance > (input.internalBalance || 0))
-    setErr('internal_secured_balance', '不可大於本社現有貸款總餘額');
+  else if (input.internalSecuredBalance > getInternalTotalBalance(input))
+    setErr(
+      'internal_secured_balance',
+      '不可大於本社貸款總餘額（含整併模式各筆）'
+    );
   if (input.shares < 0) setErr('shares', '股金不可為負值');
   if (input.ratePercent < 0) setErr('rate', '年利率不可為負值');
   if (input.appraisalValue < 0) setErr('appraisalValue', '市價淨值不可為負值');
@@ -898,17 +912,14 @@ function applyLegalCeiling(input, maxLoanLimit, grade) {
   } else {
     // 無擔保放款：第 4-1 條上限 (股金 + 100 萬 − 本社 7 年以內餘額) 與評級月薪倍數上限取小（未給評等時用最寬的 A 級）
     const dbrMultiplier = GRADE_DBR_LIMITS[grade] ?? GRADE_DBR_LIMITS.A;
-    const extBalance = (input.additionalLoans || []).reduce(
-      (sum, l) => sum + (l.balance || 0),
-      0
-    );
+    // 本社 7 年以內貸款（已含整併模式各筆，超過 7 年的房貸不扣）
     const internalUnsecured = Math.max(
       0,
       getInternalUnsecuredBalance(input) -
         (input.collateral === '5' ? input.shares || 0 : 0)
     );
     const totalExistingUnsecured =
-      (input.externalUnsecuredDebt || 0) + internalUnsecured + extBalance;
+      (input.externalUnsecuredDebt || 0) + internalUnsecured;
     const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
 
     let dbrCap = Infinity;
@@ -957,17 +968,14 @@ function getLoanLimitDetails(input, maxLoanLimit, grade) {
       : Infinity;
 
   const dbrMultiplier = GRADE_DBR_LIMITS[grade] ?? GRADE_DBR_LIMITS.A;
-  const extBalance = (input.additionalLoans || []).reduce(
-    (sum, l) => sum + (l.balance || 0),
-    0
-  );
+  // 本社 7 年以內貸款（已含整併模式各筆，超過 7 年的房貸不扣）
   const internalUnsecured = Math.max(
     0,
     getInternalUnsecuredBalance(input) -
       (input.collateral === '5' ? input.shares || 0 : 0)
   );
   const totalExistingUnsecured =
-    (input.externalUnsecuredDebt || 0) + internalUnsecured + extBalance;
+    (input.externalUnsecuredDebt || 0) + internalUnsecured;
   const securedSharesPart = input.collateral === '5' ? input.shares || 0 : 0;
   const dbrCap =
     effectiveIncome > 0

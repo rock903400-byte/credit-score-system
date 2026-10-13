@@ -1280,4 +1280,34 @@ test.describe('場景 13-18：實務進階', () => {
     expect(await limitOf()).toBeGreaterThan(3500000);
     console.log(`  → 一年內鑑價報告才適用 85%：${reason.slice(0, 60)}`);
   });
+
+  test('㉟ 整併模式第二筆本社貸款也計入第 4-1 條：5 年期 150 萬 + 申請 50 萬 → 否決並寫明無法再借', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await fillForm(page, {
+      income: 80000,
+      age: 40,
+      loan: 500000,
+      years: 5,
+      rate: 3,
+      shares: 200000,
+    });
+    await page.locator('#collateral').selectOption('5');
+    await page.locator('#consolidationMode').check();
+    const ext = page.locator('.ext-row').nth(0);
+    await ext.locator('.ext-monthly').fill('30000');
+    await ext.locator('.ext-balance').fill('1500000');
+    await ext.locator('.ext-years').fill('5');
+    await ext.locator('.ext-rate').fill('3');
+    await page.locator('#btnCalc').click();
+
+    const status = await page.locator('#resStatus').innerText();
+    expect(status).toContain('第 4-1 條');
+    expect(status).toContain('本次無法再借');
+    console.log(`  → 整併第二筆計入無擔保上限：${status.slice(0, 70)}`);
+  });
 });

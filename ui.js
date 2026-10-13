@@ -1941,12 +1941,13 @@ function renderPrintReport(result) {
     extLoans.length > 0
       ? `／其餘 ${extLoans.length} 筆既有貸款月付合計 ${extMonthlySumP.toLocaleString('zh-TW')} 元、餘額合計 ${extBalanceSumP.toLocaleString('zh-TW')} 元`
       : '';
+  // 「超過 7 年」涵蓋主欄位＋整併各筆，所以接在整併資訊之後
   const securedNote =
     getInternalSecuredBalance(input) > 0
-      ? `，其中超過 7 年（擔保）${getInternalSecuredBalance(input).toLocaleString('zh-TW')} 元`
+      ? `；本社貸款中期限超過 7 年（擔保）${getInternalSecuredBalance(input).toLocaleString('zh-TW')} 元`
       : '';
   $('p_internal').innerText =
-    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${securedNote}${extNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
+    `${input.internalMonthly.toLocaleString('zh-TW')} 元 / 餘額 ${input.internalBalance.toLocaleString('zh-TW')} 元${extNote}${securedNote}（在本社借款總金額：${totalExposure.toLocaleString('zh-TW')} 元）`;
   const pmtFormatted = Math.round(result.newLoanMonthlyPmt || 0).toLocaleString(
     'zh-TW'
   );

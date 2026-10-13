@@ -2307,7 +2307,7 @@ test('驗證器阻擋社外無擔保負債總餘額為負值', () => {
 // 偵測日後微調公式時分布劇烈漂移（A 級從 30% 掉到 5% 等）
 // 範圍為「常態合理區間」：小幅漂移通過，劇烈漂移才失敗
 // ============================================================
-console.log('\n── 放款實施要點第 4-1 條與擔保放款辦法第 10 條 (8) ──');
+console.log('\n── 放款實施要點第 4-1 條與擔保放款辦法第 10 條 (12) ──');
 const LTV_BASE = {
   income: 80000,
   age: 40,
@@ -2481,6 +2481,103 @@ test('第 4-1 條第 1 款也適用股金內借款：股金 50 萬、本社 7 �
   assert(
     ALC({ ...inp, internalBalance: 800_000 }, Infinity, 'A') === 500_000,
     'got:' + ALC({ ...inp, internalBalance: 800_000 }, Infinity, 'A')
+  );
+});
+
+// 整併模式的第二筆以後也是本社貸款；「期限超過 7 年」欄位涵蓋本社所有貸款（含整併各筆）
+const CONS_BASE = {
+  income: 80000,
+  age: 40,
+  years: 5,
+  ratePercent: 3,
+  existingDebt: 0,
+  internalMonthly: 0,
+  internalBalance: 0,
+  internalSecuredBalance: 0,
+  proposedLoan: 500000,
+  shares: 200000,
+  collateral: '5',
+};
+const rule41 = (inp) => ARV(inp).vetoes.filter((x) => x.includes('第 4-1 條'));
+
+test('整併模式各筆計入股金＋100 萬：本社 5 年期 150 萬填在主欄位或整併第二筆，結果相同', () => {
+  const main = { ...CONS_BASE, internalBalance: 1_500_000 };
+  const cons = {
+    ...CONS_BASE,
+    consolidationMode: true,
+    additionalLoans: [
+      { monthly: 30000, balance: 1_500_000, years: 5, rate: 3 },
+    ],
+  };
+  assert(rule41(main).length === 1, '主欄位應否決');
+  assert(
+    rule41(cons)[0] === rule41(main)[0],
+    `整併 got:[${rule41(cons).join('; ')}]`
+  );
+  assert(
+    ALC(cons, Infinity, 'A') === ALC(main, Infinity, 'A'),
+    `可貸 整併=${ALC(cons, Infinity, 'A')} 主欄位=${ALC(main, Infinity, 'A')}`
+  );
+});
+
+test('整併模式各筆計入 1,000 萬每人累計：整併第二筆房貸 800 萬（期限超過 7 年）+ 本次擔保 500 萬 → 否決', () => {
+  const inp = {
+    ...CONS_BASE,
+    ...LTV_BASE,
+    appraisalAge: 1,
+    appraisalValue: 20_000_000,
+    proposedLoan: 5_000_000,
+    mortgageAmount: 6_000_000,
+    internalBalance: 0,
+    internalSecuredBalance: 8_000_000,
+    additionalLoans: [
+      { monthly: 45000, balance: 8_000_000, years: 15, rate: 2.5 },
+    ],
+  };
+  assert(
+    rule41(inp).some((x) => x.includes('1,000 萬')),
+    'got:' + ARV(inp).vetoes.join('; ')
+  );
+});
+
+test('整併列表裡的房貸（期限超過 7 年）不扣無擔保月薪倍數上限', () => {
+  const inp = {
+    income: 30000,
+    age: 40,
+    years: 5,
+    ratePercent: 3,
+    existingDebt: 0,
+    internalMonthly: 0,
+    internalBalance: 0,
+    internalSecuredBalance: 3_000_000,
+    additionalLoans: [
+      { monthly: 20000, balance: 3_000_000, years: 15, rate: 2.5 },
+    ],
+    collateral: '0',
+    shares: 50000,
+  };
+  assert(ALC(inp, Infinity, 'A') === 600000, 'got:' + ALC(inp, Infinity, 'A'));
+});
+
+test('期限超過 7 年餘額可涵蓋整併各筆：不超過主欄位＋整併各筆餘額合計即可', () => {
+  const inp = {
+    income: 50000,
+    age: 30,
+    years: 5,
+    proposedLoan: 100000,
+    internalBalance: 100000,
+    internalSecuredBalance: 500000,
+    additionalLoans: [{ monthly: 0, balance: 400000, years: 0, rate: 0 }],
+  };
+  assert(
+    !VI(inp).some((e) => e.includes('7 年')),
+    '50 萬 ≤ 10 萬＋40 萬，不應報錯，got:' + VI(inp).join('; ')
+  );
+  assert(
+    VI({ ...inp, internalSecuredBalance: 600000 }).some((e) =>
+      e.includes('7 年')
+    ),
+    '60 萬 > 合計 50 萬應報錯'
   );
 });
 
